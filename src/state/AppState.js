@@ -1,12 +1,13 @@
-git checkout -b feat/app-v0-1import { createContext, useContext, useMemo, useState } from 'react';
+// src/state/AppState.js
+import { createContext, useContext, useMemo, useState } from 'react';
 
 const AppCtx = createContext(null);
 
 export function AppProvider({ children }) {
   const [balance, setBalance] = useState(1523.76);
   const [payments, setPayments] = useState([
-    { id: 'p1', payee: 'Coffee Roasters', amount: -4.20, createdAt: '2025-10-05T10:30:00Z' },
-    { id: 'p2', payee: 'Salary', amount: +2100.00, createdAt: '2025-09-28T09:00:00Z' },
+    { id: 'p1', payee: 'Coffee Roasters', amount: -4.2, createdAt: '2025-10-05T10:30:00Z' },
+    { id: 'p2', payee: 'Salary', amount: 2100.0, createdAt: '2025-09-28T09:00:00Z' }
   ]);
 
   const addPayment = (payee, amount) => {
