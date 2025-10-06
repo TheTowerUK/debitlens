@@ -6,7 +6,6 @@ dist/
 web-build/
 npm-debug.log*
 yarn-error.log*
-package-lock.json # optional to ignore; many teams commit it
 .expo-packager/
 
 # OS junk
