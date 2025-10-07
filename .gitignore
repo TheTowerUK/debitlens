@@ -4,19 +4,31 @@ node_modules/
 .expo-shared/
 dist/
 web-build/
+build/
 npm-debug.log*
 yarn-error.log*
 .expo-packager/
 
-# OS junk
+# Metro/packager junk
+*.map
+
+# OS / IDE
 .DS_Store
 Thumbs.db
-
-# IDE
 .vscode/
 .idea/
 
-# Build artifacts
-android/app/build/
-ios/build/
-node_modules
+# Env/Secrets
+.env
+.env.*
+*.keystore
+*.p12
+*.mobileprovision
+*.jks
+*.der
+google-services.json
+GoogleService-Info.plist
+
+# Native projects (ignore if you're using managed workflow)
+android/
+ios/
