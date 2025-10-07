@@ -1,43 +1,42 @@
+// src/screens/SplashAuthScreen.js
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useApp } from '../state/AppState';
 
 const BIOMETRIC_TIMEOUT_MS = 4000;   // stop waiting after 4s
-const FAILSAFE_NAV_MS      = 8000;   // absolute max time on splash
+const FAILSAFE_NAV_MS      = 8000;   // absolute max time spent on splash
 
 export default function SplashAuthScreen({ navigation }) {
   const { isHydrated, getPin, setPin } = useApp();
-  const [mode, setMode] = useState('loading'); // loading | biometric | pin | setpin
+  const [mode, setMode] = useState('loading'); // 'loading' | 'biometric' | 'pin' | 'setpin'
   const [pinInput, setPinInput] = useState('');
   const failsafeRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
 
+    const goDashboard = () => {
+      if (!cancelled) navigation.replace('Dashboard');
+    };
+
     const decide = async () => {
       if (!isHydrated || cancelled) return;
 
-      // Start a failsafe that ALWAYS navigates after X seconds so we never stall
+      // Absolute failsafe: always leave splash by X seconds
       if (!failsafeRef.current) {
-        failsafeRef.current = setTimeout(() => {
-          if (!cancelled) {
-            console.log('[Splash] FAILSAFE firing → go Dashboard');
-            navigation.replace('Dashboard');
-          }
-        }, FAILSAFE_NAV_MS);
+        failsafeRef.current = setTimeout(goDashboard, FAILSAFE_NAV_MS);
       }
 
       try {
         // On web: skip biometrics entirely
         if (Platform.OS === 'web') {
           const stored = await getPin().catch(() => null);
-          console.log('[Splash] web →', stored ? 'pin' : 'setpin');
           setMode(stored ? 'pin' : 'setpin');
           return;
         }
 
-        // Get PIN so we know the fallback
+        // Determine fallback PIN path up front
         const storedPin = await getPin().catch(() => null);
 
         // Check biometric capability
@@ -47,34 +46,31 @@ export default function SplashAuthScreen({ navigation }) {
           LocalAuthentication.supportedAuthenticationTypesAsync().catch(() => []),
         ]);
 
-        const canBio = hasHw && enrolled && (supported?.length ?? 0) > 0;
+        const canBiometric = hasHw && enrolled && (supported?.length ?? 0) > 0;
 
-        if (canBio) {
+        if (canBiometric) {
           setMode('biometric');
 
-          // Race biometrics against a timeout to avoid hanging
+          // Race biometric prompt against a timeout to avoid hanging
           const result = await Promise.race([
             LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock to view accounts' }),
-            new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), BIOMETRIC_TIMEOUT_MS))
+            new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), BIOMETRIC_TIMEOUT_MS)),
           ]);
 
           if (!cancelled && result?.success) {
-            console.log('[Splash] biometric success');
             clearTimeout(failsafeRef.current); failsafeRef.current = null;
-            navigation.replace('Dashboard');
-            return;
+            return goDashboard();
           }
 
-          console.log('[Splash] biometric failed/timeout →', storedPin ? 'pin' : 'setpin');
+          // Biometric failed or timed out → PIN/SET PIN
           setMode(storedPin ? 'pin' : 'setpin');
           return;
         }
 
-        // No biometrics → PIN path
-        console.log('[Splash] no biometrics →', storedPin ? 'pin' : 'setpin');
+        // No biometric available → PIN flow
         setMode(storedPin ? 'pin' : 'setpin');
-      } catch (e) {
-        console.log('[Splash] decide error → pin', e);
+      } catch {
+        // Any unexpected error → PIN
         setMode('pin');
       }
     };
@@ -83,7 +79,7 @@ export default function SplashAuthScreen({ navigation }) {
     return () => { cancelled = true; };
   }, [isHydrated]);
 
-  // UI states
+  // ----- UI States -----
   if (mode === 'loading') {
     return (
       <View style={styles.center}>
@@ -118,16 +114,19 @@ export default function SplashAuthScreen({ navigation }) {
       <Text style={styles.subtle}>PIN or Face/Touch ID</Text>
 
       {mode === 'biometric' ? (
-        <Pressable style={styles.primary} onPress={async () => {
-          const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock' });
-          if (res.success) {
-            clearTimeout(failsafeRef.current); failsafeRef.current = null;
-            navigation.replace('Dashboard');
-          } else {
-            const stored = await getPin().catch(() => null);
-            setMode(stored ? 'pin' : 'setpin');
-          }
-        }}>
+        <Pressable
+          style={styles.primary}
+          onPress={async () => {
+            const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock' });
+            if (res.success) {
+              clearTimeout(failsafeRef.current); failsafeRef.current = null;
+              navigation.replace('Dashboard');
+            } else {
+              const stored = await getPin().catch(() => null);
+              setMode(stored ? 'pin' : 'setpin');
+            }
+          }}
+        >
           <Text style={styles.primaryText}>Use Face/Touch ID</Text>
         </Pressable>
       ) : (
@@ -158,11 +157,19 @@ export default function SplashAuthScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex:1, backgroundColor:'#0B0D13', alignItems:'center', justifyContent:'center' },
-  wrap: { flex:1, backgroundColor:'#0B0D13', padding:24, justifyContent:'center' },
-  h1: { color:'#fff', fontSize:28, fontWeight:'700', marginBottom:8 },
-  subtle: { color:'#9CA3AF', marginBottom:16 },
-  input: { backgroundColor:'#0F172A', color:'#fff', borderColor:'#1F2937', borderWidth:1, borderRadius:10, padding:12, marginBottom:12 },
-  primary: { backgroundColor:'#2563EB', borderRadius:10, paddingVertical:12, alignItems:'center' },
-  primaryText: { color:'#fff', fontWeight:'700' }
+  center: { flex: 1, backgroundColor: '#0B0D13', alignItems: 'center', justifyContent: 'center' },
+  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 24, justifyContent: 'center' },
+  h1: { color: '#fff', fontSize: 28, fontWeight: '700', marginBottom: 8 },
+  subtle: { color: '#9CA3AF', marginBottom: 16 },
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12
+  },
+  primary: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  primaryText: { color: '#fff', fontWeight: '700' }
 });
