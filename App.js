@@ -7,6 +7,7 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 
+<Stack.Screen name="Account" component={AccountScreen} />
 const Stack = createNativeStackNavigator();
 
 export default function App() {

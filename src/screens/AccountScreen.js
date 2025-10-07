@@ -5,26 +5,26 @@ import { useApp } from '../state/AppState';
 export default function AccountScreen({ route, navigation }) {
   const { accountId } = route.params || {};
   const { getAccount, addTransaction, removeTransaction } = useApp();
-  const account = getAccount(accountId);
+  const account = getAccount?.(accountId);
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
 
-  const transactions = useMemo(
-    () => (account?.transactions ?? []).slice().sort((a,b)=>b.ts - a.ts),
-    [account?.transactions]
-  );
-
   if (!account) {
     return (
       <View style={styles.page}>
-        <Text style={styles.err}>Account not found.</Text>
+        <Text style={styles.err}>Account not found (id: {String(accountId)})</Text>
         <Pressable style={styles.outline} onPress={() => navigation.goBack()}>
           <Text style={styles.outlineText}>Back</Text>
         </Pressable>
       </View>
     );
   }
+
+  const transactions = useMemo(
+    () => (account.transactions ?? []).slice().sort((a,b) => b.ts - a.ts),
+    [account.transactions]
+  );
 
   const submit = () => {
     const v = parseFloat(amount);
@@ -41,9 +41,9 @@ export default function AccountScreen({ route, navigation }) {
       <TextInput
         value={amount}
         onChangeText={setAmount}
+        keyboardType="decimal-pad"
         placeholder="Amount (use negative for outgoing)"
         placeholderTextColor="#6B7280"
-        keyboardType="decimal-pad"
         style={styles.input}
       />
       <TextInput
