@@ -1,24 +1,15 @@
-// App.js
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { AppProvider } from './src/state/AppState';
-
-import DashboardScreen from './src/screens/DashboardScreen';
-import AccountScreen from './src/screens/AccountScreen';
-import ReportsScreen from './src/screens/ReportsScreen';
-
-const Stack = createNativeStackNavigator();
+import { useEffect } from 'react';
+import { View, Text, Alert, Platform } from 'react-native';
 
 export default function App() {
+  useEffect(() => {
+    console.log('[App.js] mounted on', Platform.OS);
+    Alert.alert('App.js loaded', `Platform: ${Platform.OS}`);
+  }, []);
+
   return (
-    <AppProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Dashboard">
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          <Stack.Screen name="Account" component={AccountScreen} />
-          <Stack.Screen name="Reports" component={ReportsScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AppProvider>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ff00aa' }}>
+      <Text style={{ color: 'white', fontSize: 28, fontWeight: '800' }}>HELLO FROM App.js</Text>
+    </View>
   );
 }
