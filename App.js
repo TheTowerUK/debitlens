@@ -1,9 +1,17 @@
-// App.js TEMP
-import { View, Text } from 'react-native';
+// App.js
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
+import DashboardScreen from './src/screens/DashboardScreen';
+
+const Stack = createNativeStackNavigator();
+
 export default function App() {
   return (
-    <View style={{ flex:1, backgroundColor:'#00ccff', alignItems:'center', justifyContent:'center' }}>
-      <Text style={{ color:'#000', fontSize:26, fontWeight:'900' }}>APP.JS DIRECT</Text>
-    </View>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Dashboard">
+        <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
