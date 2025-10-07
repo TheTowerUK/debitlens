@@ -1,27 +1,9 @@
-// App.js
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { AppProvider } from './src/state/AppState';
-
-import DashboardScreen from './src/screens/DashboardScreen';
-import AccountScreen from './src/screens/AccountScreen';
-import ReportsScreen from './src/screens/ReportsScreen';
-// NOTE: Splash disabled for now while we verify render
-// import SplashAuthScreen from './src/screens/SplashAuthScreen';
-
-const Stack = createNativeStackNavigator();
-
+// App.js (TEMP TEST)
+import { View, Text } from 'react-native';
 export default function App() {
   return (
-    <AppProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Dashboard">
-          {/* <Stack.Screen name="SplashAuth" component={SplashAuthScreen} /> */}
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          <Stack.Screen name="Account" component={AccountScreen} />
-          <Stack.Screen name="Reports" component={ReportsScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AppProvider>
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor:'#0B0D13' }}>
+      <Text style={{ color:'#fff', fontSize:28 }}>HELLO</Text>
+    </View>
   );
 }
