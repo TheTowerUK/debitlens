@@ -1,3 +1,4 @@
+console.log('[DashboardScreen] mounted');
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
