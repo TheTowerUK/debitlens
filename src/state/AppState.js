@@ -27,6 +27,7 @@ const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 // ---------- Provider ----------
 export function AppProvider({ children }) {
   // Seed demo data; will be replaced on hydration if storage has data
+  console.log('[AppProvider] mounted');
   const [accounts, setAccounts] = useState([
     {
       id: 'acc1',
