@@ -4,6 +4,7 @@ import PaymentCard from '../components/PaymentCard';
 import UpcomingTimeline from '../components/UpcomingTimeline';
 import RecurringPayment from '../components/RecurringPayment';
 import { useApp } from '../state/AppState';
+console.log('[Dashboard] mounted');
 
 export default function Dashboard({ navigation }) {
   const { balance, payments } = useApp();
