@@ -10,6 +10,7 @@ import ReportsScreen from './src/screens/ReportsScreen';
 const Stack = createNativeStackNavigator();
 
 export default function App() {
+  console.log('[App] rendering');
   return (
     <AppProvider>
       <NavigationContainer>
