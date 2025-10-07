@@ -1,6 +1,7 @@
 export type TxnType = 'income' | 'expense';
 
-export interface Transaction {
+export interface Transacti
+on {
   id: string;
   accountId: string;
   accountName?: string;
