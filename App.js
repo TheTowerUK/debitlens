@@ -6,7 +6,8 @@ import { AppProvider } from './src/state/AppState';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
-// IMPORTANT: do not import Splash for this test
+// NOTE: Splash disabled for now while we verify render
+// import SplashAuthScreen from './src/screens/SplashAuthScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -15,6 +16,7 @@ export default function App() {
     <AppProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Dashboard">
+          {/* <Stack.Screen name="SplashAuth" component={SplashAuthScreen} /> */}
           <Stack.Screen name="Dashboard" component={DashboardScreen} />
           <Stack.Screen name="Account" component={AccountScreen} />
           <Stack.Screen name="Reports" component={ReportsScreen} />

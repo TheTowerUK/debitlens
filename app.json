@@ -1,5 +1,11 @@
 {
-  "plugins": [
-    "expo-secure-store"
-  ]
+  "expo": {
+    "name": "base44-app",
+    "slug": "base44-app",
+    "scheme": "base44app",
+    "platforms": ["ios", "android"], 
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
 }
