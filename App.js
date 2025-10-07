@@ -1,24 +1,9 @@
-// App.js (restore)
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { AppProvider } from './src/state/AppState';
-
-import DashboardScreen from './src/screens/DashboardScreen';
-import AccountScreen from './src/screens/AccountScreen';
-import ReportsScreen from './src/screens/ReportsScreen';
-
-const Stack = createNativeStackNavigator();
-
+// App.js TEMP
+import { View, Text } from 'react-native';
 export default function App() {
   return (
-    <AppProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Dashboard">
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          <Stack.Screen name="Account" component={AccountScreen} />
-          <Stack.Screen name="Reports" component={ReportsScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AppProvider>
+    <View style={{ flex:1, backgroundColor:'#00ccff', alignItems:'center', justifyContent:'center' }}>
+      <Text style={{ color:'#000', fontSize:26, fontWeight:'900' }}>APP.JS DIRECT</Text>
+    </View>
   );
 }
