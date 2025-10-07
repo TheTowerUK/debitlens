@@ -3,21 +3,26 @@ import { View, Text, ScrollView, Pressable, TextInput, StyleSheet } from 'react-
 import { useApp } from '../state/AppState';
 
 export default function AccountScreen({ route, navigation }) {
-  const { accountId } = route.params;
+  const { accountId } = route.params || {};
   const { getAccount, addTransaction, removeTransaction } = useApp();
   const account = getAccount(accountId);
 
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
 
-  const transactions = useMemo(() =>
-    (account?.transactions ?? []).slice().sort((a,b)=>b.ts - a.ts),
+  const transactions = useMemo(
+    () => (account?.transactions ?? []).slice().sort((a,b)=>b.ts - a.ts),
     [account?.transactions]
   );
 
   if (!account) {
     return (
-      <View style={styles.page}><Text style={styles.err}>Account not found.</Text></View>
+      <View style={styles.page}>
+        <Text style={styles.err}>Account not found.</Text>
+        <Pressable style={styles.outline} onPress={() => navigation.goBack()}>
+          <Text style={styles.outlineText}>Back</Text>
+        </Pressable>
+      </View>
     );
   }
 
@@ -34,12 +39,19 @@ export default function AccountScreen({ route, navigation }) {
 
       <Text style={styles.h2}>Add / Remove Payment</Text>
       <TextInput
-        value={amount} onChangeText={setAmount}
-        placeholder="Amount (use negative for outgoing)" placeholderTextColor="#6B7280" keyboardType="decimal-pad" style={styles.input}
+        value={amount}
+        onChangeText={setAmount}
+        placeholder="Amount (use negative for outgoing)"
+        placeholderTextColor="#6B7280"
+        keyboardType="decimal-pad"
+        style={styles.input}
       />
       <TextInput
-        value={note} onChangeText={setNote}
-        placeholder="Note (optional)" placeholderTextColor="#6B7280" style={styles.input}
+        value={note}
+        onChangeText={setNote}
+        placeholder="Note (optional)"
+        placeholderTextColor="#6B7280"
+        style={styles.input}
       />
       <Pressable style={styles.primary} onPress={submit}>
         <Text style={styles.primaryText}>Add Transaction</Text>
