@@ -4,17 +4,19 @@ import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet, Platfo
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useApp } from '../state/AppState';
 
-const BIOMETRIC_TIMEOUT_MS = 4000;   // stop waiting after 4s
-const FAILSAFE_NAV_MS      = 8000;   // absolute max time spent on splash
+const BIOMETRIC_TIMEOUT_MS = 4000;
+const FAILSAFE_NAV_MS      = 8000;
 
 export default function SplashAuthScreen({ navigation }) {
-  const { isHydrated, getPin, setPin } = useApp();
+  const { state, isHydrated, getPin, setPin } = useApp();
   const [mode, setMode] = useState('loading'); // 'loading' | 'biometric' | 'pin' | 'setpin'
   const [pinInput, setPinInput] = useState('');
 
   const failsafeRef = useRef(null);
   const didNavigate = useRef(false);
   const cancelledRef = useRef(false);
+
+  const allowBiometrics = !!state?.prefs?.useBiometrics;
 
   const safeReset = (routeName) => {
     if (didNavigate.current) return;
@@ -32,13 +34,11 @@ export default function SplashAuthScreen({ navigation }) {
     const decide = async () => {
       if (!isHydrated || cancelledRef.current) return;
 
-      // Absolute failsafe to ensure we leave splash
       if (!failsafeRef.current) {
         failsafeRef.current = setTimeout(goDashboard, FAILSAFE_NAV_MS);
       }
 
       try {
-        // Web: skip biometrics
         if (Platform.OS === 'web') {
           const stored = await getPin().catch(() => null);
           setMode(stored ? 'pin' : 'setpin');
@@ -47,18 +47,18 @@ export default function SplashAuthScreen({ navigation }) {
 
         const storedPin = await getPin().catch(() => null);
 
+        // Biometric capability
         const [hasHw, enrolled, supported] = await Promise.all([
           LocalAuthentication.hasHardwareAsync().catch(() => false),
           LocalAuthentication.isEnrolledAsync().catch(() => false),
           LocalAuthentication.supportedAuthenticationTypesAsync().catch(() => []),
         ]);
 
-        const canBiometric = hasHw && enrolled && (supported?.length ?? 0) > 0;
+        const canBiometric = allowBiometrics && hasHw && enrolled && (supported?.length ?? 0) > 0;
 
         if (canBiometric) {
           setMode('biometric');
 
-          // Race biometric prompt against timeout
           const result = await Promise.race([
             LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock to view accounts' }),
             new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), BIOMETRIC_TIMEOUT_MS)),
@@ -69,12 +69,11 @@ export default function SplashAuthScreen({ navigation }) {
             return goDashboard();
           }
 
-          // fallback to PIN flow
           setMode(storedPin ? 'pin' : 'setpin');
           return;
         }
 
-        // No biometric available → PIN flow
+        // No biometrics (or disabled) → PIN flow
         setMode(storedPin ? 'pin' : 'setpin');
       } catch {
         setMode('pin');
@@ -90,9 +89,8 @@ export default function SplashAuthScreen({ navigation }) {
         failsafeRef.current = null;
       }
     };
-  }, [isHydrated, getPin, navigation]);
+  }, [isHydrated, allowBiometrics, getPin, navigation]);
 
-  // ----- UI States -----
   if (mode === 'loading') {
     return (
       <View style={styles.center}>
@@ -124,7 +122,9 @@ export default function SplashAuthScreen({ navigation }) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Secure Access</Text>
-      <Text style={styles.subtle}>PIN or Face/Touch ID</Text>
+      <Text style={styles.subtle}>
+        {allowBiometrics ? 'PIN or Face/Touch ID' : 'PIN (biometrics disabled in Settings)'}
+      </Text>
 
       {mode === 'biometric' ? (
         <Pressable

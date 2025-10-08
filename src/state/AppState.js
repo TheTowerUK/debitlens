@@ -33,6 +33,10 @@ const initialState = {
   user: null,           // { id, name, email } or null
   accounts: [],         // [{ id, name, type }]
   transactions: [],     // [{ id, accountId, accountName?, date:"YYYY-MM-DD", amount, type:"income"|"expense", category, note? }]
+  prefs: {
+    useBiometrics: true,
+    theme: 'dark',      // 'dark' | 'light'
+  },
   lastSync: null,       // ISO
 };
 
@@ -41,8 +45,12 @@ const initialState = {
 // ----------------------------
 function reducer(state, action) {
   switch (action.type) {
-    case 'BOOTSTRAP_DONE':
-      return { ...state, ...action.payload, isLoading: false };
+    case 'BOOTSTRAP_DONE': {
+      // tolerate missing prefs from older payloads
+      const incoming = action.payload || {};
+      const prefs = { ...initialState.prefs, ...(incoming.prefs || {}) };
+      return { ...state, ...incoming, prefs, isLoading: false };
+    }
 
     case 'SIGN_IN':
       return { ...state, user: action.payload.user };
@@ -73,6 +81,9 @@ function reducer(state, action) {
     case 'DELETE_TXN':
       return { ...state, transactions: state.transactions.filter(t => t.id !== action.payload.id) };
 
+    case 'UPDATE_PREFS':
+      return { ...state, prefs: { ...state.prefs, ...(action.payload || {}) } };
+
     default:
       return state;
   }
@@ -99,6 +110,7 @@ export function AppProvider({ children }) {
         user: next.user,
         accounts: next.accounts,
         transactions: next.transactions,
+        prefs: next.prefs,
         lastSync: new Date().toISOString(),
       };
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -107,7 +119,7 @@ export function AppProvider({ children }) {
     }
   }
 
-  // PIN helpers for SplashAuthScreen
+  // PIN helpers for SplashAuthScreen + Settings
   async function getPinRaw() {
     try { return await AsyncStorage.getItem(PIN_KEY); } catch { return null; }
   }
@@ -210,6 +222,13 @@ export function AppProvider({ children }) {
         await persist(next);
       },
 
+      // Preferences
+      async updatePrefs(patch) {
+        const next = reducer(state, { type: 'UPDATE_PREFS', payload: patch });
+        dispatch({ type: 'UPDATE_PREFS', payload: patch });
+        await persist(next);
+      },
+
       // Utilities
       async clearAll() {
         try {
@@ -249,7 +268,7 @@ export function AppProvider({ children }) {
     actions,
     selectors,
 
-    // used by SplashAuthScreen
+    // used by SplashAuthScreen + Settings
     isHydrated,
     getPin: getPinRaw,
     setPin: setPinRaw,
@@ -288,6 +307,7 @@ function seedDemo() {
     user: null,
     accounts: [acc1, acc2],
     transactions: txns,
+    prefs: { ...initialState.prefs },
     lastSync: new Date().toISOString(),
   };
 }

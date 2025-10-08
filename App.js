@@ -14,6 +14,7 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import ReportScreen from './src/screens/ReportScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +30,7 @@ export default function App() {
           <Stack.Screen name="Account" component={AccountScreen} />
           <Stack.Screen name="Report" component={ReportScreen} />
           <Stack.Screen name="History" component={HistoryScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

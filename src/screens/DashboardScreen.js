@@ -62,16 +62,18 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
-      {/* QUICK ACTIONS */}
       <View style={styles.actionsRow}>
-        <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
-          <Text style={styles.btnText}>Reports</Text>
-        </Pressable>
+  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
+    <Text style={styles.btnText}>Reports</Text>
+  </Pressable>
+  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
+    <Text style={styles.btnText}>View History</Text>
+  </Pressable>
+  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Settings')}>
+    <Text style={styles.btnText}>Settings</Text>
+  </Pressable>
+</View>
 
-        <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
-          <Text style={styles.btnText}>View History</Text>
-        </Pressable>
-      </View>
 
       {/* ACCOUNTS LIST */}
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
