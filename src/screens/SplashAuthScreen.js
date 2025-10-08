@@ -11,35 +11,42 @@ export default function SplashAuthScreen({ navigation }) {
   const { isHydrated, getPin, setPin } = useApp();
   const [mode, setMode] = useState('loading'); // 'loading' | 'biometric' | 'pin' | 'setpin'
   const [pinInput, setPinInput] = useState('');
+
   const failsafeRef = useRef(null);
+  const didNavigate = useRef(false);
+  const cancelledRef = useRef(false);
+
+  const safeReset = (routeName) => {
+    if (didNavigate.current) return;
+    didNavigate.current = true;
+    navigation.reset({ index: 0, routes: [{ name: routeName }] });
+  };
 
   useEffect(() => {
-    let cancelled = false;
+    cancelledRef.current = false;
 
     const goDashboard = () => {
-      if (!cancelled) navigation.replace('Dashboard');
+      if (!cancelledRef.current) safeReset('Dashboard');
     };
 
     const decide = async () => {
-      if (!isHydrated || cancelled) return;
+      if (!isHydrated || cancelledRef.current) return;
 
-      // Absolute failsafe: always leave splash by X seconds
+      // Absolute failsafe to ensure we leave splash
       if (!failsafeRef.current) {
         failsafeRef.current = setTimeout(goDashboard, FAILSAFE_NAV_MS);
       }
 
       try {
-        // On web: skip biometrics entirely
+        // Web: skip biometrics
         if (Platform.OS === 'web') {
           const stored = await getPin().catch(() => null);
           setMode(stored ? 'pin' : 'setpin');
           return;
         }
 
-        // Determine fallback PIN path up front
         const storedPin = await getPin().catch(() => null);
 
-        // Check biometric capability
         const [hasHw, enrolled, supported] = await Promise.all([
           LocalAuthentication.hasHardwareAsync().catch(() => false),
           LocalAuthentication.isEnrolledAsync().catch(() => false),
@@ -51,18 +58,18 @@ export default function SplashAuthScreen({ navigation }) {
         if (canBiometric) {
           setMode('biometric');
 
-          // Race biometric prompt against a timeout to avoid hanging
+          // Race biometric prompt against timeout
           const result = await Promise.race([
             LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock to view accounts' }),
             new Promise(resolve => setTimeout(() => resolve({ success: false, timeout: true }), BIOMETRIC_TIMEOUT_MS)),
           ]);
 
-          if (!cancelled && result?.success) {
-            clearTimeout(failsafeRef.current); failsafeRef.current = null;
+          if (!cancelledRef.current && result?.success) {
+            if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
             return goDashboard();
           }
 
-          // Biometric failed or timed out → PIN/SET PIN
+          // fallback to PIN flow
           setMode(storedPin ? 'pin' : 'setpin');
           return;
         }
@@ -70,14 +77,20 @@ export default function SplashAuthScreen({ navigation }) {
         // No biometric available → PIN flow
         setMode(storedPin ? 'pin' : 'setpin');
       } catch {
-        // Any unexpected error → PIN
         setMode('pin');
       }
     };
 
     decide();
-    return () => { cancelled = true; };
-  }, [isHydrated]);
+
+    return () => {
+      cancelledRef.current = true;
+      if (failsafeRef.current) {
+        clearTimeout(failsafeRef.current);
+        failsafeRef.current = null;
+      }
+    };
+  }, [isHydrated, getPin, navigation]);
 
   // ----- UI States -----
   if (mode === 'loading') {
@@ -92,8 +105,8 @@ export default function SplashAuthScreen({ navigation }) {
   const submitPin = async () => {
     const stored = await getPin().catch(() => null);
     if (stored === pinInput.trim()) {
-      clearTimeout(failsafeRef.current); failsafeRef.current = null;
-      navigation.replace('Dashboard');
+      if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
+      safeReset('Dashboard');
     } else {
       setPinInput('');
       alert('Incorrect PIN');
@@ -104,8 +117,8 @@ export default function SplashAuthScreen({ navigation }) {
     const v = pinInput.trim();
     if (!/^\d{4,6}$/.test(v)) return alert('Enter a 4–6 digit PIN');
     await setPin(v);
-    clearTimeout(failsafeRef.current); failsafeRef.current = null;
-    navigation.replace('Dashboard');
+    if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
+    safeReset('Dashboard');
   };
 
   return (
@@ -119,8 +132,8 @@ export default function SplashAuthScreen({ navigation }) {
           onPress={async () => {
             const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock' });
             if (res.success) {
-              clearTimeout(failsafeRef.current); failsafeRef.current = null;
-              navigation.replace('Dashboard');
+              if (failsafeRef.current) { clearTimeout(failsafeRef.current); failsafeRef.current = null; }
+              safeReset('Dashboard');
             } else {
               const stored = await getPin().catch(() => null);
               setMode(stored ? 'pin' : 'setpin');

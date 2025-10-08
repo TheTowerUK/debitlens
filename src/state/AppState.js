@@ -3,9 +3,10 @@ import React, { createContext, useContext, useEffect, useMemo, useReducer } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ----------------------------
-// Storage
+// Storage keys
 // ----------------------------
 const STORAGE_KEY = '@base44_app_state_v1';
+const PIN_KEY     = '@base44_app_pin';
 
 // ----------------------------
 // Helpers
@@ -13,12 +14,13 @@ const STORAGE_KEY = '@base44_app_state_v1';
 const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// Compute account balance from transactions
+// Compute account balance from global transactions
 function computeBalance(transactions, accountId) {
   let bal = 0;
   for (const t of transactions) {
     if (t.accountId !== accountId) continue;
-    bal += t.type === 'expense' ? -Number(t.amount || 0) : Number(t.amount || 0);
+    const amt = Number(t.amount || 0);
+    bal += t.type === 'expense' ? -amt : amt;
   }
   return bal;
 }
@@ -27,11 +29,11 @@ function computeBalance(transactions, accountId) {
 // Initial state
 // ----------------------------
 const initialState = {
-  isLoading: true,      // SplashAuthScreen watches this
+  isLoading: true,      // SplashAuthScreen waits for this to be false
   user: null,           // { id, name, email } or null
-  accounts: [],         // [{ id, name, type? }]
-  transactions: [],     // [{ id, accountId, date:"YYYY-MM-DD", amount, type:"income"|"expense", category, note? }]
-  lastSync: null,       // ISO timestamp of last save
+  accounts: [],         // [{ id, name, type }]
+  transactions: [],     // [{ id, accountId, accountName?, date:"YYYY-MM-DD", amount, type:"income"|"expense", category, note? }]
+  lastSync: null,       // ISO
 };
 
 // ----------------------------
@@ -53,6 +55,9 @@ function reducer(state, action) {
 
     case 'SET_TRANSACTIONS':
       return { ...state, transactions: Array.isArray(action.payload) ? action.payload : [] };
+
+    case 'ADD_ACCOUNT':
+      return { ...state, accounts: [action.payload, ...state.accounts] };
 
     case 'ADD_TXN':
       return { ...state, transactions: [action.payload, ...state.transactions] };
@@ -84,6 +89,9 @@ const AppContext = createContext(null);
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  // boolean used by SplashAuthScreen
+  const isHydrated = !state.isLoading;
+
   // Persist selected fields to storage
   async function persist(next) {
     try {
@@ -99,6 +107,17 @@ export function AppProvider({ children }) {
     }
   }
 
+  // PIN helpers for SplashAuthScreen
+  async function getPinRaw() {
+    try { return await AsyncStorage.getItem(PIN_KEY); } catch { return null; }
+  }
+  async function setPinRaw(pin) {
+    try { await AsyncStorage.setItem(PIN_KEY, String(pin)); } catch {}
+  }
+  async function clearPinRaw() {
+    try { await AsyncStorage.removeItem(PIN_KEY); } catch {}
+  }
+
   // Bootstrap from storage (or seed demo)
   useEffect(() => {
     let alive = true;
@@ -109,11 +128,9 @@ export function AppProvider({ children }) {
           const parsed = JSON.parse(raw);
           dispatch({ type: 'BOOTSTRAP_DONE', payload: parsed });
         } else {
-          // Seed minimal demo data so screens work out of the box
           const demo = seedDemo();
           if (alive) {
             dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
-            // Save the seed
             await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
           }
         }
@@ -122,14 +139,10 @@ export function AppProvider({ children }) {
         if (alive) dispatch({ type: 'BOOTSTRAP_DONE', payload: initialState });
       }
     })();
-    console.log('[AppProvider] mounted');
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
-  // Action helpers that both dispatch and persist
+  // Actions (persist after each change)
   const actions = useMemo(() => {
     return {
       // Auth
@@ -153,6 +166,14 @@ export function AppProvider({ children }) {
         await persist(next);
       },
 
+      async addAccount(name, type = 'current') {
+        const acc = { id: uid(), name: String(name || 'Account'), type };
+        const next = reducer(state, { type: 'ADD_ACCOUNT', payload: acc });
+        dispatch({ type: 'ADD_ACCOUNT', payload: acc });
+        await persist(next);
+        return acc;
+      },
+
       // Transactions
       async setTransactions(transactions) {
         const next = reducer(state, { type: 'SET_TRANSACTIONS', payload: transactions });
@@ -161,15 +182,16 @@ export function AppProvider({ children }) {
       },
 
       async addTransaction(txn) {
+        const account = (state.accounts || []).find(a => a.id === txn.accountId);
         const safeTxn = {
           id: uid(),
           accountId: txn.accountId,
-          date: (txn.date || todayISO()),
-          amount: Number(txn.amount || 0),
+          accountName: txn.accountName || account?.name,
+          date: txn.date || todayISO(),
+          amount: Math.abs(Number(txn.amount || 0)),
           type: txn.type === 'expense' ? 'expense' : 'income',
           category: txn.category || (txn.type === 'expense' ? 'General' : 'Income'),
           note: txn.note || '',
-          accountName: txn.accountName || undefined,
         };
         const next = reducer(state, { type: 'ADD_TXN', payload: safeTxn });
         dispatch({ type: 'ADD_TXN', payload: safeTxn });
@@ -197,7 +219,6 @@ export function AppProvider({ children }) {
         }
       },
 
-      // Optional: re-seed demo data
       async seedDemo() {
         const demo = seedDemo();
         dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
@@ -207,19 +228,33 @@ export function AppProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
 
-  // Derived selectors (memoized)
+  // Selectors (derived values)
   const selectors = useMemo(() => {
     return {
       accountBalance(accountId) {
         return computeBalance(state.transactions, accountId);
       },
       totalNet() {
-        return state.accounts.reduce((sum, a) => sum + computeBalance(state.transactions, a.id), 0);
+        return (state.accounts || []).reduce(
+          (sum, a) => sum + computeBalance(state.transactions, a.id),
+          0
+        );
       },
     };
   }, [state.transactions, state.accounts]);
 
-  const value = useMemo(() => ({ state, dispatch, actions, selectors }), [state, actions, selectors]);
+  const value = useMemo(() => ({
+    state,
+    dispatch,
+    actions,
+    selectors,
+
+    // used by SplashAuthScreen
+    isHydrated,
+    getPin: getPinRaw,
+    setPin: setPinRaw,
+    clearPin: clearPinRaw,
+  }), [state, actions, selectors, isHydrated]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
@@ -229,9 +264,7 @@ export function AppProvider({ children }) {
 // ----------------------------
 export function useApp() {
   const ctx = useContext(AppContext);
-  if (!ctx) {
-    throw new Error('useApp must be used within AppProvider');
-  }
+  if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
 
@@ -244,10 +277,10 @@ function seedDemo() {
 
   const txns = [
     { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount: 2500, type: 'income',  category: 'Salary',   note: 'Monthly pay' },
-    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:  -65, type: 'expense', category: 'Groceries', note: 'Supermarket' },
-    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:  -40, type: 'expense', category: 'Transport', note: 'Fuel' },
-    { id: uid(), accountId: acc2.id, accountName: acc2.name, date: todayISO(), amount:  200, type: 'income',  category: 'Transfer', note: 'Move to savings' },
-  ].map(t => ({ ...t, amount: Math.abs(t.amount), type: t.type })); // ensure positive amounts
+    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:   65, type: 'expense', category: 'Groceries', note: 'Supermarket' },
+    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:   40, type: 'expense', category: 'Transport', note: 'Fuel' },
+    { id: uid(), accountId: acc2.id, accountName: acc2.name, date: todayISO(), amount:  200, type: 'income',  category: 'Transfer',  note: 'Move to savings' },
+  ];
 
   return {
     ...initialState,
