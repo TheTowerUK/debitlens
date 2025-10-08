@@ -25,7 +25,7 @@ export default function AccountScreen({ route, navigation }) {
     const all = state.transactions || [];
     return all
       .filter(t => t.accountId === accountId)
-      .sort((a, b) => b.date.localeCompare(a.date)); // newest first
+      .sort((a, b) => b.date.localeCompare(a.date));
   }, [state.transactions, accountId]);
 
   if (!account) {
@@ -55,10 +55,7 @@ export default function AccountScreen({ route, navigation }) {
       <View style={styles.header}>
         <View>
           <Text style={styles.h1}>{account.name}</Text>
-          <Text style={[
-            styles.balance,
-            { color: balance < 0 ? '#F87171' : '#34D399' }
-          ]}>
+          <Text style={[styles.balance, { color: balance < 0 ? '#F87171' : '#34D399' }]}>
             £{fmt(Math.abs(balance))}
           </Text>
         </View>
@@ -84,7 +81,7 @@ export default function AccountScreen({ route, navigation }) {
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.cat}>
-                {item.category}{item.note ? ` • ${item.note}` : ''}
+                {(item.category || '') + (item.note ? ` • ${item.note}` : '')}
               </Text>
               <Text style={styles.date}>{item.date}</Text>
             </View>
@@ -92,43 +89,16 @@ export default function AccountScreen({ route, navigation }) {
               styles.amount,
               item.type === 'expense' ? styles.red : styles.green
             ]}>
-              {item.type === 'expense' ? '-' : '+'}£{fmt(item.amount)}
+              {(item.type === 'expense' ? '-' : '+') + '£' + fmt(item.amount)}
             </Text>
           </Pressable>
         )}
-        ListEmptyComponent={
-          <Text style={[styles.subtle, { padding: 16 }]}>
-            No transactions yet.
-          </Text>
-        }
+        ListEmptyComponent={<Text style={[styles.subtle, { padding: 16 }]}>No transactions yet.</Text>}
       />
 
       {/* FAB */}
-
-      renderItem={({ item }) => (
-        <Pressable
-          style={styles.row}
-          onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}  // 👈 edit
-          onLongPress={() => onDelete(item.id)}                                              // 👈 delete (optional)
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cat}>{item.category}{item.note ? ` • ${item.note}` : ''}</Text>
-            <Text style={styles.date}>{item.date}</Text>
-          </View>
-          <Text style={[
-            styles.amount,
-            item.type === 'expense' ? styles.red : styles.green
-          ]}>
-            {item.type === 'expense' ? '-' : '+'}£{Number(item.amount).toFixed(2)}
-          </Text>
-        </Pressable>
-      )}
-
       <Pressable
-        style={({ pressed }) => [
-          styles.fab,
-          pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }
-        ]}
+        style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
         onPress={() => navigation.navigate('TxnEditor', { mode: 'add', accountId })}
       >
         <Text style={styles.fabText}>＋</Text>
@@ -176,5 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 6, elevation: 6,
   },
+  fabPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   fabText: { color: '#fff', fontSize: 32, marginTop: -2 },
 });

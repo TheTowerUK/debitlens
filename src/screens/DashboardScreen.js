@@ -23,14 +23,13 @@ export default function DashboardScreen({ navigation }) {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
-  // ---------- Derived totals ----------
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => sum + selectors.accountBalance(a.id), 0);
   }, [accounts, state.transactions, selectors]);
 
   const positiveTrend = totalBalance >= 0;
 
-  // ---------- Account CRUD ----------
+  // ----- Account CRUD -----
   const handleAddAccount = async () => {
     const name = newName.trim();
     if (!name) return;
@@ -54,11 +53,13 @@ export default function DashboardScreen({ navigation }) {
     if (!name) return;
     const next = accounts.map(a => (a.id === editingId ? { ...a, name } : a));
     await actions.setAccounts(next);
-    // also update accountName on existing txns for nicer display
+
+    // keep existing txns' accountName in sync (optional, nice UX)
     const nextTxns = transactions.map(t =>
       t.accountId === editingId ? { ...t, accountName: name } : t
     );
     await actions.setTransactions(nextTxns);
+
     cancelEdit();
   };
 
@@ -111,20 +112,17 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
-      {/* QUICK ACTIONS (wraps on narrow screens) */}
+      {/* QUICK ACTIONS */}
       <View style={styles.actionsRow}>
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Report')}>
           <Text style={styles.btnText}>Reports</Text>
         </Pressable>
-
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('History')}>
           <Text style={styles.btnText}>View History</Text>
         </Pressable>
-
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Settings')}>
           <Text style={styles.btnText}>Settings</Text>
         </Pressable>
-
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.btnText}>Notifications</Text>
         </Pressable>
@@ -134,23 +132,20 @@ export default function DashboardScreen({ navigation }) {
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
         {accounts.map((a) => {
           const bal = selectors.accountBalance(a.id);
-
-          // derive last transaction for this account
           const txs = transactions
             .filter((t) => t.accountId === a.id)
             .sort((x, y) => y.date.localeCompare(x.date)); // newest first
 
           const lastTx = txs[0] || null;
           const lastDate = lastTx ? new Date(`${lastTx.date}T00:00:00`) : null;
-
           const isEditing = editingId === a.id;
 
           return (
             <View key={a.id} style={{ marginBottom: 12 }}>
               <Pressable
-                style={({ pressed }) => [styles.card, pressed && !isEditing && { opacity: 0.9 }]}
+                style={({ pressed }) => [styles.card, !isEditing && pressed ? styles.cardPressed : null]}
                 onPress={() => {
-                  if (isEditing) return; // don’t navigate while editing
+                  if (isEditing) return;
                   navigation.navigate('Account', { accountId: a.id });
                 }}
               >
@@ -168,16 +163,15 @@ export default function DashboardScreen({ navigation }) {
 
                 {lastTx ? (
                   <Text style={styles.lastTx}>
-                    {lastTx.note || lastTx.category} · {lastDate?.toLocaleDateString()}
+                    {(lastTx.note || lastTx.category) + ' • ' + (lastDate ? lastDate.toLocaleDateString() : '')}
                   </Text>
                 ) : (
                   <Text style={styles.lastTxEmpty}>No transactions yet</Text>
                 )}
 
-                {/* Row actions */}
                 {!isEditing && (
                   <View style={styles.cardActions}>
-                    <Pressable style={styles.btnTiny} onPress={() => startEdit(a)}>
+                    <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(a)}>
                       <Text style={styles.btnTinyText}>Edit</Text>
                     </Pressable>
                     <Pressable style={styles.btnTinyDanger} onPress={() => confirmDelete(a)}>
@@ -187,7 +181,6 @@ export default function DashboardScreen({ navigation }) {
                 )}
               </Pressable>
 
-              {/* Inline editor */}
               {isEditing && (
                 <View style={styles.editBox}>
                   <TextInput
@@ -234,13 +227,10 @@ export default function DashboardScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* FLOATING ADD BUTTON */}
+      {/* FAB */}
       {!adding && (
         <Pressable
-          style={({ pressed }) => [
-            styles.fab,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
-          ]}
+          style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
           onPress={() => {
             cancelEdit();
             setAdding(true);
@@ -269,19 +259,16 @@ const styles = StyleSheet.create({
   trend: { color: '#9CA3AF', fontSize: 16, fontWeight: '600' },
   logout: { color: '#93C5FD', marginTop: 6, fontWeight: '700' },
 
-  // Quick actions (wrapping)
+  // Quick actions (wrap)
   actionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 12,
     marginRight: -8,
+    // negative bottom margin to neutralize child bottom margins on last row:
     marginBottom: -8,
   },
-  actionBtn: {
-    marginRight: 8,
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-  },
+  actionBtn: { marginRight: 8, marginBottom: 8, alignSelf: 'flex-start' },
 
   scroll: { flex: 1 },
 
@@ -295,15 +282,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
   },
+  cardPressed: { opacity: 0.92 },
+
   cardTop: { flexDirection: 'row', justifyContent: 'space-between' },
   cardName: { color: '#fff', fontSize: 18, fontWeight: '700' },
   balance: { fontSize: 18, fontWeight: '800' },
   lastTx: { color: '#9CA3AF', fontSize: 13, marginTop: 6 },
   lastTxEmpty: { color: '#6B7280', fontSize: 13, marginTop: 6 },
 
-  cardActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cardActions: { flexDirection: 'row', marginTop: 12 },
   btnTiny: { backgroundColor: '#1F2937', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  btnTinyDanger: { backgroundColor: '#7F1D1D', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  btnTinyDanger: { backgroundColor: '#7F1D1D', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginLeft: 8 },
   btnTinyText: { color: '#fff', fontWeight: '700' },
 
   editBox: { backgroundColor: '#1E293B', borderRadius: 12, padding: 12, marginTop: 8 },
@@ -323,7 +312,6 @@ const styles = StyleSheet.create({
   },
   addRow: { flexDirection: 'row', justifyContent: 'space-between' },
 
-  // Reuse your button styles
   btnCancel: {
     backgroundColor: '#374151',
     borderRadius: 8,
@@ -353,5 +341,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 6,
   },
+  fabPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
 });
