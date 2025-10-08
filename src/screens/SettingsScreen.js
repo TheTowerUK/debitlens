@@ -142,10 +142,6 @@ export default function SettingsScreen({ navigation }) {
       <Pressable style={[styles.btnSecondary, { marginTop: 12 }]} onPress={handleSignOut}>
         <Text style={styles.btnText}>Sign Out</Text>
       </Pressable>
-      // In DashboardScreen.js actions row, add:
-      <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Notifications')}>
-        <Text style={styles.btnText}>Notifications</Text>
-      </Pressable>
     </View>
   );
 }

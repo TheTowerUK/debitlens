@@ -62,21 +62,25 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
+      {/* QUICK ACTIONS */}
       <View style={styles.actionsRow}>
-  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
-    <Text style={styles.btnText}>Reports</Text>
-  </Pressable>
-  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
-    <Text style={styles.btnText}>View History</Text>
-  </Pressable>
-  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Settings')}>
-    <Text style={styles.btnText}>Settings</Text>
-  </Pressable>
-  // In DashboardScreen.js actions row, add:
-  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Notifications')}>
-    <Text style={styles.btnText}>Notifications</Text>
-  </Pressable>
-</View>
+        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Report')}>
+          <Text style={styles.btnText}>Reports</Text>
+        </Pressable>
+
+        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('History')}>
+          <Text style={styles.btnText}>View History</Text>
+        </Pressable>
+
+        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Settings')}>
+          <Text style={styles.btnText}>Settings</Text>
+        </Pressable>
+
+        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Notifications')}>
+          <Text style={styles.btnText}>Notifications</Text>
+        </Pressable>
+      </View>
+
 
 
       {/* ACCOUNTS LIST */}
@@ -161,6 +165,21 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  actionsRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  marginBottom: 12,
+
+  // spacing without relying on `gap`:
+  marginRight: -8, // cancels child right-margin on last item per row
+  marginBottom: -8, // cancels child bottom-margin on last row
+},
+actionBtn: {
+  marginRight: 8,
+  marginBottom: 8,
+  alignSelf: 'flex-start', // prevents stretching if any parent tries to
+},
+
   container: { flex: 1, backgroundColor: '#0B0D13', paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
