@@ -51,6 +51,17 @@ export default function DashboardScreen({ navigation }) {
           {positiveTrend ? '▲ Up' : '▼ Down'}
         </Text>
       </View>
+  {/* QUICK ACTIONS */}
+  <View style={styles.actionsRow}>
+   <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
+     <Text style={styles.btnText}>Reports</Text>
+   </Pressable>
+
+   <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
+     <Text style={styles.btnText}>View History</Text>
+   </Pressable>
+  </View>
+
 
       {/* ACCOUNTS LIST */}
       <ScrollView
@@ -95,6 +106,7 @@ export default function DashboardScreen({ navigation }) {
                 <Text style={styles.lastTxEmpty}>No transactions yet</Text>
               )}
             </Pressable>
+            
           );
         })}
 
@@ -138,6 +150,7 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  
   container: { flex: 1, backgroundColor: '#0B0D13', paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
@@ -212,4 +225,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
+  actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+// If RN version doesn't support `gap`, use:
+// actionsRow: { flexDirection: 'row', marginBottom: 12 },
+// and set `style={{ marginRight: 8 }}` on the first button.
+
 });

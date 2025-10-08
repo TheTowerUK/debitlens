@@ -12,6 +12,9 @@ import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import ReportScreen from './src/screens/ReportScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
+
+<Stack.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
 
 const Stack = createNativeStackNavigator();
 
