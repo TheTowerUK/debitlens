@@ -24,6 +24,12 @@ const PIN_KEY = 'app/pin/v1';
 // ---------- Utils ----------
 const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
+const initialState = {
+  isLoading: false,
+  user: null,
+  accounts: [],
+  transactions: [],
+};
 // ---------- Provider ----------
 export function AppProvider({ children }) {
   // Seed demo data; will be replaced on hydration if storage has data
@@ -41,6 +47,14 @@ export function AppProvider({ children }) {
     },
     { id: 'acc2', name: 'Savings', currency: '£', transactions: [{ id: 't4', amount: 300.0, note: 'Top-up', ts: Date.now() - 86400000 * 3 }] },
   ]);
+
+  const [state, setState] = React.useState(initialState);
+  // console.log('[AppProvider] mounted');
+  return (
+    <AppContext.Provider value={{ state, setState }}>
+      {children}
+    </AppContext.Provider>
+  );
 
   const [isHydrated, setIsHydrated] = useState(false);
 

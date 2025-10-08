@@ -8,14 +8,17 @@ const PRESETS = [
   { key: 'LAST_MONTH', label: 'Last Month' },
   { key: 'THIS_WEEK',  label: 'This Week'  },
 ];
-
 const TYPE_TABS = ['all', 'income', 'expense'];
 
 const fmtAmt = (n) => Number(n || 0).toFixed(2);
-const dateKey = (iso) => iso.slice(0,10); // YYYY-MM-DD
+const dateKey = (iso) => iso.slice(0,10);
 
-export default function HistoryScreen({ navigation }) {
-  const { state } = useApp();
+export default function HistoryScreen() {
+  const app = useApp();
+  const stateLike = app?.state ?? app ?? {};
+  const transactions = Array.isArray(stateLike.transactions) ? stateLike.transactions : [];
+  const accounts     = Array.isArray(stateLike.accounts)     ? stateLike.accounts     : [];
+
   const [preset, setPreset]   = useState('THIS_MONTH');
   const [typeTab, setTypeTab] = useState('all');
   const [q, setQ]             = useState('');
@@ -24,24 +27,20 @@ export default function HistoryScreen({ navigation }) {
   const { start, end } = useMemo(() => startEndForPreset(preset), [preset]);
 
   const filtered = useMemo(() => {
-    let base = filterTxns(state.transactions ?? [], { dateStart: start, dateEnd: end, accountId });
+    let base = filterTxns(transactions, { dateStart: start, dateEnd: end, accountId });
     if (typeTab !== 'all') base = base.filter(t => t.type === typeTab);
 
     const query = q.trim().toLowerCase();
     if (query) {
       base = base.filter(t => {
         const hay = [
-          t.category || '',
-          t.note || '',
-          t.accountName || '',
-          String(t.amount)
+          t.category || '', t.note || '', t.accountName || '', String(t.amount)
         ].join(' ').toLowerCase();
         return hay.includes(query);
       });
     }
-    // newest first
     return base.sort((a,b) => b.date.localeCompare(a.date));
-  }, [state.transactions, start, end, accountId, typeTab, q]);
+  }, [transactions, start, end, accountId, typeTab, q]);
 
   const sections = useMemo(() => {
     const bucket = new Map();
@@ -50,7 +49,7 @@ export default function HistoryScreen({ navigation }) {
       if (!bucket.has(key)) bucket.set(key, []);
       bucket.get(key).push(t);
     }
-    const keys = Array.from(bucket.keys()).sort((a,b) => b.localeCompare(a)); // desc
+    const keys = Array.from(bucket.keys()).sort((a,b) => b.localeCompare(a)); // newest first
     return keys.map(k => ({ title: k, data: bucket.get(k) }));
   }, [filtered]);
 
@@ -64,7 +63,6 @@ export default function HistoryScreen({ navigation }) {
           <View style={styles.header}>
             <Text style={styles.title}>History</Text>
 
-            {/* Presets */}
             <View style={styles.row}>
               {PRESETS.map(p => (
                 <Pressable key={p.key} onPress={() => setPreset(p.key)}
@@ -74,7 +72,6 @@ export default function HistoryScreen({ navigation }) {
               ))}
             </View>
 
-            {/* Type tabs */}
             <View style={styles.row}>
               {TYPE_TABS.map(t => (
                 <Pressable key={t} onPress={() => setTypeTab(t)}
@@ -86,12 +83,11 @@ export default function HistoryScreen({ navigation }) {
               ))}
             </View>
 
-            {/* Account cycle + search */}
             <View style={styles.rowWrap}>
               <Pressable
                 style={styles.accountBtn}
                 onPress={() => {
-                  const ids = (state.accounts ?? []).map(a => a.id);
+                  const ids = accounts.map(a => a.id);
                   if (!ids.length) return;
                   if (!accountId) { setAccountId(ids[0]); return; }
                   const idx = ids.indexOf(accountId);
@@ -120,18 +116,7 @@ export default function HistoryScreen({ navigation }) {
           </View>
         )}
         renderItem={({ item }) => (
-          <Pressable
-            style={styles.rowItem}
-            onPress={() => {
-              // Optional: navigate to an edit/details screen if you have one
-              // navigation.navigate('TransactionDetail', { id: item.id })
-            }}
-            onLongPress={() => {
-              // TODO: wire to your AppState delete action if available
-              // Example: dispatch({ type: 'DELETE_TXN', id: item.id })
-              console.log('Long-pressed txn', item.id);
-            }}
-          >
+          <View style={styles.rowItem}>
             <View style={{ flex: 1 }}>
               <Text style={styles.cat}>{item.category}{item.accountName ? ` • ${item.accountName}` : ''}</Text>
               {!!item.note && <Text style={styles.note} numberOfLines={1}>{item.note}</Text>}
@@ -139,7 +124,7 @@ export default function HistoryScreen({ navigation }) {
             <Text style={[styles.amount, item.type === 'expense' ? styles.red : styles.green]}>
               {item.type === 'expense' ? '-' : '+'}£{fmtAmt(item.amount)}
             </Text>
-          </Pressable>
+          </View>
         )}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
         contentContainerStyle={{ paddingBottom: 40 }}
@@ -155,12 +140,10 @@ const styles = StyleSheet.create({
   rowWrap: { flexDirection: 'row', gap: 8, marginVertical: 6, alignItems: 'center' },
   chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: '#ddd' },
   chipActive: { backgroundColor: '#111', borderColor: '#111' },
-  chipText: { color: '#111' },
-  chipTextActive: { color: 'white' },
+  chipText: { color: '#111' }, chipTextActive: { color: 'white' },
   pill: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F3F4F6' },
   pillActive: { backgroundColor: '#111' },
-  pillText: { color: '#111' },
-  pillTextActive: { color: '#fff' },
+  pillText: { color: '#111' }, pillTextActive: { color: '#fff' },
   accountBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F3F4F6' },
   accountBtnText: { fontSize: 13 },
   search: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
@@ -171,7 +154,6 @@ const styles = StyleSheet.create({
   cat: { fontSize: 14, color: '#111827', fontWeight: '600' },
   note: { fontSize: 12, color: '#6B7280', marginTop: 2, maxWidth: 200 },
   amount: { width: 120, textAlign: 'right', fontWeight: '700' },
-  red: { color: '#DC2626' },
-  green: { color: '#16A34A' },
+  red: { color: '#DC2626' }, green: { color: '#16A34A' },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: '#E5E7EB' },
 });
