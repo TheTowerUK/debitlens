@@ -1,41 +1,26 @@
+// src/screens/ReportScreen.js
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
-import { VictoryBar, VictoryChart, VictoryPie, VictoryAxis } from 'victory-native';
-import { useApp } from '../state/AppState'; // adjust if your path differs
-import { startEndForPreset, filterTxns, totals, byCategory, byDay } from '../utils/reports';
-
-// in src/screens/ReportScreen.js
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
-
-let VictoryBar, VictoryChart, VictoryPie, VictoryAxis;
-try {
-  ({ VictoryBar, VictoryChart, VictoryPie, VictoryAxis } = require('victory-native'));
-} catch (e) {
-  // charts unavailable, we'll fallback to text
-}
-
 import { useApp } from '../state/AppState';
 import { startEndForPreset, filterTxns, totals, byCategory, byDay } from '../utils/reports';
 
-// ...inside render:
-{VictoryChart ? (
-  <View style={styles.chartBlock}>
-    <Text style={styles.sectionTitle}>Daily Net</Text>
-    <VictoryChart>
-      <VictoryAxis tickFormat={(t) => String(t).slice(5)} />
-      <VictoryBar data={data.byDay} x="date" y="value" />
-    </VictoryChart>
-  </View>
-) : (
-  <Text style={styles.subtle}>Charts unavailable (install victory-native & react-native-svg)</Text>
-)}
+// Optional charts: guard require so the app still runs if victory-native isn't installed
+let VictoryBar, VictoryChart, VictoryPie, VictoryAxis;
+let HAS_CHARTS = false;
+try {
+  ({ VictoryBar, VictoryChart, VictoryPie, VictoryAxis } = require('victory-native'));
+  HAS_CHARTS = true;
+} catch (e) {
+  HAS_CHARTS = false;
+}
 
 const PRESETS = [
   { key: 'THIS_MONTH', label: 'This Month' },
   { key: 'LAST_MONTH', label: 'Last Month' },
   { key: 'THIS_WEEK',  label: 'This Week'  },
 ];
+
+const fmt = (n) => Number(n || 0).toFixed(2);
 
 export default function ReportScreen() {
   const { state } = useApp(); // expects state.transactions and state.accounts
@@ -61,6 +46,16 @@ export default function ReportScreen() {
         <View style={styles.container}>
           <Text style={styles.title}>Reports</Text>
 
+          {/* Chart availability banner */}
+          {!HAS_CHARTS && (
+            <View style={styles.banner}>
+              <Text style={styles.bannerText}>
+                Charts unavailable — install {'"victory-native"'} and {'"react-native-svg"'}. 
+                Example: npx expo install victory-native react-native-svg
+              </Text>
+            </View>
+          )}
+
           {/* Preset filter */}
           <View style={styles.row}>
             {PRESETS.map(p => (
@@ -74,20 +69,20 @@ export default function ReportScreen() {
           <View style={styles.cards}>
             <View style={[styles.card, styles.income]}>
               <Text style={styles.cardLabel}>Income</Text>
-              <Text style={styles.cardValue}>£{data.totals.income.toFixed(2)}</Text>
+              <Text style={styles.cardValue}>£{fmt(data.totals.income)}</Text>
             </View>
             <View style={[styles.card, styles.expense]}>
               <Text style={styles.cardLabel}>Expense</Text>
-              <Text style={styles.cardValue}>£{data.totals.expense.toFixed(2)}</Text>
+              <Text style={styles.cardValue}>£{fmt(data.totals.expense)}</Text>
             </View>
             <View style={[styles.card, styles.net]}>
               <Text style={styles.cardLabel}>Net</Text>
-              <Text style={styles.cardValue}>£{data.totals.net.toFixed(2)}</Text>
+              <Text style={styles.cardValue}>£{fmt(data.totals.net)}</Text>
             </View>
           </View>
 
           {/* Bar: daily net */}
-          {data.byDay.length > 0 && (
+          {HAS_CHARTS && data.byDay.length > 0 && (
             <View style={styles.chartBlock}>
               <Text style={styles.sectionTitle}>Daily Net</Text>
               <VictoryChart>
@@ -98,7 +93,7 @@ export default function ReportScreen() {
           )}
 
           {/* Pie: by category */}
-          {data.byCat.length > 0 && (
+          {HAS_CHARTS && data.byCat.length > 0 && (
             <View style={styles.chartBlock}>
               <Text style={styles.sectionTitle}>By Category (Net)</Text>
               <VictoryPie
@@ -150,7 +145,7 @@ export default function ReportScreen() {
           <Text style={styles.txnDate}>{item.date.slice(0,10)}</Text>
           <Text style={styles.txnCat}>{item.category}</Text>
           <Text style={[styles.txnAmt, item.type === 'expense' ? styles.red : styles.green]}>
-            {item.type === 'expense' ? '-' : '+'}£{item.amount.toFixed(2)}
+            {item.type === 'expense' ? '-' : '+'}£{fmt(item.amount)}
           </Text>
         </View>
       )}
@@ -179,6 +174,8 @@ const styles = StyleSheet.create({
   pill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F3F4F6' },
   pillText: { fontSize: 13 },
   subtle: { color: '#6B7280', marginTop: 4 },
+  banner: { backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8, marginBottom: 8 },
+  bannerText: { color: '#92400E', fontSize: 12 },
   txnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
   txnDate: { width: 100, color: '#374151' },
   txnCat: { flex: 1, color: '#374151' },
