@@ -104,6 +104,26 @@ export default function AccountScreen({ route, navigation }) {
       />
 
       {/* FAB */}
+
+      renderItem={({ item }) => (
+        <Pressable
+          style={styles.row}
+          onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}  // 👈 edit
+          onLongPress={() => onDelete(item.id)}                                              // 👈 delete (optional)
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cat}>{item.category}{item.note ? ` • ${item.note}` : ''}</Text>
+            <Text style={styles.date}>{item.date}</Text>
+          </View>
+          <Text style={[
+            styles.amount,
+            item.type === 'expense' ? styles.red : styles.green
+          ]}>
+            {item.type === 'expense' ? '-' : '+'}£{Number(item.amount).toFixed(2)}
+          </Text>
+        </Pressable>
+      )}
+
       <Pressable
         style={({ pressed }) => [
           styles.fab,

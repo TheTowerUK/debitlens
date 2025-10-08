@@ -8,14 +8,20 @@ import {
   TextInput,
   StyleSheet,
   Platform,
+  Alert,
 } from 'react-native';
 import { useApp } from '../state/AppState';
 
 export default function DashboardScreen({ navigation }) {
   const { state, selectors, actions } = useApp();
   const accounts = state.accounts ?? [];
+  const transactions = state.transactions ?? [];
+
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
+
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
 
   // ---------- Derived totals ----------
   const totalBalance = useMemo(() => {
@@ -24,13 +30,56 @@ export default function DashboardScreen({ navigation }) {
 
   const positiveTrend = totalBalance >= 0;
 
-  // ---------- Actions ----------
+  // ---------- Account CRUD ----------
   const handleAddAccount = async () => {
     const name = newName.trim();
     if (!name) return;
     await actions.addAccount(name, 'current');
     setNewName('');
     setAdding(false);
+  };
+
+  const startEdit = (acc) => {
+    setEditingId(acc.id);
+    setEditName(acc.name);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+  };
+
+  const saveEdit = async () => {
+    const name = editName.trim();
+    if (!name) return;
+    const next = accounts.map(a => (a.id === editingId ? { ...a, name } : a));
+    await actions.setAccounts(next);
+    // also update accountName on existing txns for nicer display
+    const nextTxns = transactions.map(t =>
+      t.accountId === editingId ? { ...t, accountName: name } : t
+    );
+    await actions.setTransactions(nextTxns);
+    cancelEdit();
+  };
+
+  const confirmDelete = (acc) => {
+    Alert.alert(
+      'Delete account?',
+      'This will also remove all transactions belonging to this account.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const nextAccounts = accounts.filter(a => a.id !== acc.id);
+            await actions.setAccounts(nextAccounts);
+            const nextTxns = transactions.filter(t => t.accountId !== acc.id);
+            await actions.setTransactions(nextTxns);
+          },
+        },
+      ]
+    );
   };
 
   const onLogout = async () => {
@@ -62,7 +111,7 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
-      {/* QUICK ACTIONS */}
+      {/* QUICK ACTIONS (wraps on narrow screens) */}
       <View style={styles.actionsRow}>
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Report')}>
           <Text style={styles.btnText}>Reports</Text>
@@ -81,47 +130,84 @@ export default function DashboardScreen({ navigation }) {
         </Pressable>
       </View>
 
-
-
       {/* ACCOUNTS LIST */}
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
         {accounts.map((a) => {
           const bal = selectors.accountBalance(a.id);
 
           // derive last transaction for this account
-          const txs = (state.transactions ?? [])
+          const txs = transactions
             .filter((t) => t.accountId === a.id)
             .sort((x, y) => y.date.localeCompare(x.date)); // newest first
 
           const lastTx = txs[0] || null;
           const lastDate = lastTx ? new Date(`${lastTx.date}T00:00:00`) : null;
 
-          return (
-            <Pressable
-              key={a.id}
-              style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
-              onPress={() => navigation.navigate('Account', { accountId: a.id })}
-            >
-              <View style={styles.cardTop}>
-                <Text style={styles.cardName}>{a.name}</Text>
-                <Text
-                  style={[
-                    styles.balance,
-                    { color: bal < 0 ? '#F87171' : '#34D399' },
-                  ]}
-                >
-                  £{Math.abs(bal).toFixed(2)}
-                </Text>
-              </View>
+          const isEditing = editingId === a.id;
 
-              {lastTx ? (
-                <Text style={styles.lastTx}>
-                  {lastTx.note || lastTx.category} · {lastDate?.toLocaleDateString()}
-                </Text>
-              ) : (
-                <Text style={styles.lastTxEmpty}>No transactions yet</Text>
+          return (
+            <View key={a.id} style={{ marginBottom: 12 }}>
+              <Pressable
+                style={({ pressed }) => [styles.card, pressed && !isEditing && { opacity: 0.9 }]}
+                onPress={() => {
+                  if (isEditing) return; // don’t navigate while editing
+                  navigation.navigate('Account', { accountId: a.id });
+                }}
+              >
+                <View style={styles.cardTop}>
+                  <Text style={styles.cardName}>{a.name}</Text>
+                  <Text
+                    style={[
+                      styles.balance,
+                      { color: bal < 0 ? '#F87171' : '#34D399' },
+                    ]}
+                  >
+                    £{Math.abs(bal).toFixed(2)}
+                  </Text>
+                </View>
+
+                {lastTx ? (
+                  <Text style={styles.lastTx}>
+                    {lastTx.note || lastTx.category} · {lastDate?.toLocaleDateString()}
+                  </Text>
+                ) : (
+                  <Text style={styles.lastTxEmpty}>No transactions yet</Text>
+                )}
+
+                {/* Row actions */}
+                {!isEditing && (
+                  <View style={styles.cardActions}>
+                    <Pressable style={styles.btnTiny} onPress={() => startEdit(a)}>
+                      <Text style={styles.btnTinyText}>Edit</Text>
+                    </Pressable>
+                    <Pressable style={styles.btnTinyDanger} onPress={() => confirmDelete(a)}>
+                      <Text style={styles.btnTinyText}>Delete</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* Inline editor */}
+              {isEditing && (
+                <View style={styles.editBox}>
+                  <TextInput
+                    value={editName}
+                    onChangeText={setEditName}
+                    placeholder="Account name"
+                    placeholderTextColor="#6B7280"
+                    style={styles.input}
+                  />
+                  <View style={styles.editRow}>
+                    <Pressable style={styles.btnSave} onPress={saveEdit}>
+                      <Text style={styles.btnText}>Save</Text>
+                    </Pressable>
+                    <Pressable style={styles.btnCancel} onPress={cancelEdit}>
+                      <Text style={styles.btnText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </View>
               )}
-            </Pressable>
+            </View>
           );
         })}
 
@@ -155,7 +241,10 @@ export default function DashboardScreen({ navigation }) {
             styles.fab,
             pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
           ]}
-          onPress={() => setAdding(true)}
+          onPress={() => {
+            cancelEdit();
+            setAdding(true);
+          }}
         >
           <Text style={styles.fabText}>＋</Text>
         </Pressable>
@@ -165,22 +254,8 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  actionsRow: {
-  flexDirection: 'row',
-  flexWrap: 'wrap',
-  marginBottom: 12,
-
-  // spacing without relying on `gap`:
-  marginRight: -8, // cancels child right-margin on last item per row
-  marginBottom: -8, // cancels child bottom-margin on last row
-},
-actionBtn: {
-  marginRight: 8,
-  marginBottom: 8,
-  alignSelf: 'flex-start', // prevents stretching if any parent tries to
-},
-
   container: { flex: 1, backgroundColor: '#0B0D13', paddingHorizontal: 16 },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -194,13 +269,26 @@ actionBtn: {
   trend: { color: '#9CA3AF', fontSize: 16, fontWeight: '600' },
   logout: { color: '#93C5FD', marginTop: 6, fontWeight: '700' },
 
+  // Quick actions (wrapping)
+  actionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+    marginRight: -8,
+    marginBottom: -8,
+  },
+  actionBtn: {
+    marginRight: 8,
+    marginBottom: 8,
+    alignSelf: 'flex-start',
+  },
+
   scroll: { flex: 1 },
 
   card: {
     backgroundColor: '#111827',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 12,
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
@@ -213,13 +301,17 @@ actionBtn: {
   lastTx: { color: '#9CA3AF', fontSize: 13, marginTop: 6 },
   lastTxEmpty: { color: '#6B7280', fontSize: 13, marginTop: 6 },
 
-  addBox: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-  },
+  cardActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  btnTiny: { backgroundColor: '#1F2937', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  btnTinyDanger: { backgroundColor: '#7F1D1D', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  btnTinyText: { color: '#fff', fontWeight: '700' },
+
+  editBox: { backgroundColor: '#1E293B', borderRadius: 12, padding: 12, marginTop: 8 },
+  editRow: { flexDirection: 'row', justifyContent: 'space-between' },
+
+  addBox: { backgroundColor: '#1E293B', borderRadius: 12, padding: 16, marginTop: 12 },
   addLabel: { color: '#9CA3AF', marginBottom: 8 },
+
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
@@ -231,7 +323,7 @@ actionBtn: {
   },
   addRow: { flexDirection: 'row', justifyContent: 'space-between' },
 
-  // Reuses your existing button styles
+  // Reuse your button styles
   btnCancel: {
     backgroundColor: '#374151',
     borderRadius: 8,
@@ -262,5 +354,4 @@ actionBtn: {
     elevation: 6,
   },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
- 
 });
