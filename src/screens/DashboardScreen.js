@@ -262,10 +262,5 @@ actionBtn: {
     elevation: 6,
   },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
-
-  // Quick actions row above account list
-  actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  // If your RN version doesn't support `gap`, use:
-  // actionsRow: { flexDirection: 'row', marginBottom: 12 },
-  // and add style={{ marginRight: 8 }} to the first button.
+ 
 });
