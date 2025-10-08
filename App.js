@@ -40,6 +40,7 @@ function RootNavigator() {
       <Stack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
       <Stack.Screen name="Report" component={ReportScreen} options={{ title: 'Reports' }} />
       <Stack.Screen name="History" component={HistoryScreen} options={{ title: 'History' }} />
+      <Stack.Screen name="Login"  component={LoginScreen} options={{ headerShown: false }}/>
     </Stack.Navigator>
   );
 }

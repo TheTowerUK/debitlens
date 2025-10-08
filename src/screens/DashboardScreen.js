@@ -19,28 +19,23 @@ export default function DashboardScreen({ navigation }) {
 
   // ---------- Derived totals ----------
   const totalBalance = useMemo(() => {
-    // sum balances across all accounts using selectors.accountBalance
     return accounts.reduce((sum, a) => sum + selectors.accountBalance(a.id), 0);
   }, [accounts, state.transactions, selectors]);
 
   const positiveTrend = totalBalance >= 0;
 
-  // ---------- Add Account ----------
+  // ---------- Actions ----------
   const handleAddAccount = async () => {
     const name = newName.trim();
     if (!name) return;
-
-    const newAccount = {
-      id: Math.random().toString(36).slice(2) + Date.now().toString(36),
-      name,
-      type: 'current',
-    };
-
-    // Persist via AppState actions
-    await actions.setAccounts([...accounts, newAccount]);
-
+    await actions.addAccount(name, 'current');
     setNewName('');
     setAdding(false);
+  };
+
+  const onLogout = async () => {
+    await actions.signOut();
+    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
   };
 
   return (
@@ -58,22 +53,22 @@ export default function DashboardScreen({ navigation }) {
             £{Math.abs(totalBalance).toFixed(2)}
           </Text>
         </View>
-        <Text style={styles.trend}>{positiveTrend ? '▲ Up' : '▼ Down'}</Text>
+
+        <View style={styles.headerRight}>
+          <Text style={styles.trend}>{positiveTrend ? '▲ Up' : '▼ Down'}</Text>
+          <Pressable onPress={onLogout} hitSlop={8}>
+            <Text style={styles.logout}>Logout</Text>
+          </Pressable>
+        </View>
       </View>
 
-      {/* QUICK ACTIONS (uses your existing btnSave/btnText styles) */}
+      {/* QUICK ACTIONS */}
       <View style={styles.actionsRow}>
-        <Pressable
-          style={styles.btnSave}
-          onPress={() => navigation.navigate('Report')}
-        >
+        <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
           <Text style={styles.btnText}>Reports</Text>
         </Pressable>
 
-        <Pressable
-          style={styles.btnSave}
-          onPress={() => navigation.navigate('History')}
-        >
+        <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
           <Text style={styles.btnText}>View History</Text>
         </Pressable>
       </View>
@@ -83,7 +78,7 @@ export default function DashboardScreen({ navigation }) {
         {accounts.map((a) => {
           const bal = selectors.accountBalance(a.id);
 
-          // derive last transaction for this account from global state.transactions
+          // derive last transaction for this account
           const txs = (state.transactions ?? [])
             .filter((t) => t.accountId === a.id)
             .sort((x, y) => y.date.localeCompare(x.date)); // newest first
@@ -111,8 +106,7 @@ export default function DashboardScreen({ navigation }) {
 
               {lastTx ? (
                 <Text style={styles.lastTx}>
-                  {lastTx.note || lastTx.category}{' '}
-                  · {lastDate?.toLocaleDateString()}
+                  {lastTx.note || lastTx.category} · {lastDate?.toLocaleDateString()}
                 </Text>
               ) : (
                 <Text style={styles.lastTxEmpty}>No transactions yet</Text>
@@ -169,10 +163,14 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingBottom: 20,
   },
+  headerRight: { alignItems: 'flex-end' },
   heading: { color: '#9CA3AF', fontSize: 16 },
   total: { fontSize: 32, fontWeight: '800' },
   trend: { color: '#9CA3AF', fontSize: 16, fontWeight: '600' },
+  logout: { color: '#93C5FD', marginTop: 6, fontWeight: '700' },
+
   scroll: { flex: 1 },
+
   card: {
     backgroundColor: '#111827',
     borderRadius: 16,
@@ -189,6 +187,7 @@ const styles = StyleSheet.create({
   balance: { fontSize: 18, fontWeight: '800' },
   lastTx: { color: '#9CA3AF', fontSize: 13, marginTop: 6 },
   lastTxEmpty: { color: '#6B7280', fontSize: 13, marginTop: 6 },
+
   addBox: {
     backgroundColor: '#1E293B',
     borderRadius: 12,
@@ -206,6 +205,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   addRow: { flexDirection: 'row', justifyContent: 'space-between' },
+
+  // Reuses your existing button styles
   btnCancel: {
     backgroundColor: '#374151',
     borderRadius: 8,
@@ -219,6 +220,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   btnText: { color: '#fff', fontWeight: '700' },
+
   fab: {
     position: 'absolute',
     bottom: 28,
@@ -236,7 +238,9 @@ const styles = StyleSheet.create({
   },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
 
-  // You already had this; keeping it for the actions row above the list
+  // Quick actions row above account list
   actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  // If RN version doesn't support `gap`, use the alternative you noted.
+  // If your RN version doesn't support `gap`, use:
+  // actionsRow: { flexDirection: 'row', marginBottom: 12 },
+  // and add style={{ marginRight: 8 }} to the first button.
 });
