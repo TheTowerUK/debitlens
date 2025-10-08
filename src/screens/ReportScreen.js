@@ -4,6 +4,33 @@ import { VictoryBar, VictoryChart, VictoryPie, VictoryAxis } from 'victory-nativ
 import { useApp } from '../state/AppState'; // adjust if your path differs
 import { startEndForPreset, filterTxns, totals, byCategory, byDay } from '../utils/reports';
 
+// in src/screens/ReportScreen.js
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+
+let VictoryBar, VictoryChart, VictoryPie, VictoryAxis;
+try {
+  ({ VictoryBar, VictoryChart, VictoryPie, VictoryAxis } = require('victory-native'));
+} catch (e) {
+  // charts unavailable, we'll fallback to text
+}
+
+import { useApp } from '../state/AppState';
+import { startEndForPreset, filterTxns, totals, byCategory, byDay } from '../utils/reports';
+
+// ...inside render:
+{VictoryChart ? (
+  <View style={styles.chartBlock}>
+    <Text style={styles.sectionTitle}>Daily Net</Text>
+    <VictoryChart>
+      <VictoryAxis tickFormat={(t) => String(t).slice(5)} />
+      <VictoryBar data={data.byDay} x="date" y="value" />
+    </VictoryChart>
+  </View>
+) : (
+  <Text style={styles.subtle}>Charts unavailable (install victory-native & react-native-svg)</Text>
+)}
+
 const PRESETS = [
   { key: 'THIS_MONTH', label: 'This Month' },
   { key: 'LAST_MONTH', label: 'Last Month' },
