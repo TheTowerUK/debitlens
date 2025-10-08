@@ -72,6 +72,10 @@ export default function DashboardScreen({ navigation }) {
   <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Settings')}>
     <Text style={styles.btnText}>Settings</Text>
   </Pressable>
+  // In DashboardScreen.js actions row, add:
+  <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Notifications')}>
+    <Text style={styles.btnText}>Notifications</Text>
+  </Pressable>
 </View>
 
 
