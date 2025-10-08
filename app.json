@@ -2,7 +2,7 @@
   "expo": {
     "name": "base44-app",
     "slug": "base44-app",
-    "platforms": ["ios", "android"]
+    "plugins": ["expo-notifications"]
   }
 }
 

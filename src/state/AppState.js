@@ -29,16 +29,25 @@ function computeBalance(transactions, accountId) {
 // Initial state
 // ----------------------------
 const initialState = {
-  isLoading: true,      // SplashAuthScreen waits for this to be false
-  user: null,           // { id, name, email } or null
-  accounts: [],         // [{ id, name, type }]
-  transactions: [],     // [{ id, accountId, accountName?, date:"YYYY-MM-DD", amount, type:"income"|"expense", category, note? }]
+  isLoading: true,
+  user: null,
+  accounts: [],
+  transactions: [],
   prefs: {
     useBiometrics: true,
-    theme: 'dark',      // 'dark' | 'light'
+    theme: 'dark',
+    // 👇 NEW (defaults)
+    notifications: {
+      dailyEnabled: false,
+      dailyTime: '09:00',
+      weeklyEnabled: false,
+      weeklyDay: 2,      // Monday (Sun=1)
+      weeklyTime: '09:00',
+    },
   },
-  lastSync: null,       // ISO
+  lastSync: null,
 };
+
 
 // ----------------------------
 // Reducer
