@@ -1,196 +1,260 @@
 // src/state/AppState.js
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 
-/**
- * AppState responsibilities:
- * - Persist accounts + transactions to AsyncStorage
- * - Compute balances (per-account + total)
- * - CRUD: accounts and transactions
- * - PIN storage (for biometric fallback) via SecureStore
- *
- * Notes:
- * - Negative amounts = outgoings; positive = income
- * - Change STORAGE_KEY version if you change the stored shape (simple migration guard)
- */
+// ----------------------------
+// Storage
+// ----------------------------
+const STORAGE_KEY = '@base44_app_state_v1';
 
-const AppCtx = createContext(null);
+// ----------------------------
+// Helpers
+// ----------------------------
+const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
-// ---------- Config ----------
-const STORAGE_KEY = 'app/accounts/v1';
-const PIN_KEY = 'app/pin/v1';
+// Compute account balance from transactions
+function computeBalance(transactions, accountId) {
+  let bal = 0;
+  for (const t of transactions) {
+    if (t.accountId !== accountId) continue;
+    bal += t.type === 'expense' ? -Number(t.amount || 0) : Number(t.amount || 0);
+  }
+  return bal;
+}
 
-// ---------- Utils ----------
-const sum = (arr) => arr.reduce((a, b) => a + b, 0);
-
+// ----------------------------
+// Initial state
+// ----------------------------
 const initialState = {
-  isLoading: false,
-  user: null,
-  accounts: [],
-  transactions: [],
+  isLoading: true,      // SplashAuthScreen watches this
+  user: null,           // { id, name, email } or null
+  accounts: [],         // [{ id, name, type? }]
+  transactions: [],     // [{ id, accountId, date:"YYYY-MM-DD", amount, type:"income"|"expense", category, note? }]
+  lastSync: null,       // ISO timestamp of last save
 };
-// ---------- Provider ----------
+
+// ----------------------------
+// Reducer
+// ----------------------------
+function reducer(state, action) {
+  switch (action.type) {
+    case 'BOOTSTRAP_DONE':
+      return { ...state, ...action.payload, isLoading: false };
+
+    case 'SIGN_IN':
+      return { ...state, user: action.payload.user };
+
+    case 'SIGN_OUT':
+      return { ...state, user: null };
+
+    case 'SET_ACCOUNTS':
+      return { ...state, accounts: Array.isArray(action.payload) ? action.payload : [] };
+
+    case 'SET_TRANSACTIONS':
+      return { ...state, transactions: Array.isArray(action.payload) ? action.payload : [] };
+
+    case 'ADD_TXN':
+      return { ...state, transactions: [action.payload, ...state.transactions] };
+
+    case 'UPDATE_TXN': {
+      const { id, patch } = action.payload;
+      return {
+        ...state,
+        transactions: state.transactions.map(t => (t.id === id ? { ...t, ...patch } : t)),
+      };
+    }
+
+    case 'DELETE_TXN':
+      return { ...state, transactions: state.transactions.filter(t => t.id !== action.payload.id) };
+
+    default:
+      return state;
+  }
+}
+
+// ----------------------------
+// Context
+// ----------------------------
+const AppContext = createContext(null);
+
+// ----------------------------
+// Provider
+// ----------------------------
 export function AppProvider({ children }) {
-  // Seed demo data; will be replaced on hydration if storage has data
-  console.log('[AppProvider] mounted');
-  const [accounts, setAccounts] = useState([
-    {
-      id: 'acc1',
-      name: 'Main',
-      currency: '£',
-      transactions: [
-        { id: 't1', amount: 2100.0, note: 'Salary', ts: Date.now() - 86400000 * 8 },
-        { id: 't2', amount: -950.0, note: 'Rent', ts: Date.now() - 86400000 * 6 },
-        { id: 't3', amount: -42.5, note: 'Coffee', ts: Date.now() - 86400000 * 1 },
-      ],
-    },
-    { id: 'acc2', name: 'Savings', currency: '£', transactions: [{ id: 't4', amount: 300.0, note: 'Top-up', ts: Date.now() - 86400000 * 3 }] },
-  ]);
+  const [state, dispatch] = useReducer(reducer, initialState);
 
-  const [state, setState] = React.useState(initialState);
-  // console.log('[AppProvider] mounted');
-  return (
-    <AppContext.Provider value={{ state, setState }}>
-      {children}
-    </AppContext.Provider>
-  );
+  // Persist selected fields to storage
+  async function persist(next) {
+    try {
+      const payload = {
+        user: next.user,
+        accounts: next.accounts,
+        transactions: next.transactions,
+        lastSync: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (e) {
+      console.warn('[AppState] persist error', e);
+    }
+  }
 
-  const [isHydrated, setIsHydrated] = useState(false);
-
-  // ---------- Hydration ----------
+  // Bootstrap from storage (or seed demo)
   useEffect(() => {
+    let alive = true;
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          try {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              setAccounts(parsed);
-            } else {
-              console.warn('Stored accounts were not an array; keeping seed.');
-            }
-          } catch (e) {
-            console.warn('Failed to parse stored accounts; keeping seed.', e);
+        if (alive && raw) {
+          const parsed = JSON.parse(raw);
+          dispatch({ type: 'BOOTSTRAP_DONE', payload: parsed });
+        } else {
+          // Seed minimal demo data so screens work out of the box
+          const demo = seedDemo();
+          if (alive) {
+            dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
+            // Save the seed
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
           }
         }
       } catch (e) {
-        console.warn('Hydration failed', e);
-      } finally {
-        // ALWAYS finish hydration so the splash screen can proceed
-        setIsHydrated(true);
+        console.warn('[AppState] bootstrap error', e);
+        if (alive) dispatch({ type: 'BOOTSTRAP_DONE', payload: initialState });
       }
     })();
+    console.log('[AppProvider] mounted');
+
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  // ---------- Persistence ----------
-  useEffect(() => {
-    if (!isHydrated) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(accounts)).catch((e) => {
-      console.warn('Persist failed', e);
-    });
-  }, [accounts, isHydrated]);
+  // Action helpers that both dispatch and persist
+  const actions = useMemo(() => {
+    return {
+      // Auth
+      async signIn({ name, email, remember = true }) {
+        const user = { id: uid(), name: name || 'User', email: email || '' };
+        const next = reducer(state, { type: 'SIGN_IN', payload: { user } });
+        dispatch({ type: 'SIGN_IN', payload: { user } });
+        if (remember) await persist(next);
+      },
 
-  // ---------- Selectors ----------
-  const getAccount = (accountId) => accounts.find((a) => a.id === accountId);
+      async signOut() {
+        const next = reducer(state, { type: 'SIGN_OUT' });
+        dispatch({ type: 'SIGN_OUT' });
+        await persist(next);
+      },
 
-  const balanceOf = (accountId) => {
-    const acc = getAccount(accountId);
-    if (!acc?.transactions?.length) return 0;
-    return sum(acc.transactions.map((t) => Number(t.amount) || 0));
-  };
+      // Accounts
+      async setAccounts(accounts) {
+        const next = reducer(state, { type: 'SET_ACCOUNTS', payload: accounts });
+        dispatch({ type: 'SET_ACCOUNTS', payload: accounts });
+        await persist(next);
+      },
 
-  const totalBalance = useMemo(() => sum(accounts.map((a) => balanceOf(a.id))), [accounts]);
+      // Transactions
+      async setTransactions(transactions) {
+        const next = reducer(state, { type: 'SET_TRANSACTIONS', payload: transactions });
+        dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
+        await persist(next);
+      },
 
-  // ---------- Mutators ----------
-  const createAccount = (name, currency = '£') => {
-    const acc = {
-      id: `acc${Date.now()}`,
-      name: name?.trim() || 'Account',
-      currency,
-      transactions: [],
+      async addTransaction(txn) {
+        const safeTxn = {
+          id: uid(),
+          accountId: txn.accountId,
+          date: (txn.date || todayISO()),
+          amount: Number(txn.amount || 0),
+          type: txn.type === 'expense' ? 'expense' : 'income',
+          category: txn.category || (txn.type === 'expense' ? 'General' : 'Income'),
+          note: txn.note || '',
+          accountName: txn.accountName || undefined,
+        };
+        const next = reducer(state, { type: 'ADD_TXN', payload: safeTxn });
+        dispatch({ type: 'ADD_TXN', payload: safeTxn });
+        await persist(next);
+      },
+
+      async updateTransaction(id, patch) {
+        const next = reducer(state, { type: 'UPDATE_TXN', payload: { id, patch } });
+        dispatch({ type: 'UPDATE_TXN', payload: { id, patch } });
+        await persist(next);
+      },
+
+      async deleteTransaction(id) {
+        const next = reducer(state, { type: 'DELETE_TXN', payload: { id } });
+        dispatch({ type: 'DELETE_TXN', payload: { id } });
+        await persist(next);
+      },
+
+      // Utilities
+      async clearAll() {
+        try {
+          await AsyncStorage.removeItem(STORAGE_KEY);
+        } finally {
+          dispatch({ type: 'BOOTSTRAP_DONE', payload: { ...initialState, isLoading: false } });
+        }
+      },
+
+      // Optional: re-seed demo data
+      async seedDemo() {
+        const demo = seedDemo();
+        dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
+      },
     };
-    setAccounts((prev) => [acc, ...prev]);
-    return acc.id;
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
-  const renameAccount = (accountId, newName) => {
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === accountId ? { ...a, name: newName?.trim() || a.name } : a)),
-    );
-  };
-
-  const removeAccount = (accountId) => {
-    setAccounts((prev) => prev.filter((a) => a.id !== accountId));
-  };
-
-  const addTransaction = (accountId, { amount, note }) => {
-    const tx = {
-      id: `t${Date.now()}`,
-      amount: Number(amount),
-      note: note?.trim() || '',
-      ts: Date.now(),
+  // Derived selectors (memoized)
+  const selectors = useMemo(() => {
+    return {
+      accountBalance(accountId) {
+        return computeBalance(state.transactions, accountId);
+      },
+      totalNet() {
+        return state.accounts.reduce((sum, a) => sum + computeBalance(state.transactions, a.id), 0);
+      },
     };
-    if (Number.isNaN(tx.amount) || !tx.amount) return;
-    setAccounts((prev) =>
-      prev.map((a) => (a.id === accountId ? { ...a, transactions: [tx, ...(a.transactions || [])] } : a)),
-    );
-  };
+  }, [state.transactions, state.accounts]);
 
-  const removeTransaction = (accountId, txId) => {
-    setAccounts((prev) =>
-      prev.map((a) =>
-        a.id === accountId ? { ...a, transactions: (a.transactions || []).filter((t) => t.id !== txId) } : a,
-      ),
-    );
-  };
+  const value = useMemo(() => ({ state, dispatch, actions, selectors }), [state, actions, selectors]);
 
-  // ---------- PIN (for Splash/Auth fallback) ----------
-  const setPin = async (pin) => {
-    await SecureStore.setItemAsync(PIN_KEY, String(pin));
-  };
-
-  const getPin = async () => {
-    return (await SecureStore.getItemAsync(PIN_KEY)) || null;
-  };
-
-  // ---------- Value ----------
-  const value = useMemo(
-    () => ({
-      // lifecycle
-      isHydrated,
-
-      // data
-      accounts,
-      totalBalance,
-
-      // selectors
-      getAccount,
-      balanceOf,
-
-      // account ops
-      createAccount,
-      renameAccount,
-      removeAccount,
-
-      // tx ops
-      addTransaction,
-      removeTransaction,
-
-      // pin ops
-      setPin,
-      getPin,
-    }),
-    [isHydrated, accounts, totalBalance],
-  );
-
-  return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-// ---------- Hook ----------
-export const useApp = () => {
-  const ctx = useContext(AppCtx);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+// ----------------------------
+// Hook
+// ----------------------------
+export function useApp() {
+  const ctx = useContext(AppContext);
+  if (!ctx) {
+    throw new Error('useApp must be used within AppProvider');
+  }
   return ctx;
-};
+}
+
+// ----------------------------
+// Demo seed
+// ----------------------------
+function seedDemo() {
+  const acc1 = { id: uid(), name: 'Main Account', type: 'current' };
+  const acc2 = { id: uid(), name: 'Savings', type: 'savings' };
+
+  const txns = [
+    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount: 2500, type: 'income',  category: 'Salary',   note: 'Monthly pay' },
+    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:  -65, type: 'expense', category: 'Groceries', note: 'Supermarket' },
+    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:  -40, type: 'expense', category: 'Transport', note: 'Fuel' },
+    { id: uid(), accountId: acc2.id, accountName: acc2.name, date: todayISO(), amount:  200, type: 'income',  category: 'Transfer', note: 'Move to savings' },
+  ].map(t => ({ ...t, amount: Math.abs(t.amount), type: t.type })); // ensure positive amounts
+
+  return {
+    ...initialState,
+    isLoading: false,
+    user: null,
+    accounts: [acc1, acc2],
+    transactions: txns,
+    lastSync: new Date().toISOString(),
+  };
+}

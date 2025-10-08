@@ -12,26 +12,37 @@ import {
 import { useApp } from '../state/AppState';
 
 export default function DashboardScreen({ navigation }) {
-  const { accounts, balanceOf, createAccount } = useApp();
+  const { state, selectors, actions } = useApp();
+  const accounts = state.accounts ?? [];
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
   // ---------- Derived totals ----------
-  const totalBalance = useMemo(
-    () => accounts.reduce((sum, a) => sum + balanceOf(a.id), 0),
-    [accounts, balanceOf]
-  );
+  const totalBalance = useMemo(() => {
+    // sum balances across all accounts using selectors.accountBalance
+    return accounts.reduce((sum, a) => sum + selectors.accountBalance(a.id), 0);
+  }, [accounts, state.transactions, selectors]);
 
   const positiveTrend = totalBalance >= 0;
 
-  const handleAddAccount = () => {
-    if (!newName.trim()) return;
-    createAccount(newName.trim(), '£');
+  // ---------- Add Account ----------
+  const handleAddAccount = async () => {
+    const name = newName.trim();
+    if (!name) return;
+
+    const newAccount = {
+      id: Math.random().toString(36).slice(2) + Date.now().toString(36),
+      name,
+      type: 'current',
+    };
+
+    // Persist via AppState actions
+    await actions.setAccounts([...accounts, newAccount]);
+
     setNewName('');
     setAdding(false);
   };
 
-  // ---------- UI ----------
   return (
     <View style={styles.container}>
       {/* HEADER SUMMARY */}
@@ -47,44 +58,44 @@ export default function DashboardScreen({ navigation }) {
             £{Math.abs(totalBalance).toFixed(2)}
           </Text>
         </View>
-        <Text style={styles.trend}>
-          {positiveTrend ? '▲ Up' : '▼ Down'}
-        </Text>
+        <Text style={styles.trend}>{positiveTrend ? '▲ Up' : '▼ Down'}</Text>
       </View>
-  {/* QUICK ACTIONS */}
-  <View style={styles.actionsRow}>
-   <Pressable style={styles.btnSave} onPress={() => navigation.navigate('Report')}>
-     <Text style={styles.btnText}>Reports</Text>
-   </Pressable>
 
-   <Pressable style={styles.btnSave} onPress={() => navigation.navigate('History')}>
-     <Text style={styles.btnText}>View History</Text>
-   </Pressable>
-  </View>
+      {/* QUICK ACTIONS (uses your existing btnSave/btnText styles) */}
+      <View style={styles.actionsRow}>
+        <Pressable
+          style={styles.btnSave}
+          onPress={() => navigation.navigate('Report')}
+        >
+          <Text style={styles.btnText}>Reports</Text>
+        </Pressable>
 
+        <Pressable
+          style={styles.btnSave}
+          onPress={() => navigation.navigate('History')}
+        >
+          <Text style={styles.btnText}>View History</Text>
+        </Pressable>
+      </View>
 
       {/* ACCOUNTS LIST */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 100 }}
-      >
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
         {accounts.map((a) => {
-          const bal = balanceOf(a.id);
-          const txs = a.transactions ?? [];
-          const lastTx = txs.length
-            ? txs.sort((x, y) => y.ts - x.ts)[0]
-            : null;
+          const bal = selectors.accountBalance(a.id);
+
+          // derive last transaction for this account from global state.transactions
+          const txs = (state.transactions ?? [])
+            .filter((t) => t.accountId === a.id)
+            .sort((x, y) => y.date.localeCompare(x.date)); // newest first
+
+          const lastTx = txs[0] || null;
+          const lastDate = lastTx ? new Date(`${lastTx.date}T00:00:00`) : null;
 
           return (
             <Pressable
               key={a.id}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={() =>
-                navigation.navigate('Account', { accountId: a.id })
-              }
+              style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
+              onPress={() => navigation.navigate('Account', { accountId: a.id })}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.cardName}>{a.name}</Text>
@@ -97,16 +108,16 @@ export default function DashboardScreen({ navigation }) {
                   £{Math.abs(bal).toFixed(2)}
                 </Text>
               </View>
+
               {lastTx ? (
                 <Text style={styles.lastTx}>
-                  {lastTx.note} ·{' '}
-                  {new Date(lastTx.ts).toLocaleDateString()}
+                  {lastTx.note || lastTx.category}{' '}
+                  · {lastDate?.toLocaleDateString()}
                 </Text>
               ) : (
                 <Text style={styles.lastTxEmpty}>No transactions yet</Text>
               )}
             </Pressable>
-            
           );
         })}
 
@@ -150,7 +161,6 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  
   container: { flex: 1, backgroundColor: '#0B0D13', paddingHorizontal: 16 },
   header: {
     flexDirection: 'row',
@@ -225,9 +235,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabText: { color: '#fff', fontSize: 36, marginTop: -2 },
-  actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-// If RN version doesn't support `gap`, use:
-// actionsRow: { flexDirection: 'row', marginBottom: 12 },
-// and set `style={{ marginRight: 8 }}` on the first button.
 
+  // You already had this; keeping it for the actions row above the list
+  actionsRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  // If RN version doesn't support `gap`, use the alternative you noted.
 });
