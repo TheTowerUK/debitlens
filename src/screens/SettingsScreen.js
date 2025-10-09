@@ -1,179 +1,205 @@
 // src/screens/SettingsScreen.js
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  View, Text, StyleSheet, Switch, Pressable, Alert, TextInput, Platform
+  View, Text, StyleSheet, Switch, Pressable, Alert, Platform
 } from 'react-native';
-import * as LocalAuthentication from 'expo-local-authentication';
+import * as FileSystem from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Sharing from 'expo-sharing';
 import { useApp } from '../state/AppState';
 
-export default function SettingsScreen({ navigation }) {
-  const { state, actions, setPin, clearPin } = useApp();
-  const [bioCapable, setBioCapable] = useState(false);
-  const [bioReason, setBioReason] = useState('');
-  const [useBio, setUseBio] = useState(!!state?.prefs?.useBiometrics);
-  const [theme, setTheme] = useState(state?.prefs?.theme || 'dark');
-  const [newPin, setNewPin] = useState('');
+export default function SettingsScreen() {
+  const { state, actions } = useApp();
+  const prefs = state?.prefs || {};
+  const [useBio, setUseBio] = useState(!!prefs.useBiometrics);
+  const [themeDark, setThemeDark] = useState((prefs.theme || 'dark') === 'dark');
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        if (Platform.OS === 'web') {
-          if (alive) { setBioCapable(false); setBioReason('Biometrics not available on web'); }
-          return;
-        }
-        const [hasHw, enrolled, supported] = await Promise.all([
-          LocalAuthentication.hasHardwareAsync().catch(() => false),
-          LocalAuthentication.isEnrolledAsync().catch(() => false),
-          LocalAuthentication.supportedAuthenticationTypesAsync().catch(() => []),
-        ]);
-        const ok = hasHw && enrolled && (supported?.length ?? 0) > 0;
-        if (alive) {
-          setBioCapable(ok);
-          if (!ok) setBioReason('No Face/Touch ID enrolled on this device');
-        }
-      } catch {
-        if (alive) { setBioCapable(false); setBioReason('Error checking biometrics'); }
-      }
-    })();
-    return () => { alive = false; };
+  const filePrefix = useMemo(() => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `base44-backup-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
   }, []);
 
-  const toggleBiometrics = async (val) => {
-    if (val && !bioCapable) {
-      return Alert.alert('Not available', bioReason || 'Biometrics not available on this device.');
+  const onSavePrefs = async () => {
+    await actions.updatePrefs({
+      useBiometrics: useBio,
+      theme: themeDark ? 'dark' : 'light',
+    });
+    Alert.alert('Saved', 'Preferences updated.');
+  };
+
+  const onExport = async () => {
+    try {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: {
+          accounts: state.accounts || [],
+          transactions: state.transactions || [],
+          prefs: state.prefs || {},
+          lastSync: state.lastSync || null,
+        },
+      };
+      const json = JSON.stringify(payload, null, 2);
+      const uri = FileSystem.cacheDirectory + `${filePrefix}.json`;
+      await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Base44 data',
+          UTI: 'public.json',
+        });
+      } else {
+        Alert.alert('Exported', `Saved to cache:\n${uri}`);
+      }
+    } catch (e) {
+      console.warn('[settings] export failed', e);
+      Alert.alert('Export failed', String(e?.message || e));
     }
-    setUseBio(val);
-    await actions.updatePrefs({ useBiometrics: val });
   };
 
-  const toggleTheme = async () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    await actions.updatePrefs({ theme: next });
-  };
+  const onImport = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      // Handle both old and new API shapes
+      const cancelled = res.canceled || res.type === 'cancel';
+      if (cancelled) return;
 
-  const handleSavePin = async () => {
-    const v = newPin.trim();
-    if (!/^\d{4,6}$/.test(v)) {
-      return Alert.alert('Invalid PIN', 'Enter a 4–6 digit PIN');
+      const asset = res.assets ? res.assets[0] : res; // SDK API compatibility
+      const uri = asset?.uri;
+      if (!uri) return Alert.alert('Import', 'No file selected.');
+
+      const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return Alert.alert('Import failed', 'Selected file is not valid JSON.');
+      }
+
+      if (!parsed?.data) {
+        return Alert.alert('Import failed', 'File format not recognized.');
+      }
+
+      const { accounts = [], transactions = [], prefs: importedPrefs = {}, lastSync = null } = parsed.data;
+
+      Alert.alert(
+        'Restore data?',
+        `Accounts: ${accounts.length}\nTransactions: ${transactions.length}\nThis will replace current data.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Restore',
+            style: 'destructive',
+            onPress: async () => {
+              await actions.setAccounts(accounts);
+              await actions.setTransactions(transactions);
+              if (importedPrefs && typeof importedPrefs === 'object') {
+                await actions.updatePrefs(importedPrefs);
+              }
+              // lastSync is optional; if you track it, you can add an action to set it.
+              Alert.alert('Restored', 'Data import complete.');
+            },
+          },
+        ]
+      );
+    } catch (e) {
+      console.warn('[settings] import failed', e);
+      Alert.alert('Import failed', String(e?.message || e));
     }
-    await setPin(v);
-    setNewPin('');
-    Alert.alert('PIN saved', 'Your PIN has been updated.');
   };
 
-  const handleResetPin = async () => {
-    await clearPin();
-    Alert.alert('PIN cleared', 'Your PIN has been cleared. You can set a new one next time.');
-  };
-
-  const handleClearAll = async () => {
+  const onClearAll = async () => {
     Alert.alert(
-      'Clear all data?',
-      'This removes all accounts and transactions stored locally.',
+      'Delete ALL data?',
+      'This removes all accounts and transactions. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Clear',
+          text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            await actions.clearAll();
-            navigation.reset({ index: 0, routes: [{ name: 'SplashAuth' }] });
+            await actions.setAccounts([]);
+            await actions.setTransactions([]);
+            await actions.updatePrefs({
+              ...prefs,
+              // reset to safe defaults
+              theme: 'dark',
+              useBiometrics: false,
+            });
+            Alert.alert('Cleared', 'All local data removed.');
           },
         },
       ]
     );
   };
 
-  const handleSignOut = async () => {
-    await actions.signOut();
-    navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
-  };
-
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Settings</Text>
-      <Text style={styles.subtle}>Profile & preferences</Text>
+      <Text style={styles.subtle}>Preferences & Data</Text>
 
-      {/* Biometrics */}
-      <View style={styles.rowBetween}>
-        <View>
+      {/* Prefs */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
           <Text style={styles.label}>Use Face/Touch ID</Text>
-          {!bioCapable && <Text style={styles.hint}>{bioReason}</Text>}
+          <Switch value={useBio} onValueChange={setUseBio} />
         </View>
-        <Switch value={useBio} onValueChange={toggleBiometrics} disabled={!bioCapable} />
-      </View>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Dark theme</Text>
+          <Switch value={themeDark} onValueChange={setThemeDark} />
+        </View>
 
-      {/* Theme */}
-      <View style={styles.rowBetween}>
-        <Text style={styles.label}>Theme</Text>
-        <Pressable style={styles.pill} onPress={toggleTheme}>
-          <Text style={styles.pillText}>{theme === 'dark' ? 'Dark' : 'Light'}</Text>
+        <Pressable style={[styles.btnSave, { marginTop: 12 }]} onPress={onSavePrefs}>
+          <Text style={styles.btnText}>Save Preferences</Text>
         </Pressable>
       </View>
 
-      {/* PIN */}
-      <Text style={[styles.sectionTitle, { marginTop: 12 }]}>PIN</Text>
-      <TextInput
-        value={newPin}
-        onChangeText={setNewPin}
-        placeholder="New PIN (4–6 digits)"
-        placeholderTextColor="#6B7280"
-        keyboardType="number-pad"
-        secureTextEntry
-        style={styles.input}
-      />
-      <View style={styles.row}>
-        <Pressable style={styles.btnSave} onPress={handleSavePin}>
-          <Text style={styles.btnText}>Save PIN</Text>
+      {/* Backup / Restore */}
+      <View style={styles.card}>
+        <Text style={styles.label}>Data Backup</Text>
+        <View style={{ height: 8 }} />
+        <Pressable style={styles.btnSave} onPress={onExport}>
+          <Text style={styles.btnText}>Export JSON</Text>
         </Pressable>
-        <Pressable style={styles.btnCancel} onPress={handleResetPin}>
-          <Text style={styles.btnText}>Reset PIN</Text>
+        <View style={{ height: 8 }} />
+        <Pressable style={styles.btnSecondary} onPress={onImport}>
+          <Text style={styles.btnText}>Import JSON</Text>
         </Pressable>
       </View>
 
       {/* Danger zone */}
-      <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Danger Zone</Text>
-      <Pressable style={[styles.btnDanger, { marginTop: 8 }]} onPress={handleClearAll}>
-        <Text style={styles.btnText}>Clear All Local Data</Text>
-      </Pressable>
-
-      <Pressable style={[styles.btnSecondary, { marginTop: 12 }]} onPress={handleSignOut}>
-        <Text style={styles.btnText}>Sign Out</Text>
-      </Pressable>
+      <View style={styles.cardDanger}>
+        <Text style={styles.label}>Danger Zone</Text>
+        <View style={{ height: 8 }} />
+        <Pressable style={styles.btnDanger} onPress={onClearAll}>
+          <Text style={styles.btnText}>Clear All Data</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 24 },
-  h1: { color: '#fff', fontSize: 24, fontWeight: '700' },
-  subtle: { color: '#9CA3AF', marginBottom: 16, marginTop: 4 },
-  label: { color: '#E5E7EB', fontSize: 16, fontWeight: '600' },
-  hint: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginBottom: 12 },
 
-  row: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
+  cardDanger: { backgroundColor: '#1F2937', borderRadius: 16, padding: 16, marginBottom: 12 },
 
-  pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
-  pillText: { color: '#fff', fontWeight: '700' },
+  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
 
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-  },
+  label: { color: '#E5E7EB', fontWeight: '700' },
 
-  sectionTitle: { color: '#E5E7EB', fontSize: 14, fontWeight: '700' },
-
-  btnSave: { backgroundColor: '#2563EB', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
-  btnCancel: { backgroundColor: '#374151', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 16, flex: 1, alignItems: 'center' },
-  btnDanger: { backgroundColor: '#DC2626', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  btnSecondary: { backgroundColor: '#6B7280', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  btnSecondary: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  btnDanger: { backgroundColor: '#B91C1C', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700' },
 });
