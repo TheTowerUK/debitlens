@@ -46,8 +46,7 @@ export default function App() {
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
-          <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
-        </Stack.Navigator>
+         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
   );
