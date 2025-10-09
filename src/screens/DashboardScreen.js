@@ -1,5 +1,8 @@
 // src/screens/DashboardScreen.js
 import React, { useMemo, useState } from 'react';
+import { View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
+import { useApp } from '../state/AppState';
+import ActionFab from '../components/ActionFab';
 import {
   View,
   Text,
@@ -12,14 +15,13 @@ import {
 } from 'react-native';
 import { useApp } from '../state/AppState';
 
-export default function DashboardScreen({ navigation }) {
+ export default function DashboardScreen({ navigation }) {
   const { state, selectors, actions } = useApp();
   const accounts = state.accounts ?? [];
-  const transactions = state.transactions ?? [];
-
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
+  
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState('');
 
@@ -112,24 +114,6 @@ export default function DashboardScreen({ navigation }) {
         </View>
       </View>
 
-      {/* QUICK ACTIONS */}
-      <View style={styles.actionsRow}>
-        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Report')}>
-          <Text style={styles.btnText}>Reports</Text>
-        </Pressable>
-        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('History')}>
-          <Text style={styles.btnText}>View History</Text>
-        </Pressable>
-        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Notifications')}>
-          <Text style={styles.btnText}>Notifications</Text>
-        </Pressable>
-        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Budgets')}>
-          <Text style={styles.btnText}>Budgets</Text>
-        </Pressable>
-        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Settings')}>
-          <Text style={styles.btnText}>Settings</Text>
-        </Pressable>
-      </View>
 
       {/* ACCOUNTS LIST */}
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -230,18 +214,17 @@ export default function DashboardScreen({ navigation }) {
         )}
       </ScrollView>
 
-      {/* FAB */}
-      {!adding && (
-        <Pressable
-          style={({ pressed }) => [styles.fab, pressed ? styles.fabPressed : null]}
-          onPress={() => {
-            cancelEdit();
-            setAdding(true);
-          }}
-        >
-          <Text style={styles.fabText}>＋</Text>
-        </Pressable>
-      )}
+      +  {/* Floating menu (replaces the quick actions + add button) */}
+  <ActionFab
+    items={[
+      { label: 'Add Account', onPress: () => setAdding(true) },
+      { label: 'History', onPress: () => navigation.navigate('History') },
+      { label: 'Reports', onPress: () => navigation.navigate('Report') },
+      { label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
+      { label: 'Settings', onPress: () => navigation.navigate('Settings') },
+      { label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
+    ]}
+  />
     </View>
   );
 }
