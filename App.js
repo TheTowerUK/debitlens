@@ -24,22 +24,7 @@ import NotificationBootstrapper from './src/notifications/bootstrapper';
 
 const Stack = createNativeStackNavigator();
 
-// Skip Android Expo Go notifications setup; enable elsewhere
-function NotificationBootstrapper() {
-  const { state } = useApp();
-  useEffect(() => {
-    const inExpoGo = Constants.appOwnership === 'expo';
-    if (inExpoGo && Platform.OS === 'android') {
-      console.log('[notifications] Skipping setup on Android Expo Go');
-      return;
-    }
-    (async () => {
-      await initNotifications();
-      await rescheduleFromPrefs(state?.prefs?.notifications);
-    })();
-  }, [state?.prefs?.notifications]);
-  return null;
-}
+
 
 // Common header options that show a back arrow
 const withBack = {
@@ -76,7 +61,7 @@ export default function App() {
           <AppProvider>
           
           <NotificationBootstrapper />
-          {/* your NavigationContainer / Stack goes here */}
+          <NavigationContainer>{/* … */}</NavigationContainer>
           </AppProvider>
 
 
