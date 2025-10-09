@@ -1,340 +1,253 @@
 // src/state/AppState.js
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
-// ----------------------------
-// Storage keys
-// ----------------------------
-const STORAGE_KEY = '@base44_app_state_v1';
-const PIN_KEY     = '@base44_app_pin';
+// ---------- Persistence keys ----------
+const STORAGE_KEY = '@base44/state/v1';
+const PIN_KEY     = 'base44_app_pin';
 
-// ----------------------------
-// Helpers
-// ----------------------------
-const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// ---------- Utilities ----------
+const genId = (p = 'id') => `${p}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
 
-// Compute account balance from global transactions
-function computeBalance(transactions, accountId) {
-  let bal = 0;
-  for (const t of transactions) {
-    if (t.accountId !== accountId) continue;
-    const amt = Number(t.amount || 0);
-    bal += t.type === 'expense' ? -amt : amt;
-  }
-  return bal;
-}
-
-// ----------------------------
-// Initial state
-// ----------------------------
+// ---------- Initial State ----------
 const initialState = {
-  isLoading: true,
-  user: null,
-  accounts: [],
-  transactions: [],
+  isHydrated: false,
+
+  accounts: [],         // [{ id, name, kind? }]
+  transactions: [],     // [{ id, accountId, type: 'income'|'expense', amount, date:'YYYY-MM-DD', category?, note? }]
+  budgets: [],          // [{ id, category, limit:number, month:'YYYY-MM' | undefined }]
+
   prefs: {
     useBiometrics: true,
     theme: 'dark',
-    // 👇 NEW (defaults)
+    currencyCode: 'GBP',
     notifications: {
-      dailyEnabled: false,
-      dailyTime: '09:00',
-      weeklyEnabled: false,
-      weeklyDay: 2,      // Monday (Sun=1)
-      weeklyTime: '09:00',
+      // your app can put switches / times here if needed
     },
   },
+
+  // optional: last sync timestamp if you later add cloud sync
   lastSync: null,
 };
 
-// inside initialState
-budgets: [],  // 👈 NEW
-
-
-// ----------------------------
-// Reducer
-// ----------------------------
+// ---------- Reducer ----------
 function reducer(state, action) {
   switch (action.type) {
-    case 'BOOTSTRAP_DONE': {
-      // tolerate missing prefs from older payloads
-      const incoming = action.payload || {};
-      const prefs = { ...initialState.prefs, ...(incoming.prefs || {}) };
-      return { ...state, ...incoming, prefs, isLoading: false };
-    }
-
-    case 'SIGN_IN':
-      return { ...state, user: action.payload.user };
-
-    case 'SIGN_OUT':
-      return { ...state, user: null };
-
-    case 'SET_ACCOUNTS':
-      return { ...state, accounts: Array.isArray(action.payload) ? action.payload : [] };
-
-    case 'SET_TRANSACTIONS':
-      return { ...state, transactions: Array.isArray(action.payload) ? action.payload : [] };
-
-    case 'ADD_ACCOUNT':
-      return { ...state, accounts: [action.payload, ...state.accounts] };
-
-    case 'ADD_TXN':
-      return { ...state, transactions: [action.payload, ...state.transactions] };
-
-    case 'UPDATE_TXN': {
-      const { id, patch } = action.payload;
+    case 'HYDRATE': {
+      // ensure new keys exist even if older storage is loaded
+      const loaded = action.payload || {};
       return {
         ...state,
-        transactions: state.transactions.map(t => (t.id === id ? { ...t, ...patch } : t)),
+        ...loaded,
+        budgets: loaded.budgets ?? [],
+        prefs: { ...initialState.prefs, ...(loaded.prefs || {}) },
+        isHydrated: true,
       };
     }
 
-    case 'DELETE_TXN':
-      return { ...state, transactions: state.transactions.filter(t => t.id !== action.payload.id) };
+    // Accounts
+    case 'SET_ACCOUNTS': {
+      return { ...state, accounts: action.payload };
+    }
+    case 'ADD_ACCOUNT': {
+      return { ...state, accounts: [...state.accounts, action.payload] };
+    }
 
-    case 'UPDATE_PREFS':
+    // Transactions
+    case 'SET_TRANSACTIONS': {
+      return { ...state, transactions: action.payload };
+    }
+    case 'UPSERT_TRANSACTION': {
+      const t = action.payload;
+      const exists = state.transactions.some(x => x.id === t.id);
+      return {
+        ...state,
+        transactions: exists
+          ? state.transactions.map(x => (x.id === t.id ? t : x))
+          : [...state.transactions, t],
+      };
+    }
+    case 'DELETE_TRANSACTION': {
+      const id = action.payload;
+      return { ...state, transactions: state.transactions.filter(t => t.id !== id) };
+    }
+
+    // Budgets
+    case 'SET_BUDGETS': {
+      return { ...state, budgets: action.payload };
+    }
+    case 'ADD_BUDGET': {
+      return { ...state, budgets: [...(state.budgets || []), action.payload] };
+    }
+    case 'DELETE_BUDGET': {
+      const id = action.payload;
+      return { ...state, budgets: (state.budgets || []).filter(b => b.id !== id) };
+    }
+
+    // Prefs
+    case 'UPDATE_PREFS': {
       return { ...state, prefs: { ...state.prefs, ...(action.payload || {}) } };
+    }
+
+    case 'SIGN_OUT': {
+      // Clear volatile data but keep a minimal structure (you can tweak)
+      return {
+        ...initialState,
+        isHydrated: true, // remain hydrated to avoid splash loop
+      };
+    }
 
     default:
       return state;
   }
 }
 
-// ----------------------------
-// Context
-// ----------------------------
-const AppContext = createContext(null);
+// ---------- Context ----------
+const AppCtx = createContext(null);
 
-// ----------------------------
-// Provider
-// ----------------------------
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // boolean used by SplashAuthScreen
-  const isHydrated = !state.isLoading;
-
-  // Persist selected fields to storage
-  async function persist(next) {
+  // Persist the whole app state (except isHydrated) to AsyncStorage
+  const persist = async (nextState) => {
     try {
-      const payload = {
-        user: next.user,
-        accounts: next.accounts,
-        transactions: next.transactions,
-        prefs: next.prefs,
-        lastSync: new Date().toISOString(),
-      };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      const toSave = { ...nextState };
+      delete toSave.isHydrated;
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch (e) {
-      console.warn('[AppState] persist error', e);
+      console.warn('[persist] failed', e);
     }
-  }
+  };
 
-  // PIN helpers for SplashAuthScreen + Settings
-  async function getPinRaw() {
-    try { return await AsyncStorage.getItem(PIN_KEY); } catch { return null; }
-  }
-  async function setPinRaw(pin) {
-    try { await AsyncStorage.setItem(PIN_KEY, String(pin)); } catch {}
-  }
-  async function clearPinRaw() {
-    try { await AsyncStorage.removeItem(PIN_KEY); } catch {}
-  }
-
-  // Bootstrap from storage (or seed demo)
+  // Hydrate on mount
   useEffect(() => {
-    let alive = true;
+    let canceled = false;
     (async () => {
       try {
         const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (alive && raw) {
-          const parsed = JSON.parse(raw);
-          dispatch({ type: 'BOOTSTRAP_DONE', payload: parsed });
-        } else {
-          const demo = seedDemo();
-          if (alive) {
-            dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
-          }
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (!canceled) {
+          dispatch({ type: 'HYDRATE', payload: parsed || {} });
         }
       } catch (e) {
-        console.warn('[AppState] bootstrap error', e);
-        if (alive) dispatch({ type: 'BOOTSTRAP_DONE', payload: initialState });
+        console.warn('[hydrate] failed', e);
+        if (!canceled) dispatch({ type: 'HYDRATE', payload: {} });
       }
     })();
-    return () => { alive = false; };
+    return () => { canceled = true; };
   }, []);
 
-  // Actions (persist after each change)
-  const actions = useMemo(() => {
-    return {
-      // Auth
-      async signIn({ name, email, remember = true }) {
-        const user = { id: uid(), name: name || 'User', email: email || '' };
-        const next = reducer(state, { type: 'SIGN_IN', payload: { user } });
-        dispatch({ type: 'SIGN_IN', payload: { user } });
-        if (remember) await persist(next);
-      },
+  // ---------- Selectors ----------
+  const selectors = useMemo(() => ({
+    accountBalance: (accountId) => {
+      const tx = (state.transactions || []).filter(t => t.accountId === accountId);
+      let inc = 0, exp = 0;
+      for (const t of tx) {
+        const a = Number(t.amount || 0);
+        if (t.type === 'income') inc += a; else exp += a;
+      }
+      return inc - exp;
+    },
+  }), [state.transactions]);
 
-      async signOut() {
-        const next = reducer(state, { type: 'SIGN_OUT' });
-        dispatch({ type: 'SIGN_OUT' });
-        await persist(next);
-      },
+  // ---------- Actions ----------
+  const actions = useMemo(() => ({
+    // Accounts
+    addAccount: async (name, kind = 'current') => {
+      const account = { id: genId('acc'), name, kind };
+      const next = reducer(state, { type: 'ADD_ACCOUNT', payload: account });
+      dispatch({ type: 'ADD_ACCOUNT', payload: account });
+      await persist(next);
+      return account;
+    },
+    setAccounts: async (accounts) => {
+      const next = reducer(state, { type: 'SET_ACCOUNTS', payload: accounts });
+      dispatch({ type: 'SET_ACCOUNTS', payload: accounts });
+      await persist(next);
+    },
 
-      // Accounts
-      async setAccounts(accounts) {
-        const next = reducer(state, { type: 'SET_ACCOUNTS', payload: accounts });
-        dispatch({ type: 'SET_ACCOUNTS', payload: accounts });
-        await persist(next);
-      },
+    // Transactions
+    setTransactions: async (transactions) => {
+      const next = reducer(state, { type: 'SET_TRANSACTIONS', payload: transactions });
+      dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
+      await persist(next);
+    },
+    addTransaction: async (tx) => {
+      const t = { id: genId('txn'), ...tx };
+      const next = reducer(state, { type: 'UPSERT_TRANSACTION', payload: t });
+      dispatch({ type: 'UPSERT_TRANSACTION', payload: t });
+      await persist(next);
+      return t;
+    },
+    updateTransaction: async (tx) => {
+      const next = reducer(state, { type: 'UPSERT_TRANSACTION', payload: tx });
+      dispatch({ type: 'UPSERT_TRANSACTION', payload: tx });
+      await persist(next);
+    },
+    deleteTransaction: async (id) => {
+      const next = reducer(state, { type: 'DELETE_TRANSACTION', payload: id });
+      dispatch({ type: 'DELETE_TRANSACTION', payload: id });
+      await persist(next);
+    },
 
-      async addAccount(name, type = 'current') {
-        const acc = { id: uid(), name: String(name || 'Account'), type };
-        const next = reducer(state, { type: 'ADD_ACCOUNT', payload: acc });
-        dispatch({ type: 'ADD_ACCOUNT', payload: acc });
-        await persist(next);
-        return acc;
-      },
+    // Budgets
+    setBudgets: async (budgets) => {
+      const next = reducer(state, { type: 'SET_BUDGETS', payload: budgets });
+      dispatch({ type: 'SET_BUDGETS', payload: budgets });
+      await persist(next);
+    },
+    addBudget: async (budget) => {
+      const b = { id: genId('b'), ...budget };
+      const next = reducer(state, { type: 'ADD_BUDGET', payload: b });
+      dispatch({ type: 'ADD_BUDGET', payload: b });
+      await persist(next);
+      return b;
+    },
+    deleteBudget: async (id) => {
+      const next = reducer(state, { type: 'DELETE_BUDGET', payload: id });
+      dispatch({ type: 'DELETE_BUDGET', payload: id });
+      await persist(next);
+    },
 
-      // Transactions
-      async setTransactions(transactions) {
-        const next = reducer(state, { type: 'SET_TRANSACTIONS', payload: transactions });
-        dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
-        await persist(next);
-      },
+    // Prefs
+    updatePrefs: async (partial) => {
+      const next = reducer(state, { type: 'UPDATE_PREFS', payload: partial });
+      dispatch({ type: 'UPDATE_PREFS', payload: partial });
+      await persist(next);
+    },
 
-      async addTransaction(txn) {
-        const account = (state.accounts || []).find(a => a.id === txn.accountId);
-        const safeTxn = {
-          id: uid(),
-          accountId: txn.accountId,
-          accountName: txn.accountName || account?.name,
-          date: txn.date || todayISO(),
-          amount: Math.abs(Number(txn.amount || 0)),
-          type: txn.type === 'expense' ? 'expense' : 'income',
-          category: txn.category || (txn.type === 'expense' ? 'General' : 'Income'),
-          note: txn.note || '',
-        };
-        const next = reducer(state, { type: 'ADD_TXN', payload: safeTxn });
-        dispatch({ type: 'ADD_TXN', payload: safeTxn });
-        await persist(next);
-      },
+    // Auth-ish
+    signOut: async () => {
+      try {
+        await AsyncStorage.removeItem(STORAGE_KEY);
+      } catch {}
+      dispatch({ type: 'SIGN_OUT' });
+    },
 
-      async updateTransaction(id, patch) {
-        const next = reducer(state, { type: 'UPDATE_TXN', payload: { id, patch } });
-        dispatch({ type: 'UPDATE_TXN', payload: { id, patch } });
-        await persist(next);
-      },
+    // PIN helpers (used by SplashAuthScreen)
+    getPin: async () => {
+      try {
+        const v = await SecureStore.getItemAsync(PIN_KEY);
+        return v || null;
+      } catch {
+        return null;
+      }
+    },
+    setPin: async (pin) => {
+      await SecureStore.setItemAsync(PIN_KEY, String(pin));
+    },
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [state]); // depend on state so persist(next) uses latest base
 
-      async deleteTransaction(id) {
-        const next = reducer(state, { type: 'DELETE_TXN', payload: { id } });
-        dispatch({ type: 'DELETE_TXN', payload: { id } });
-        await persist(next);
-      },
+  const value = useMemo(() => ({ state, dispatch, actions, selectors, isHydrated: state.isHydrated }), [state, actions, selectors]);
 
-      // Budgets
-      setBudgets: async (budgets) => {
-        update(draft => { draft.budgets = budgets; });
-        await persist();
-      },
-      addBudget: async (budget) => {
-        update(draft => { draft.budgets = [...(draft.budgets || []), budget]; });
-        await persist();
-      },
-      deleteBudget: async (id) => {
-        update(draft => { draft.budgets = (draft.budgets || []).filter(b => b.id !== id); });
-        await persist();
-      },
-
-
-      // Preferences
-      async updatePrefs(patch) {
-        const next = reducer(state, { type: 'UPDATE_PREFS', payload: patch });
-        dispatch({ type: 'UPDATE_PREFS', payload: patch });
-        await persist(next);
-      },
-
-      // Utilities
-      async clearAll() {
-        try {
-          await AsyncStorage.removeItem(STORAGE_KEY);
-        } finally {
-          dispatch({ type: 'BOOTSTRAP_DONE', payload: { ...initialState, isLoading: false } });
-        }
-      },
-
-      async seedDemo() {
-        const demo = seedDemo();
-        dispatch({ type: 'BOOTSTRAP_DONE', payload: demo });
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(demo));
-      },
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
-
-  // Selectors (derived values)
-  const selectors = useMemo(() => {
-    return {
-      accountBalance(accountId) {
-        return computeBalance(state.transactions, accountId);
-      },
-      totalNet() {
-        return (state.accounts || []).reduce(
-          (sum, a) => sum + computeBalance(state.transactions, a.id),
-          0
-        );
-      },
-    };
-  }, [state.transactions, state.accounts]);
-
-  const value = useMemo(() => ({
-    state,
-    dispatch,
-    actions,
-    selectors,
-
-    // used by SplashAuthScreen + Settings
-    isHydrated,
-    getPin: getPinRaw,
-    setPin: setPinRaw,
-    clearPin: clearPinRaw,
-  }), [state, actions, selectors, isHydrated]);
-
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
 
-// ----------------------------
-// Hook
-// ----------------------------
+// ---------- Hook ----------
 export function useApp() {
-  const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+  const ctx = useContext(AppCtx);
+  if (!ctx) throw new Error('useApp must be used within <AppProvider>');
   return ctx;
-}
-
-// ----------------------------
-// Demo seed
-// ----------------------------
-function seedDemo() {
-  const acc1 = { id: uid(), name: 'Main Account', type: 'current' };
-  const acc2 = { id: uid(), name: 'Savings', type: 'savings' };
-
-  const txns = [
-    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount: 2500, type: 'income',  category: 'Salary',   note: 'Monthly pay' },
-    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:   65, type: 'expense', category: 'Groceries', note: 'Supermarket' },
-    { id: uid(), accountId: acc1.id, accountName: acc1.name, date: todayISO(), amount:   40, type: 'expense', category: 'Transport', note: 'Fuel' },
-    { id: uid(), accountId: acc2.id, accountName: acc2.name, date: todayISO(), amount:  200, type: 'income',  category: 'Transfer',  note: 'Move to savings' },
-  ];
-
-  return {
-    ...initialState,
-    isLoading: false,
-    user: null,
-    accounts: [acc1, acc2],
-    transactions: txns,
-    prefs: { ...initialState.prefs },
-    lastSync: new Date().toISOString(),
-  };
 }
