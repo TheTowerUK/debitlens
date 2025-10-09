@@ -29,6 +29,10 @@ const initialState = {
 
   // optional: last sync timestamp if you later add cloud sync
   lastSync: null,
+
+  // Busget Rollover
+  budgetRollover: false, // 👈 NEW: global on/off
+
 };
 
 // ---------- Reducer ----------

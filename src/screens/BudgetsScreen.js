@@ -1,73 +1,127 @@
 // src/screens/BudgetsScreen.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, FlatList, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Pressable, FlatList, Alert, Platform, Switch } from 'react-native';
 import { useApp } from '../state/AppState';
 import { money } from '../utils/money';
 
 const pad = (n) => String(n).padStart(2, '0');
-const now = new Date();
-const THIS_MONTH = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`; // YYYY-MM
+const ym = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;           // YYYY-MM
+const thisMonthStr = ym(new Date());
+const prevMonthStr = (() => {
+  const d = new Date(); d.setMonth(d.getMonth() - 1);
+  return ym(d);
+})();
 
 export default function BudgetsScreen() {
-  const { state, actions, selectors } = useApp();
+  const { state, actions } = useApp();
   const prefs = state?.prefs || {};
   const txns = state?.transactions || [];
-  const budgets = state?.budgets || []; // [{ id, category, limit, month? }]
+  const allBudgets = state?.budgets || []; // [{ id, category, limit, month? }]
 
-  // form
+  // local form
   const [category, setCategory] = useState('');
   const [limitStr, setLimitStr] = useState('');
   const [editingId, setEditingId] = useState(null);
 
-  // Sum this month’s expense by category
-  const monthExpenseByCategory = useMemo(() => {
-    const map = {};
-    const thisMonth = THIS_MONTH;
+  // ---- expenses by category for this & last month ----
+  const expenseByMonthCat = useMemo(() => {
+    const map = { [thisMonthStr]: {}, [prevMonthStr]: {} };
     for (const t of txns) {
       if (t.type !== 'expense') continue;
-      if (!t.date || !t.date.startsWith(thisMonth)) continue;
+      const m = (t.date || '').slice(0, 7);
+      if (m !== thisMonthStr && m !== prevMonthStr) continue;
       const cat = (t.category || 'Uncategorized').trim();
-      map[cat] = (map[cat] || 0) + Number(t.amount || 0);
+      map[m][cat] = (map[m][cat] || 0) + Number(t.amount || 0);
     }
     return map;
   }, [txns]);
 
+  // ---- budget limits by category for this & last month ----
+  const limitByMonthCat = useMemo(() => {
+    const map = { [thisMonthStr]: {}, [prevMonthStr]: {} };
+    for (const b of allBudgets) {
+      const m = b.month || thisMonthStr;
+      if (m !== thisMonthStr && m !== prevMonthStr) continue;
+      const cat = (b.category || 'Uncategorized').trim();
+      map[m][cat] = Number(map[m][cat] || 0) + Number(b.limit || 0);
+    }
+    return map;
+  }, [allBudgets]);
+
+  // ---- rows (effective limit applies rollover if enabled) ----
   const rows = useMemo(() => {
-    // use only budgets for THIS_MONTH (or global ones without month set)
-    return budgets
-      .filter(b => !b.month || b.month === THIS_MONTH)
+    // visible budgets: those for THIS MONTH (or global/no-month)
+    const baseRows = (allBudgets || [])
+      .filter(b => !b.month || b.month === thisMonthStr)
       .map(b => {
-        const spent = monthExpenseByCategory[b.category] || 0;
-        const limit = Number(b.limit || 0);
-        const pct = limit > 0 ? Math.min(1, spent / limit) : 0;
-        const remaining = Math.max(0, limit - spent);
-        return { ...b, spent, remaining, pct };
+        const cat = (b.category || 'Uncategorized').trim();
+
+        const spentThis = expenseByMonthCat[thisMonthStr][cat] || 0;
+        const limitThis = Number(b.limit || 0);
+
+        // Rollover: only last month’s leftover (per category), >= 0
+        const limitLast = limitByMonthCat[prevMonthStr][cat] || 0;
+        const spentLast = expenseByMonthCat[prevMonthStr][cat] || 0;
+        const carry = Math.max(0, Number(limitLast) - Number(spentLast));
+
+        const effectiveLimit = prefs.budgetRollover ? (limitThis + carry) : limitThis;
+        const pct = effectiveLimit > 0 ? Math.min(1, spentThis / effectiveLimit) : 0;
+        const remaining = Math.max(0, effectiveLimit - spentThis);
+
+        return {
+          ...b,
+          category: cat,
+          month: b.month || thisMonthStr,
+          spent: spentThis,
+          limitBase: limitThis,
+          carry,
+          effectiveLimit,
+          remaining,
+          pct,
+        };
       })
       .sort((a, b) => a.category.localeCompare(b.category));
-  }, [budgets, monthExpenseByCategory]);
 
+    return baseRows;
+  }, [allBudgets, prefs.budgetRollover, expenseByMonthCat, limitByMonthCat]);
+
+  const totals = useMemo(() => {
+    let limitBase = 0, carry = 0, effectiveLimit = 0, spent = 0;
+    for (const r of rows) {
+      limitBase += Number(r.limitBase || 0);
+      carry += Number(r.carry || 0);
+      effectiveLimit += Number(r.effectiveLimit || 0);
+      spent += Number(r.spent || 0);
+    }
+    const pct = effectiveLimit > 0 ? Math.min(1, spent / effectiveLimit) : 0;
+    return { limitBase, carry, effectiveLimit, spent, pct };
+  }, [rows]);
+
+  // ---- form helpers ----
   const resetForm = () => { setCategory(''); setLimitStr(''); setEditingId(null); };
 
   const addBudget = async () => {
     const cat = category.trim() || 'Uncategorized';
     const limit = Number(limitStr);
     if (!isFinite(limit) || limit <= 0) return Alert.alert('Budget', 'Enter a positive number for limit.');
-    const newBudget = { id: `b_${Date.now()}`, category: cat, limit, month: THIS_MONTH };
-    await actions.setBudgets([...(state.budgets || []), newBudget]);
+    const newBudget = { id: `b_${Date.now()}`, category: cat, limit, month: thisMonthStr };
+    await actions.setBudgets([...(allBudgets || []), newBudget]);
     resetForm();
   };
 
   const startEdit = (row) => {
     setEditingId(row.id);
     setCategory(row.category);
-    setLimitStr(String(row.limit));
+    setLimitStr(String(row.limitBase));
   };
 
   const saveEdit = async () => {
     const cat = category.trim() || 'Uncategorized';
     const limit = Number(limitStr);
     if (!isFinite(limit) || limit <= 0) return Alert.alert('Budget', 'Enter a positive number for limit.');
-    const next = (state.budgets || []).map(b => (b.id === editingId ? { ...b, category: cat, limit } : b));
+    const next = (allBudgets || []).map(b =>
+      b.id === editingId ? { ...b, category: cat, limit } : b
+    );
     await actions.setBudgets(next);
     resetForm();
   };
@@ -78,33 +132,58 @@ export default function BudgetsScreen() {
       {
         text: 'Delete', style: 'destructive',
         onPress: async () => {
-          const next = (state.budgets || []).filter(b => b.id !== id);
+          const next = (allBudgets || []).filter(b => b.id !== id);
           await actions.setBudgets(next);
         }
       }
     ]);
   };
 
-  const totalLimit = rows.reduce((s, r) => s + Number(r.limit || 0), 0);
-  const totalSpent = rows.reduce((s, r) => s + Number(r.spent || 0), 0);
-  const totalPct = totalLimit > 0 ? Math.min(1, totalSpent / totalLimit) : 0;
+  const toggleRollover = async (v) => {
+    await actions.updatePrefs({ budgetRollover: v });
+  };
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Budgets</Text>
-      <Text style={styles.subtle}>Monthly limits per category — {THIS_MONTH}</Text>
+      <Text style={styles.subtle}>Monthly limits per category — {thisMonthStr}</Text>
+
+      {/* Rollover toggle */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Rollover unused from last month</Text>
+          <Switch value={!!prefs.budgetRollover} onValueChange={toggleRollover} />
+        </View>
+        {prefs.budgetRollover ? (
+          <Text style={styles.subtle}>
+            Any leftover from {prevMonthStr} is added to this month’s limit per category.
+          </Text>
+        ) : (
+          <Text style={styles.subtle}>
+            Turn this on to carry forward unused budget from the previous month.
+          </Text>
+        )}
+      </View>
 
       {/* Overall summary */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
-          <Text style={styles.label}>Total Limit</Text>
-          <Text style={styles.amount}>{money(totalLimit, prefs)}</Text>
+          <Text style={styles.label}>Base Limit</Text>
+          <Text style={styles.amount}>{money(totals.limitBase, prefs)}</Text>
         </View>
         <View style={styles.rowBetween}>
-          <Text style={styles.label}>Total Spent</Text>
-          <Text style={[styles.amount, styles.red]}>{money(totalSpent, prefs)}</Text>
+          <Text style={styles.label}>Rollover Added</Text>
+          <Text style={styles.amount}>{money(totals.carry, prefs)}</Text>
         </View>
-        <Progress value={totalPct} />
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Effective Limit</Text>
+          <Text style={styles.amount}>{money(totals.effectiveLimit, prefs)}</Text>
+        </View>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Spent</Text>
+          <Text style={[styles.amount, styles.red]}>{money(totals.spent, prefs)}</Text>
+        </View>
+        <Progress value={totals.pct} />
       </View>
 
       {/* List */}
@@ -117,13 +196,25 @@ export default function BudgetsScreen() {
           <View style={styles.card}>
             <View style={styles.rowBetween}>
               <Text style={styles.itemLeft}>{item.category}</Text>
-              <Text style={styles.amount}>{money(item.limit, prefs)}</Text>
+              <Text style={styles.amount}>{money(item.effectiveLimit, prefs)}</Text>
+            </View>
+
+            {/* breakdown */}
+            <View style={styles.rowBetween}>
+              <Text style={styles.subtle}>Base</Text>
+              <Text style={styles.amount}>{money(item.limitBase, prefs)}</Text>
+            </View>
+            <View style={styles.rowBetween}>
+              <Text style={styles.subtle}>Rollover</Text>
+              <Text style={styles.amount}>{money(item.carry, prefs)}</Text>
             </View>
             <View style={styles.rowBetween}>
               <Text style={styles.subtle}>Spent</Text>
               <Text style={[styles.amount, styles.red]}>{money(item.spent, prefs)}</Text>
             </View>
+
             <Progress value={item.pct} />
+
             <View style={styles.rowBetween}>
               <Text style={styles.subtle}>Remaining</Text>
               <Text style={[styles.amount, item.remaining <= 0 ? styles.red : styles.green]}>
