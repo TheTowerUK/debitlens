@@ -1,178 +1,343 @@
+// src/screens/ReportScreen.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+import {
+  View, Text, StyleSheet, TextInput, FlatList, Pressable, Platform, Alert
+} from 'react-native';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useApp } from '../state/AppState';
-import { startEndForPreset, filterTxns, totals, byCategory, byDay } from '../utils/reports';
+import { money } from '../utils/money';
+import { toCSV } from '../utils/csv';
 
-// Optional charts guarded so app runs without victory-native
-let VictoryBar, VictoryChart, VictoryPie, VictoryAxis;
-let HAS_CHARTS = false;
-try {
-  ({ VictoryBar, VictoryChart, VictoryPie, VictoryAxis } = require('victory-native'));
-  HAS_CHARTS = true;
-} catch (e) { HAS_CHARTS = false; }
-
-const PRESETS = [
-  { key: 'THIS_MONTH', label: 'This Month' },
-  { key: 'LAST_MONTH', label: 'Last Month' },
-  { key: 'THIS_WEEK',  label: 'This Week'  },
-];
-
-const fmt = (n) => Number(n || 0).toFixed(2);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const isISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+const ym = (isoDate) => (isoDate || '').slice(0, 7); // YYYY-MM
 
 export default function ReportScreen() {
-  const app = useApp();
+  const { state } = useApp();
+  const prefs = state?.prefs || {};
+  const accounts = state?.accounts || [];
+  const txns = state?.transactions || [];
 
-  // 🔐 Support both shapes: {state:{...}} OR flat {...}
-  const stateLike = app?.state ?? app ?? {};
-  const transactions = Array.isArray(stateLike.transactions) ? stateLike.transactions : [];
-  const accounts     = Array.isArray(stateLike.accounts)     ? stateLike.accounts     : [];
+  // -------- Filters (same shape/behavior as History) --------
+  const [accountId, setAccountId] = useState(null); // null => all
+  const [type, setType] = useState('all');          // all | expense | income
+  const [startDate, setStartDate] = useState('');   // YYYY-MM-DD
+  const [endDate, setEndDate] = useState(todayISO());
+  const [query, setQuery] = useState('');           // match category/note
 
-  const [preset, setPreset] = useState('THIS_MONTH');
-  const [accountId, setAccountId] = useState(undefined);
-  const [category, setCategory] = useState(undefined);
+  const byAccount = useMemo(
+    () => Object.fromEntries(accounts.map((a) => [a.id, a])),
+    [accounts]
+  );
 
-  const { start, end } = useMemo(() => startEndForPreset(preset), [preset]);
+  // -------- Apply filters --------
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...txns]
+      .filter((t) => (accountId ? t.accountId === accountId : true))
+      .filter((t) => (type === 'all' ? true : t.type === type))
+      .filter((t) => (startDate && isISO(startDate) ? t.date >= startDate : true))
+      .filter((t) => (endDate && isISO(endDate) ? t.date <= endDate : true))
+      .filter((t) => {
+        if (!q) return true;
+        const blob = `${t.category || ''} ${t.note || ''}`.toLowerCase();
+        return blob.includes(q);
+      })
+      .sort((a, b) => a.date.localeCompare(b.date)); // oldest -> newest (handy for rollups)
+  }, [txns, accountId, type, startDate, endDate, query]);
 
-  const data = useMemo(() => {
-    const txns = filterTxns(transactions, { dateStart: start, dateEnd: end, accountId, category });
-    return {
-      list: txns,
-      totals: totals(txns),
-      byCat: byCategory(txns),
-      byDay: byDay(txns),
-    };
-  }, [transactions, start, end, accountId, category]);
+  // -------- Rollups --------
+  const rollups = useMemo(() => {
+    // Structure:
+    // {
+    //   byMonth: { 'YYYY-MM': { income: n, expense: n, net: n } },
+    //   byCategory: { 'Food': { income: n, expense: n, net: n } },
+    //   totals: { income, expense, net }
+    // }
+    const byMonth = {};
+    const byCategory = {};
+    let income = 0, expense = 0;
 
-  return (
-    <FlatList
-      ListHeaderComponent={
-        <View style={styles.container}>
-          <Text style={styles.title}>Reports</Text>
+    for (const t of filtered) {
+      const m = ym(t.date);
+      const amt = Number(t.amount || 0);
 
-          {!HAS_CHARTS && (
-            <View style={styles.banner}>
-              <Text style={styles.bannerText}>
-                Charts unavailable — install "victory-native" and "react-native-svg"
-                (e.g., npx expo install victory-native react-native-svg)
-              </Text>
-            </View>
-          )}
-
-          <View style={styles.row}>
-            {PRESETS.map(p => (
-              <Pressable key={p.key} onPress={() => setPreset(p.key)}
-                style={[styles.chip, preset === p.key && styles.chipActive]}>
-                <Text style={[styles.chipText, preset === p.key && styles.chipTextActive]}>{p.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.cards}>
-            <View style={[styles.card, styles.income]}>
-              <Text style={styles.cardLabel}>Income</Text>
-              <Text style={styles.cardValue}>£{fmt(data.totals.income)}</Text>
-            </View>
-            <View style={[styles.card, styles.expense]}>
-              <Text style={styles.cardLabel}>Expense</Text>
-              <Text style={styles.cardValue}>£{fmt(data.totals.expense)}</Text>
-            </View>
-            <View style={[styles.card, styles.net]}>
-              <Text style={styles.cardLabel}>Net</Text>
-              <Text style={styles.cardValue}>£{fmt(data.totals.net)}</Text>
-            </View>
-          </View>
-
-          {HAS_CHARTS && data.byDay.length > 0 && (
-            <View style={styles.chartBlock}>
-              <Text style={styles.sectionTitle}>Daily Net</Text>
-              <VictoryChart>
-                <VictoryAxis tickFormat={(t) => String(t).slice(5)} />
-                <VictoryBar data={data.byDay} x="date" y="value" />
-              </VictoryChart>
-            </View>
-          )}
-
-          {HAS_CHARTS && data.byCat.length > 0 && (
-            <View style={styles.chartBlock}>
-              <Text style={styles.sectionTitle}>By Category (Net)</Text>
-              <VictoryPie
-                data={data.byCat.map(d => ({ x: d.category, y: Math.abs(d.value) }))}
-                innerRadius={60}
-                labels={({ datum }) => `${datum.x}\n£${Number(datum.y).toFixed(0)}`}
-              />
-            </View>
-          )}
-
-          <View style={styles.row}>
-            <Pressable
-              style={styles.pill}
-              onPress={() => {
-                const ids = accounts.map(a => a.id);
-                if (!ids.length) return;
-                if (!accountId) { setAccountId(ids[0]); return; }
-                const idx = ids.indexOf(accountId);
-                setAccountId(idx === -1 || idx === ids.length - 1 ? undefined : ids[idx + 1]);
-              }}>
-              <Text style={styles.pillText}>Account: {accountId ?? 'All'}</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.pill}
-              onPress={() => {
-                const cats = Array.from(new Set(transactions.map(t => t.category)));
-                if (!cats.length) return;
-                if (!category) { setCategory(cats[0]); return; }
-                const idx = cats.indexOf(category);
-                setCategory(idx === -1 || idx === cats.length - 1 ? undefined : cats[idx + 1]);
-              }}>
-              <Text style={styles.pillText}>Category: {category ?? 'All'}</Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.subtle}>
-            Range: {start.toISOString().slice(0,10)} → {end.toISOString().slice(0,10)}
-          </Text>
-
-          <Text style={styles.sectionTitle}>Transactions</Text>
-        </View>
+      if (!byMonth[m]) byMonth[m] = { income: 0, expense: 0, net: 0 };
+      if (t.type === 'income') {
+        byMonth[m].income += amt;
+        income += amt;
+      } else {
+        byMonth[m].expense += amt;
+        expense += amt;
       }
-      data={data.list}
-      keyExtractor={(t) => t.id}
-      renderItem={({ item }) => (
-        <View style={styles.txnRow}>
-          <Text style={styles.txnDate}>{item.date.slice(0,10)}</Text>
-          <Text style={styles.txnCat}>{item.category}</Text>
-          <Text style={[styles.txnAmt, item.type === 'expense' ? styles.red : styles.green]}>
-            {item.type === 'expense' ? '-' : '+'}£{fmt(item.amount)}
+      byMonth[m].net = byMonth[m].income - byMonth[m].expense;
+
+      const cat = (t.category || 'Uncategorized').trim();
+      if (!byCategory[cat]) byCategory[cat] = { income: 0, expense: 0, net: 0 };
+      if (t.type === 'income') byCategory[cat].income += amt;
+      else byCategory[cat].expense += amt;
+      byCategory[cat].net = byCategory[cat].income - byCategory[cat].expense;
+    }
+
+    const totals = { income, expense, net: income - expense };
+
+    // sort helpers for rendering:
+    const months = Object.keys(byMonth).sort(); // ascending YYYY-MM
+    const categoriesByAbsNet = Object.entries(byCategory)
+      .sort(([, a], [, b]) => Math.abs(b.net) - Math.abs(a.net)); // most impactful first
+
+    return { byMonth, byCategory, months, categoriesByAbsNet, totals };
+  }, [filtered]);
+
+  const cycleAccount = () => {
+    if (!accounts.length) return;
+    if (!accountId) return setAccountId(accounts[0].id);
+    const ids = accounts.map((a) => a.id);
+    const idx = ids.indexOf(accountId);
+    setAccountId(idx === -1 || idx === ids.length - 1 ? null : ids[idx + 1]);
+  };
+  const accountLabel = accountId ? (byAccount[accountId]?.name || 'Account') : 'All Accounts';
+
+  // -------- CSV Export (current filters + rollups) --------
+  const exportCSV = async () => {
+    try {
+      // Sheet 1: transactions (filtered)
+      const rowsTx = filtered.map((t) => ({
+        id: t.id,
+        date: t.date,
+        type: t.type,
+        account: t.accountName || byAccount[t.accountId]?.name || '',
+        category: t.category || '',
+        note: t.note || '',
+        amount: Number(t.amount || 0).toFixed(2),
+      }));
+
+      // Sheet 2: month rollup
+      const rowsMonth = rollups.months.map((m) => ({
+        month: m,
+        income: Number(rollups.byMonth[m].income || 0).toFixed(2),
+        expense: Number(rollups.byMonth[m].expense || 0).toFixed(2),
+        net: Number(rollups.byMonth[m].net || 0).toFixed(2),
+      }));
+
+      // Sheet 3: category rollup
+      const rowsCat = rollups.categoriesByAbsNet.map(([cat, v]) => ({
+        category: cat,
+        income: Number(v.income || 0).toFixed(2),
+        expense: Number(v.expense || 0).toFixed(2),
+        net: Number(v.net || 0).toFixed(2),
+      }));
+
+      // Build a multi-section CSV (simple separators between blocks)
+      const sections = [
+        ['Transactions (filtered)'],
+        toCSV(rowsTx),
+        [''],
+        ['Monthly rollup'],
+        toCSV(rowsMonth),
+        [''],
+        ['Category rollup'],
+        toCSV(rowsCat),
+      ];
+      const csv = sections
+        .map((s) => (Array.isArray(s) ? s.join(',') : s))
+        .join('\n');
+
+      const fname = `base44-report-${new Date().toISOString().replace(/[:T]/g,'-').slice(0,19)}.csv`;
+      const uri = FileSystem.cacheDirectory + fname;
+      await FileSystem.writeAsStringAsync(uri, csv);
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export report',
+          UTI: 'public.comma-separated-values-text',
+        });
+      } else {
+        Alert.alert('Exported', `Saved to cache:\n${uri}`);
+      }
+    } catch (e) {
+      console.warn('[report] export failed', e);
+      Alert.alert('Export failed', String(e?.message || e));
+    }
+  };
+
+  // -------- UI --------
+  return (
+    <View style={styles.wrap}>
+      <Text style={styles.h1}>Reports</Text>
+      <Text style={styles.subtle}>Filters & monthly/category rollups</Text>
+
+      {/* Filters (same UX as History) */}
+      <View style={styles.card}>
+        {/* Type */}
+        <View style={styles.row}>
+          <Pressable style={[styles.pill, type === 'all' && styles.pillActive]} onPress={() => setType('all')}>
+            <Text style={[styles.pillText, type === 'all' && styles.pillTextActive]}>All</Text>
+          </Pressable>
+          <Pressable style={[styles.pill, type === 'expense' && styles.pillActive]} onPress={() => setType('expense')}>
+            <Text style={[styles.pillText, type === 'expense' && styles.pillTextActive]}>Expense</Text>
+          </Pressable>
+          <Pressable style={[styles.pill, type === 'income' && styles.pillActive]} onPress={() => setType('income')}>
+            <Text style={[styles.pillText, type === 'income' && styles.pillTextActive]}>Income</Text>
+          </Pressable>
+        </View>
+
+        {/* Account */}
+        <Pressable style={styles.accountBtn} onPress={cycleAccount}>
+          <Text style={styles.accountBtnText}>Account: {accountLabel}</Text>
+        </Pressable>
+
+        {/* Dates */}
+        <View style={styles.row}>
+          <View style={{ flex: 1, marginRight: 8 }}>
+            <TextInput
+              value={startDate}
+              onChangeText={setStartDate}
+              placeholder="Start (YYYY-MM-DD)"
+              placeholderTextColor="#6B7280"
+              style={styles.input}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <TextInput
+              value={endDate}
+              onChangeText={setEndDate}
+              placeholder="End (YYYY-MM-DD)"
+              placeholderTextColor="#6B7280"
+              style={styles.input}
+            />
+          </View>
+        </View>
+
+        {/* Search */}
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search category or note"
+          placeholderTextColor="#6B7280"
+          style={styles.input}
+        />
+
+        {/* Actions */}
+        <View style={styles.rowBetween}>
+          <Pressable
+            style={styles.btnSecondary}
+            onPress={() => { setAccountId(null); setType('all'); setStartDate(''); setEndDate(todayISO()); setQuery(''); }}
+          >
+            <Text style={styles.btnText}>Reset</Text>
+          </Pressable>
+          <Pressable style={styles.btnSave} onPress={exportCSV}>
+            <Text style={styles.btnText}>Export CSV</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Totals */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Income</Text>
+          <Text style={[styles.amount, styles.green]}>{money(rollups.totals.income, prefs)}</Text>
+        </View>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Expenses</Text>
+          <Text style={[styles.amount, styles.red]}>{money(rollups.totals.expense, prefs)}</Text>
+        </View>
+        <View style={[styles.rowBetween, { marginTop: 6 }]}>
+          <Text style={styles.label}>Net</Text>
+          <Text style={[styles.amount, rollups.totals.net < 0 ? styles.red : styles.green]}>
+            {money(Math.abs(rollups.totals.net), prefs)}
           </Text>
         </View>
-      )}
-      contentContainerStyle={{ paddingBottom: 40 }}
-    />
+      </View>
+
+      {/* Monthly rollup list */}
+      <View style={styles.card}>
+        <Text style={styles.sectionH}>By Month</Text>
+        <FlatList
+          data={rollups.months}
+          keyExtractor={(m) => m}
+          ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+          renderItem={({ item: m }) => {
+            const v = rollups.byMonth[m];
+            return (
+              <View style={styles.rowBetween}>
+                <Text style={styles.itemLeft}>{m}</Text>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.amount, styles.green]}>{money(v.income, prefs)}</Text>
+                  <Text style={[styles.amount, styles.red]}>{money(v.expense, prefs)}</Text>
+                  <Text style={[styles.amount, v.net < 0 ? styles.red : styles.green]}>
+                    {money(Math.abs(v.net), prefs)}
+                  </Text>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={<Text style={styles.subtle}>No data for selected filters.</Text>}
+        />
+      </View>
+
+      {/* Category rollup list */}
+      <View style={styles.card}>
+        <Text style={styles.sectionH}>By Category</Text>
+        <FlatList
+          data={rollups.categoriesByAbsNet}
+          keyExtractor={([cat]) => cat}
+          ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+          renderItem={({ item: [cat, v] }) => (
+            <View style={styles.rowBetween}>
+              <Text style={styles.itemLeft}>{cat}</Text>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={[styles.amount, styles.green]}>{money(v.income, prefs)}</Text>
+                <Text style={[styles.amount, styles.red]}>{money(v.expense, prefs)}</Text>
+                <Text style={[styles.amount, v.net < 0 ? styles.red : styles.green]}>
+                  {money(Math.abs(v.net), prefs)}
+                </Text>
+              </View>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={styles.subtle}>No categories found.</Text>}
+        />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
-  row: { flexDirection: 'row', gap: 8, marginVertical: 8, flexWrap: 'wrap' },
-  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: '#ddd' },
-  chipActive: { backgroundColor: '#111', borderColor: '#111' },
-  chipText: { color: '#111' }, chipTextActive: { color: 'white' },
-  cards: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  card: { flex: 1, padding: 12, borderRadius: 12 },
-  income: { backgroundColor: '#DCFCE7' }, expense: { backgroundColor: '#FEE2E2' }, net: { backgroundColor: '#E0E7FF' },
-  cardLabel: { fontSize: 12, color: '#374151' }, cardValue: { fontSize: 18, fontWeight: '700' },
-  chartBlock: { marginTop: 16, padding: 8, borderRadius: 12, backgroundColor: '#F9FAFB' },
-  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  pill: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: '#F3F4F6' },
-  pillText: { fontSize: 13 },
-  subtle: { color: '#6B7280', marginTop: 4 },
-  banner: { backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8, marginBottom: 8 },
-  bannerText: { color: '#92400E', fontSize: 12 },
-  txnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E5E7EB' },
-  txnDate: { width: 100, color: '#374151' },
-  txnCat: { flex: 1, color: '#374151' },
-  txnAmt: { width: 110, textAlign: 'right', fontWeight: '700' },
-  red: { color: '#DC2626' }, green: { color: '#16A34A' },
+  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginBottom: 12 },
+
+  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
+
+  // Filters
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+
+  pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8, marginBottom: 8 },
+  pillActive: { backgroundColor: '#2563EB' },
+  pillText: { color: '#fff', fontWeight: '700' },
+  pillTextActive: { color: '#fff' },
+
+  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8 },
+  accountBtnText: { color: '#fff', fontWeight: '700' },
+
+  input: {
+    backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937',
+    borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8,
+  },
+
+  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
+  btnSecondary: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
+  btnText: { color: '#fff', fontWeight: '700' },
+
+  label: { color: '#E5E7EB', fontWeight: '700' },
+  amount: { color: '#E5E7EB', fontWeight: '800' },
+  red: { color: '#DC2626' },
+  green: { color: '#34D399' },
+
+  sectionH: { color: '#E5E7EB', fontWeight: '800', marginBottom: 8 },
+  itemLeft: { color: '#E5E7EB', fontWeight: '700' },
 });
