@@ -5,7 +5,9 @@ import ActionFab from '../components/ActionFab';
 import { useApp } from '../state/AppState';
 
  export default function DashboardScreen({ navigation }) {
-  const { state, selectors, actions } = useApp();
+  const { state } = useApp();
+  const txns = state?.transactions || [];
+
   const accounts = state.accounts ?? [];
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
