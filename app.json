@@ -2,11 +2,8 @@
   "expo": {
     "name": "base44-app",
     "slug": "base44-app",
-    "plugins": [
-      "expo-notifications"
-    ],
-    "android": {
-      "package": "com.anonymous.base44app"
-    }
+    "plugins": ["expo-notifications"],
+    "platforms": ["ios", "android", "web"]
   }
 }
+
