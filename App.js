@@ -17,7 +17,6 @@ import ReportScreen from './src/screens/ReportScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import TxnEditorScreen from './src/screens/TxnEditorScreen';
 
 const Stack = createNativeStackNavigator();
 
