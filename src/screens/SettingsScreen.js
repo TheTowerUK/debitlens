@@ -46,7 +46,8 @@ export default function SettingsScreen() {
       };
       const json = JSON.stringify(payload, null, 2);
       const uri = FileSystem.cacheDirectory + `${filePrefix}.json`;
-      await FileSystem.writeAsStringAsync(uri, json, { encoding: FileSystem.EncodingType.UTF8 });
+      await FileSystem.writeAsStringAsync(uri, json);
+
 
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -69,7 +70,7 @@ export default function SettingsScreen() {
       const uri = asset?.uri;
       if (!uri) return Alert.alert('Import', 'No file selected.');
 
-      const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const text = await FileSystem.readAsStringAsync(uri);
       let parsed;
       try { parsed = JSON.parse(text); } catch { return Alert.alert('Import failed', 'Selected file is not valid JSON.'); }
       if (!parsed?.data) return Alert.alert('Import failed', 'File format not recognized.');
