@@ -1,14 +1,15 @@
 // App.js
 import 'react-native-gesture-handler';
 import React, { useEffect } from 'react';
-import { StatusBar } from 'react-native';
+import { StatusBar, Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AppProvider, useApp } from './src/state/AppState';
 import { initNotifications, rescheduleFromPrefs } from './src/utils/notifications';
 
-// Screens
+// Screens…
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -17,28 +18,32 @@ import ReportScreen from './src/screens/ReportScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import TransactionEditor from './src/screens/TransactionEditor';
 
 const Stack = createNativeStackNavigator();
 
-// Runs once at app start (under AppProvider) to set up notifications
 function NotificationBootstrapper() {
   const { state } = useApp();
   useEffect(() => {
+    const inExpoGo = Constants.appOwnership === 'expo';
+
+    // Skip only Android-on-Expo-Go (noisy + limited support)
+    if (inExpoGo && Platform.OS === 'android') {
+      console.log('[notifications] Skipping setup on Android Expo Go');
+      return;
+    }
+
     (async () => {
       await initNotifications();
       await rescheduleFromPrefs(state?.prefs?.notifications);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once
+  }, [state?.prefs?.notifications]);
   return null;
 }
 
 export default function App() {
   return (
     <AppProvider>
-      {/* This must be inside AppProvider (so it can read state),
-          but it does NOT need to be inside NavigationContainer */}
+      {/* Must be inside AppProvider so it can read state */}
       <NotificationBootstrapper />
 
       <NavigationContainer>
@@ -52,7 +57,6 @@ export default function App() {
           <Stack.Screen name="History" component={HistoryScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
-          <Stack.Screen name="TxnEditor" component={TransactionEditor} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
