@@ -1,7 +1,6 @@
 // src/screens/DashboardScreen.js
 import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, StyleSheet, Platform, Alert } from 'react-native';
-import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
 import { useApp } from '../state/AppState';
 
