@@ -8,9 +8,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useApp } from '../state/AppState';
 import { money } from '../utils/money';
 import { toCSV } from '../utils/csv';
+import { todayISO, isISO, PRESETS, getPresetRange, activePresetFor } from '../utils/dates';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
-const isISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const ym = (isoDate) => (isoDate || '').slice(0, 7); // YYYY-MM
 
 export default function ReportScreen() {
@@ -19,19 +18,18 @@ export default function ReportScreen() {
   const accounts = state?.accounts || [];
   const txns = state?.transactions || [];
 
-  // -------- Filters (same shape/behavior as History) --------
-  const [accountId, setAccountId] = useState(null); // null => all
-  const [type, setType] = useState('all');          // all | expense | income
-  const [startDate, setStartDate] = useState('');   // YYYY-MM-DD
+  // -------- Filters --------
+  const [accountId, setAccountId] = useState(null);
+  const [type, setType] = useState('all');
+  const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState(todayISO());
-  const [query, setQuery] = useState('');           // match category/note
+  const [query, setQuery] = useState('');
 
   const byAccount = useMemo(
     () => Object.fromEntries(accounts.map((a) => [a.id, a])),
     [accounts]
   );
 
-  // -------- Apply filters --------
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...txns]
@@ -44,10 +42,9 @@ export default function ReportScreen() {
         const blob = `${t.category || ''} ${t.note || ''}`.toLowerCase();
         return blob.includes(q);
       })
-      .sort((a, b) => a.date.localeCompare(b.date)); // oldest -> newest for rollups
+      .sort((a, b) => a.date.localeCompare(b.date));
   }, [txns, accountId, type, startDate, endDate, query]);
 
-  // -------- Rollups + Top categories + Monthly averages --------
   const rollups = useMemo(() => {
     const byMonth = {};
     const byCategory = {};
@@ -57,13 +54,11 @@ export default function ReportScreen() {
       const m = ym(t.date);
       const amt = Number(t.amount || 0);
 
-      // Month
       if (!byMonth[m]) byMonth[m] = { income: 0, expense: 0, net: 0 };
       if (t.type === 'income') { byMonth[m].income += amt; income += amt; }
       else { byMonth[m].expense += amt; expense += amt; }
       byMonth[m].net = byMonth[m].income - byMonth[m].expense;
 
-      // Category
       const cat = (t.category || 'Uncategorized').trim();
       if (!byCategory[cat]) byCategory[cat] = { income: 0, expense: 0, net: 0 };
       if (t.type === 'income') byCategory[cat].income += amt;
@@ -73,18 +68,15 @@ export default function ReportScreen() {
 
     const totals = { income, expense, net: income - expense };
 
-    // Sorted lists
-    const months = Object.keys(byMonth).sort(); // YYYY-MM asc
+    const months = Object.keys(byMonth).sort();
     const categoriesByAbsNet = Object.entries(byCategory)
       .sort(([, a], [, b]) => Math.abs(b.net) - Math.abs(a.net));
 
-    // Top expense categories (largest expense)
     const topExpenses = Object.entries(byCategory)
       .filter(([, v]) => v.expense > 0)
       .sort(([, a], [, b]) => b.expense - a.expense)
       .slice(0, 5);
 
-    // Monthly averages across the months present in filtered data
     const monthCount = months.length || 1;
     const monthlyAvg = {
       income: income / monthCount,
@@ -96,6 +88,13 @@ export default function ReportScreen() {
     return { byMonth, byCategory, months, categoriesByAbsNet, totals, topExpenses, monthlyAvg };
   }, [filtered]);
 
+  const applyPreset = (id) => {
+    const r = getPresetRange(id);
+    setStartDate(r.start);
+    setEndDate(r.end);
+  };
+  const activePreset = activePresetFor(startDate, endDate);
+
   const cycleAccount = () => {
     if (!accounts.length) return;
     if (!accountId) return setAccountId(accounts[0].id);
@@ -105,21 +104,15 @@ export default function ReportScreen() {
   };
   const accountLabel = accountId ? (byAccount[accountId]?.name || 'Account') : 'All Accounts';
 
-  // -------- CSV Export (current filters + rollups + extras) --------
   const exportCSV = async () => {
     try {
-      // Sheet 1: transactions (filtered)
       const rowsTx = filtered.map((t) => ({
-        id: t.id,
-        date: t.date,
-        type: t.type,
+        id: t.id, date: t.date, type: t.type,
         account: t.accountName || byAccount[t.accountId]?.name || '',
-        category: t.category || '',
-        note: t.note || '',
+        category: t.category || '', note: t.note || '',
         amount: Number(t.amount || 0).toFixed(2),
       }));
 
-      // Sheet 2: month rollup
       const rowsMonth = rollups.months.map((m) => ({
         month: m,
         income: Number(rollups.byMonth[m].income || 0).toFixed(2),
@@ -127,7 +120,6 @@ export default function ReportScreen() {
         net: Number(rollups.byMonth[m].net || 0).toFixed(2),
       }));
 
-      // Sheet 3: category rollup (sorted by absolute net)
       const rowsCat = rollups.categoriesByAbsNet.map(([cat, v]) => ({
         category: cat,
         income: Number(v.income || 0).toFixed(2),
@@ -135,7 +127,6 @@ export default function ReportScreen() {
         net: Number(v.net || 0).toFixed(2),
       }));
 
-      // Sheet 4: top expense categories
       const rowsTop = rollups.topExpenses.map(([cat, v]) => ({
         category: cat,
         expense: Number(v.expense || 0).toFixed(2),
@@ -143,7 +134,6 @@ export default function ReportScreen() {
         net: Number(v.net || 0).toFixed(2),
       }));
 
-      // Sheet 5: monthly averages
       const rowsAvg = [{
         months: rollups.monthlyAvg.monthCount,
         avg_income: Number(rollups.monthlyAvg.income).toFixed(2),
@@ -151,7 +141,6 @@ export default function ReportScreen() {
         avg_net: Number(rollups.monthlyAvg.net).toFixed(2),
       }];
 
-      // Multi-section CSV (simple separators)
       const sections = [
         ['Transactions (filtered)'],
         toCSV(rowsTx),
@@ -190,16 +179,28 @@ export default function ReportScreen() {
     }
   };
 
-  // -------- UI --------
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Reports</Text>
-      <Text style={styles.subtle}>Filters, monthly/category rollups, top categories & averages</Text>
+      <Text style={styles.subtle}>Filters, rollups, top categories & averages</Text>
 
-      {/* Filters (same UX as History) */}
+      {/* Filters */}
       <View style={styles.card}>
+        {/* Quick ranges */}
+        <View style={styles.rowWrap}>
+          {PRESETS.map((p) => (
+            <Pressable
+              key={p.id}
+              style={[styles.pill, activePreset === p.id && styles.pillActive]}
+              onPress={() => applyPreset(p.id)}
+            >
+              <Text style={[styles.pillText, activePreset === p.id && styles.pillTextActive]}>{p.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
         {/* Type */}
-        <View style={styles.row}>
+        <View style={styles.rowWrap}>
           <Pressable style={[styles.pill, type === 'all' && styles.pillActive]} onPress={() => setType('all')}>
             <Text style={[styles.pillText, type === 'all' && styles.pillTextActive]}>All</Text>
           </Pressable>
@@ -213,7 +214,7 @@ export default function ReportScreen() {
 
         {/* Account */}
         <Pressable style={styles.accountBtn} onPress={cycleAccount}>
-          <Text style={styles.accountBtnText}>Account: {accountLabel}</Text>
+          <Text style={styles.accountBtnText}>Account: {accountId ? (byAccount[accountId]?.name || 'Account') : 'All Accounts'}</Text>
         </Pressable>
 
         {/* Dates */}
@@ -251,7 +252,7 @@ export default function ReportScreen() {
         <View style={styles.rowBetween}>
           <Pressable
             style={styles.btnSecondary}
-            onPress={() => { setAccountId(null); setType('all'); setStartDate(''); setEndDate(todayISO()); setQuery(''); }}
+            onPress={() => { setAccountId(null); setType('all'); applyPreset('all'); setQuery(''); }}
           >
             <Text style={styles.btnText}>Reset</Text>
           </Pressable>
@@ -263,7 +264,7 @@ export default function ReportScreen() {
 
       {/* Totals */}
       <View style={styles.card}>
-        <View style={styles.rowBetween}>
+        <View className="rowBetween">
           <Text style={styles.label}>Income</Text>
           <Text style={[styles.amount, styles.green]}>{money(rollups.totals.income, prefs)}</Text>
         </View>
@@ -279,7 +280,7 @@ export default function ReportScreen() {
         </View>
       </View>
 
-      {/* Monthly rollup list */}
+      {/* By Month */}
       <View style={styles.card}>
         <Text style={styles.sectionH}>By Month</Text>
         <FlatList
@@ -305,7 +306,7 @@ export default function ReportScreen() {
         />
       </View>
 
-      {/* Category rollup list */}
+      {/* By Category */}
       <View style={styles.card}>
         <Text style={styles.sectionH}>By Category</Text>
         <FlatList
@@ -374,8 +375,9 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
 
-  // Filters
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 },
+
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
 
   pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8, marginBottom: 8 },
