@@ -48,6 +48,9 @@ const initialState = {
   lastSync: null,
 };
 
+// inside initialState
+budgets: [],  // 👈 NEW
+
 
 // ----------------------------
 // Reducer
@@ -230,6 +233,21 @@ export function AppProvider({ children }) {
         dispatch({ type: 'DELETE_TXN', payload: { id } });
         await persist(next);
       },
+
+      // Budgets
+      setBudgets: async (budgets) => {
+        update(draft => { draft.budgets = budgets; });
+        await persist();
+      },
+      addBudget: async (budget) => {
+        update(draft => { draft.budgets = [...(draft.budgets || []), budget]; });
+        await persist();
+      },
+      deleteBudget: async (id) => {
+        update(draft => { draft.budgets = (draft.budgets || []).filter(b => b.id !== id); });
+        await persist();
+      },
+
 
       // Preferences
       async updatePrefs(patch) {

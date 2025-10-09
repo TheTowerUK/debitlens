@@ -126,6 +126,9 @@ export default function DashboardScreen({ navigation }) {
         <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Notifications')}>
           <Text style={styles.btnText}>Notifications</Text>
         </Pressable>
+        <Pressable style={[styles.btnSave, styles.actionBtn]} onPress={() => navigation.navigate('Budgets')}>
+          <Text style={styles.btnText}>Budgets</Text>
+        </Pressable>
       </View>
 
       {/* ACCOUNTS LIST */}
