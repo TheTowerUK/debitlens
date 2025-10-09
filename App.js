@@ -19,6 +19,8 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import TransactionEditor from './src/screens/TransactionEditor';
 import BudgetsScreen from './src/screens/BudgetsScreen';
+import NotificationBootstrapper from './src/notifications/bootstrapper';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +73,12 @@ export default function App() {
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
           <Stack.Screen name="TxnEditor" component={TransactionEditor} options={withBack} />
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
+          <AppProvider>
+          
+          <NotificationBootstrapper />
+          {/* your NavigationContainer / Stack goes here */}
+          </AppProvider>
+
 
         </Stack.Navigator>
       </NavigationContainer>
