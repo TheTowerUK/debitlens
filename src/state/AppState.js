@@ -39,16 +39,18 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'HYDRATE': {
-      // ensure new keys exist even if older storage is loaded
-      const loaded = action.payload || {};
-      return {
-        ...state,
-        ...loaded,
-        budgets: loaded.budgets ?? [],
-        prefs: { ...initialState.prefs, ...(loaded.prefs || {}) },
-        isHydrated: true,
-      };
-    }
+  const loaded = action.payload || {};
+  return {
+    ...state,
+    ...loaded,
+    accounts: loaded.accounts ?? [],
+    transactions: loaded.transactions ?? [],
+    budgets: loaded.budgets ?? [],
+    prefs: { ...initialState.prefs, ...(loaded.prefs || {}) },
+    isHydrated: true,
+  };
+}
+
 
     // Accounts
     case 'SET_ACCOUNTS': {
@@ -144,17 +146,18 @@ export function AppProvider({ children }) {
 
   // ---------- Selectors ----------
   const selectors = useMemo(() => ({
-    accountBalance: (accountId) => {
-      const tx = (state.transactions || []).filter(t => t.accountId === accountId);
-      let inc = 0, exp = 0;
-      for (const t of tx) {
-        const a = Number(t.amount || 0);
-        if (t.type === 'income') inc += a; else exp += a;
-      }
-      return inc - exp;
-    },
-  }), [state.transactions]);
+  accountBalance: (accountId) => {
+    const tx = (state?.transactions ?? []).filter(t => t.accountId === accountId);
+    let inc = 0, exp = 0;
+    for (const t of tx) {
+      const a = Number(t.amount || 0);
+      if (t.type === 'income') inc += a; else exp += a;
+    }
+    return inc - exp;
+  },
+}), [state?.transactions]);
 
+  
   // ---------- Actions ----------
   const actions = useMemo(() => ({
     // Accounts
