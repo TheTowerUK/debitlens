@@ -10,7 +10,7 @@ const thisMonthStr = ym(new Date());
 const prevMonthStr = (() => {
   const d = new Date(); d.setMonth(d.getMonth() - 1);
   return ym(d);
-})();
+})(); 
 
 export default function BudgetsScreen() {
   const { state, actions } = useApp();
