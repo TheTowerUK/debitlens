@@ -1,7 +1,7 @@
 // src/screens/SettingsScreen.js
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Switch, Pressable, Alert, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Sharing from 'expo-sharing';
 import { useApp } from '../state/AppState';
