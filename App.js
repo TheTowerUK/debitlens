@@ -17,6 +17,7 @@ import ReportScreen from './src/screens/ReportScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import TxnEditorScreen from './src/screens/TxnEditorScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -46,6 +47,7 @@ export default function App() {
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
+          <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
