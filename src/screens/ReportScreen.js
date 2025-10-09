@@ -44,17 +44,11 @@ export default function ReportScreen() {
         const blob = `${t.category || ''} ${t.note || ''}`.toLowerCase();
         return blob.includes(q);
       })
-      .sort((a, b) => a.date.localeCompare(b.date)); // oldest -> newest (handy for rollups)
+      .sort((a, b) => a.date.localeCompare(b.date)); // oldest -> newest for rollups
   }, [txns, accountId, type, startDate, endDate, query]);
 
-  // -------- Rollups --------
+  // -------- Rollups + Top categories + Monthly averages --------
   const rollups = useMemo(() => {
-    // Structure:
-    // {
-    //   byMonth: { 'YYYY-MM': { income: n, expense: n, net: n } },
-    //   byCategory: { 'Food': { income: n, expense: n, net: n } },
-    //   totals: { income, expense, net }
-    // }
     const byMonth = {};
     const byCategory = {};
     let income = 0, expense = 0;
@@ -63,16 +57,13 @@ export default function ReportScreen() {
       const m = ym(t.date);
       const amt = Number(t.amount || 0);
 
+      // Month
       if (!byMonth[m]) byMonth[m] = { income: 0, expense: 0, net: 0 };
-      if (t.type === 'income') {
-        byMonth[m].income += amt;
-        income += amt;
-      } else {
-        byMonth[m].expense += amt;
-        expense += amt;
-      }
+      if (t.type === 'income') { byMonth[m].income += amt; income += amt; }
+      else { byMonth[m].expense += amt; expense += amt; }
       byMonth[m].net = byMonth[m].income - byMonth[m].expense;
 
+      // Category
       const cat = (t.category || 'Uncategorized').trim();
       if (!byCategory[cat]) byCategory[cat] = { income: 0, expense: 0, net: 0 };
       if (t.type === 'income') byCategory[cat].income += amt;
@@ -82,12 +73,27 @@ export default function ReportScreen() {
 
     const totals = { income, expense, net: income - expense };
 
-    // sort helpers for rendering:
-    const months = Object.keys(byMonth).sort(); // ascending YYYY-MM
+    // Sorted lists
+    const months = Object.keys(byMonth).sort(); // YYYY-MM asc
     const categoriesByAbsNet = Object.entries(byCategory)
-      .sort(([, a], [, b]) => Math.abs(b.net) - Math.abs(a.net)); // most impactful first
+      .sort(([, a], [, b]) => Math.abs(b.net) - Math.abs(a.net));
 
-    return { byMonth, byCategory, months, categoriesByAbsNet, totals };
+    // Top expense categories (largest expense)
+    const topExpenses = Object.entries(byCategory)
+      .filter(([, v]) => v.expense > 0)
+      .sort(([, a], [, b]) => b.expense - a.expense)
+      .slice(0, 5);
+
+    // Monthly averages across the months present in filtered data
+    const monthCount = months.length || 1;
+    const monthlyAvg = {
+      income: income / monthCount,
+      expense: expense / monthCount,
+      net: (income - expense) / monthCount,
+      monthCount,
+    };
+
+    return { byMonth, byCategory, months, categoriesByAbsNet, totals, topExpenses, monthlyAvg };
   }, [filtered]);
 
   const cycleAccount = () => {
@@ -99,7 +105,7 @@ export default function ReportScreen() {
   };
   const accountLabel = accountId ? (byAccount[accountId]?.name || 'Account') : 'All Accounts';
 
-  // -------- CSV Export (current filters + rollups) --------
+  // -------- CSV Export (current filters + rollups + extras) --------
   const exportCSV = async () => {
     try {
       // Sheet 1: transactions (filtered)
@@ -121,7 +127,7 @@ export default function ReportScreen() {
         net: Number(rollups.byMonth[m].net || 0).toFixed(2),
       }));
 
-      // Sheet 3: category rollup
+      // Sheet 3: category rollup (sorted by absolute net)
       const rowsCat = rollups.categoriesByAbsNet.map(([cat, v]) => ({
         category: cat,
         income: Number(v.income || 0).toFixed(2),
@@ -129,7 +135,23 @@ export default function ReportScreen() {
         net: Number(v.net || 0).toFixed(2),
       }));
 
-      // Build a multi-section CSV (simple separators between blocks)
+      // Sheet 4: top expense categories
+      const rowsTop = rollups.topExpenses.map(([cat, v]) => ({
+        category: cat,
+        expense: Number(v.expense || 0).toFixed(2),
+        income: Number(v.income || 0).toFixed(2),
+        net: Number(v.net || 0).toFixed(2),
+      }));
+
+      // Sheet 5: monthly averages
+      const rowsAvg = [{
+        months: rollups.monthlyAvg.monthCount,
+        avg_income: Number(rollups.monthlyAvg.income).toFixed(2),
+        avg_expense: Number(rollups.monthlyAvg.expense).toFixed(2),
+        avg_net: Number(rollups.monthlyAvg.net).toFixed(2),
+      }];
+
+      // Multi-section CSV (simple separators)
       const sections = [
         ['Transactions (filtered)'],
         toCSV(rowsTx),
@@ -139,10 +161,14 @@ export default function ReportScreen() {
         [''],
         ['Category rollup'],
         toCSV(rowsCat),
+        [''],
+        ['Top expense categories'],
+        toCSV(rowsTop),
+        [''],
+        ['Monthly averages'],
+        toCSV(rowsAvg),
       ];
-      const csv = sections
-        .map((s) => (Array.isArray(s) ? s.join(',') : s))
-        .join('\n');
+      const csv = sections.map((s) => (Array.isArray(s) ? s.join(',') : s)).join('\n');
 
       const fname = `base44-report-${new Date().toISOString().replace(/[:T]/g,'-').slice(0,19)}.csv`;
       const uri = FileSystem.cacheDirectory + fname;
@@ -168,7 +194,7 @@ export default function ReportScreen() {
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Reports</Text>
-      <Text style={styles.subtle}>Filters & monthly/category rollups</Text>
+      <Text style={styles.subtle}>Filters, monthly/category rollups, top categories & averages</Text>
 
       {/* Filters (same UX as History) */}
       <View style={styles.card}>
@@ -300,6 +326,42 @@ export default function ReportScreen() {
           )}
           ListEmptyComponent={<Text style={styles.subtle}>No categories found.</Text>}
         />
+      </View>
+
+      {/* Top expense categories */}
+      <View style={styles.card}>
+        <Text style={styles.sectionH}>Top Expense Categories</Text>
+        <FlatList
+          data={rollups.topExpenses}
+          keyExtractor={([cat]) => cat}
+          ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+          renderItem={({ item: [cat, v] }) => (
+            <View style={styles.rowBetween}>
+              <Text style={styles.itemLeft}>{cat}</Text>
+              <Text style={[styles.amount, styles.red]}>{money(v.expense, prefs)}</Text>
+            </View>
+          )}
+          ListEmptyComponent={<Text style={styles.subtle}>No expenses in range.</Text>}
+        />
+      </View>
+
+      {/* Monthly averages */}
+      <View style={styles.card}>
+        <Text style={styles.sectionH}>Monthly Averages ({rollups.monthlyAvg.monthCount} month{rollups.monthlyAvg.monthCount === 1 ? '' : 's'})</Text>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Avg Income</Text>
+          <Text style={[styles.amount, styles.green]}>{money(rollups.monthlyAvg.income, prefs)}</Text>
+        </View>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Avg Expense</Text>
+          <Text style={[styles.amount, styles.red]}>{money(rollups.monthlyAvg.expense, prefs)}</Text>
+        </View>
+        <View style={[styles.rowBetween, { marginTop: 6 }]}>
+          <Text style={styles.label}>Avg Net</Text>
+          <Text style={[styles.amount, rollups.monthlyAvg.net < 0 ? styles.red : styles.green]}>
+            {money(Math.abs(rollups.monthlyAvg.net), prefs)}
+          </Text>
+        </View>
       </View>
     </View>
   );
