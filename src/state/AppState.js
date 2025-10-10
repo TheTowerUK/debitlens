@@ -19,6 +19,8 @@ const initialState = {
   accounts: [],         // [{ id, name, kind? }]
   transactions: [],     // [{ id, accountId, type: 'income'|'expense', amount, date:'YYYY-MM-DD', category?, note? }]
   budgets: [],          // [{ id, category, limit:number, month:'YYYY-MM' | undefined }]
+  recurring: [],                // [{ id, accountId, type, amount, category, note, freq, startDate, endDate?, autoPost }]
+  lastRecurringRun: null,       // 'YYYY-MM-DD' of the last generation pass
 
   prefs: {
     useBiometrics: true,
@@ -60,6 +62,29 @@ function reducer(state, action) {
     }
     case 'ADD_ACCOUNT': {
       return { ...state, accounts: [...state.accounts, action.payload] };
+    }
+    case 'SET_RECURRING': {
+      return { ...state, recurring: action.payload };
+    }
+    case 'ADD_RECURRING': {
+      return { ...state, recurring: [...(state.recurring || []), action.payload] };
+    }
+    case 'UPDATE_RECURRING': {
+      const r = action.payload;
+      return {
+        ...state,
+        recurring: (state.recurring || []).map(x => x.id === r.id ? r : x),
+      };
+    }
+    case 'DELETE_RECURRING': {
+      const id = action.payload;
+      return {
+        ...state,
+        recurring: (state.recurring || []).filter(x => x.id !== id),
+      };
+    }
+    case 'SET_LAST_RECURRING_RUN': {
+      return { ...state, lastRecurringRun: action.payload || null };
     }
 
     // Transactions
@@ -185,6 +210,56 @@ async function notifyBudgetCrossed(category, pct, spent, effective, currencyPref
   });
 }
 
+// ----- Recurring helpers -----
+const isoToday = () => new Date().toISOString().slice(0,10);
+const parseISO = (s) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))) return null;
+  const [y,m,d] = s.split('-').map(n=>parseInt(n,10));
+  return new Date(y, m-1, d);
+};
+const toISO = (d) => {
+  const pad = (n)=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
+
+function* dateRangeDays(startISO, endISO) {
+  const s = parseISO(startISO); const e = parseISO(endISO);
+  if (!s || !e || s>e) return;
+  for (let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) {
+    yield toISO(d);
+  }
+}
+
+function isDueOn(rule, iso) {
+  // respect start/end
+  if (rule.startDate && iso < rule.startDate) return false;
+  if (rule.endDate && iso > rule.endDate) return false;
+
+  const start = parseISO(rule.startDate || iso);
+  const cur = parseISO(iso);
+  if (!start || !cur) return false;
+
+  const freq = rule.freq || 'monthly';
+  if (freq === 'daily') return true;
+
+  if (freq === 'weekly') {
+    return start.getDay() === cur.getDay(); // same weekday as start
+  }
+
+  if (freq === 'monthly') {
+    // run on same day-of-month as start; clamp if month shorter
+    const want = start.getDate();
+    return cur.getDate() === want;
+  }
+
+  return false;
+}
+
+function txKey(t) {
+  // identity key to avoid duplicates: originRecurringId|date|amount|account
+  return [t.originRecurringId, t.date, t.amount, t.accountId, t.type, t.category || '', t.note || ''].join('|');
+}
+
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
@@ -234,6 +309,90 @@ export function AppProvider({ children }) {
   
   // ---------- Actions ----------
   const actions = useMemo(() => ({
+    
+    // Recurring CRUD
+setRecurring: async (items) => {
+  const next = reducer(state, { type: 'SET_RECURRING', payload: items });
+  dispatch({ type: 'SET_RECURRING', payload: items });
+  await persist(next);
+},
+addRecurring: async (item) => {
+  const r = { id: genId('recur'), autoPost: true, freq: 'monthly', ...item };
+  const next = reducer(state, { type: 'ADD_RECURRING', payload: r });
+  dispatch({ type: 'ADD_RECURRING', payload: r });
+  await persist(next);
+  return r;
+},
+updateRecurring: async (item) => {
+  const next = reducer(state, { type: 'UPDATE_RECURRING', payload: item });
+  dispatch({ type: 'UPDATE_RECURRING', payload: item });
+  await persist(next);
+},
+deleteRecurring: async (id) => {
+  const next = reducer(state, { type: 'DELETE_RECURRING', payload: id });
+  dispatch({ type: 'DELETE_RECURRING', payload: id });
+  await persist(next);
+},
+
+// Generator: posts any due items between last run and today (inclusive)
+runRecurringGeneration: async () => {
+  try {
+    const today = isoToday();
+    const last = state.lastRecurringRun || today; // first time → only today
+    const rules = state.recurring || [];
+    if (!rules.length) {
+      // still stamp the run
+      const stamped = reducer(state, { type: 'SET_LAST_RECURRING_RUN', payload: today });
+      dispatch({ type: 'SET_LAST_RECURRING_RUN', payload: today });
+      await persist(stamped);
+      return;
+    }
+
+    // Build a set of existing keys to prevent duplicates
+    const existingKeys = new Set((state.transactions || []).map(txKey));
+
+    const newTxns = [];
+    for (const d of dateRangeDays(last, today)) {
+      for (const r of rules) {
+        if (!r.autoPost) continue;
+        if (!isDueOn(r, d)) continue;
+        const t = {
+          id: genId('txn'),
+          originRecurringId: r.id,
+          accountId: r.accountId,
+          type: r.type,                 // 'expense' | 'income'
+          amount: Number(r.amount || 0),
+          date: d,                      // due date
+          category: r.category || (r.type === 'expense' ? 'General' : 'Income'),
+          note: r.note || 'Recurring',
+        };
+        if (t.amount <= 0 || !t.accountId) continue;
+        const key = txKey(t);
+        if (!existingKeys.has(key)) {
+          existingKeys.add(key);
+          newTxns.push(t);
+        }
+      }
+    }
+
+    if (newTxns.length) {
+      const merged = [...(state.transactions || []), ...newTxns];
+      let next = reducer(state, { type: 'SET_TRANSACTIONS', payload: merged });
+      dispatch({ type: 'SET_TRANSACTIONS', payload: merged });
+      next = reducer(next, { type: 'SET_LAST_RECURRING_RUN', payload: today });
+      dispatch({ type: 'SET_LAST_RECURRING_RUN', payload: today });
+      await persist(next);
+    } else {
+      const next = reducer(state, { type: 'SET_LAST_RECURRING_RUN', payload: today });
+      dispatch({ type: 'SET_LAST_RECURRING_RUN', payload: today });
+      await persist(next);
+    }
+  } catch (e) {
+    console.warn('[recurring] generation failed', e);
+  }
+},
+
+    
     // Accounts
     addAccount: async (name, kind = 'current') => {
       const account = { id: genId('acc'), name, kind };
@@ -255,8 +414,8 @@ export function AppProvider({ children }) {
       await persist(next);
     },
     addTransaction: async (tx) => {
-  // build final tx (id + payload)
-  const t = { id: genId('txn'), ...tx };
+    // build final tx (id + payload)
+      const t = { id: genId('txn'), ...tx };
 
   // ---- Real-time alert check (pre-dispatch) ----
   try {

@@ -143,6 +143,7 @@ export default function DashboardScreen({ navigation }) {
           { label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
           { label: 'Settings', onPress: () => navigation.navigate('Settings') },
           { label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
+          { label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
         ]}
       />
     </View>

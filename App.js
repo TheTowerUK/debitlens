@@ -17,6 +17,8 @@ import ReportScreen from './src/screens/ReportScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
+import RecurringBootstrapper from './src/recurring/bootstrapper';
+import RecurringScreen from './src/screens/RecurringScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +31,9 @@ export default function App() {
     <AppProvider>
       {/* ✅ This mounts once; not a child of Stack.Navigator */}
       <NotificationBootstrapper />
+      <NotificationBootstrapper />
+      <RecurringBootstrapper />
+      <NavigationContainer>...</NavigationContainer>
 
       <NavigationContainer>
         <Stack.Navigator
@@ -46,6 +51,8 @@ export default function App() {
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
+          <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
+          
          </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
