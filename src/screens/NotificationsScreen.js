@@ -92,7 +92,7 @@ export default function NotificationsScreen() {
       <Text style={styles.subtle}>Budget alerts and daily summary</Text>
 
       {/* Settings card */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Enable alerts</Text>
           <Switch value={enabled} onValueChange={setEnabled} />
@@ -138,13 +138,13 @@ export default function NotificationsScreen() {
       </View>
 
       {/* At-risk budgets */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.sectionH}>At Risk</Text>
         {risky.length === 0 ? (
           <Text style={styles.subtle}>No budgets above the current threshold.</Text>
         ) : (
-          risky.map((r) => (
-            <View key={r.id} style={styles.rowBetween}>
+          risky.map((r, idx) => (
+           <View key={r.id ?? `${r.category}-${idx}`} style={styles.rowBetween}>
               <Text style={styles.itemLeft}>{r.category}</Text>
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={styles.itemRight}>

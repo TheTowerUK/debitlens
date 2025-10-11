@@ -104,13 +104,13 @@ export default function RecurringScreen() {
 
       {/* List */}
       <FlatList
-        data={items}
-        keyExtractor={(r)=>r.id}
+        data={accountTxns}
+        keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
         contentContainerStyle={{ paddingBottom: 16 }}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListHeaderComponent={<View style={{ height: 12 }} />}
         renderItem={({ item: r }) => (
-          <View style={styles.card}>
+          <View key={r.id ?? r.category} style={styles.card}>
             <View style={styles.rowBetween}>
               <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
               <Text style={styles.itemRight}>
@@ -136,7 +136,7 @@ export default function RecurringScreen() {
       />
 
       {/* Form */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.label}>{editingId ? 'Edit schedule' : 'Add schedule'}</Text>
 
         <Pressable style={styles.accountBtn} onPress={cycleAccount}>

@@ -57,7 +57,7 @@ export default function LoginScreen({ navigation }) {
       style={styles.wrap}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.h1}>Welcome back</Text>
         <Text style={styles.subtle}>Sign in to continue</Text>
 

@@ -185,7 +185,7 @@ export default function ReportScreen() {
       <Text style={styles.subtle}>Filters, rollups, top categories & averages</Text>
 
       {/* Filters */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         {/* Quick ranges */}
         <View style={styles.rowWrap}>
           {PRESETS.map((p) => (
@@ -263,7 +263,7 @@ export default function ReportScreen() {
       </View>
 
       {/* Totals */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View className="rowBetween">
           <Text style={styles.label}>Income</Text>
           <Text style={[styles.amount, styles.green]}>{money(rollups.totals.income, prefs)}</Text>
@@ -281,11 +281,11 @@ export default function ReportScreen() {
       </View>
 
       {/* By Month */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.sectionH}>By Month</Text>
         <FlatList
           data={rollups.months}
-          keyExtractor={(m) => m}
+          keyExtractor={(item, index) => String(item)}
           ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
           renderItem={({ item: m }) => {
             const v = rollups.byMonth[m];
@@ -307,11 +307,11 @@ export default function ReportScreen() {
       </View>
 
       {/* By Category */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.sectionH}>By Category</Text>
         <FlatList
           data={rollups.categoriesByAbsNet}
-          keyExtractor={([cat]) => cat}
+          keyExtractor={([cat], index) => String(cat)}
           ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
           renderItem={({ item: [cat, v] }) => (
             <View style={styles.rowBetween}>
@@ -330,11 +330,11 @@ export default function ReportScreen() {
       </View>
 
       {/* Top expense categories */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.sectionH}>Top Expense Categories</Text>
         <FlatList
           data={rollups.topExpenses}
-          keyExtractor={([cat]) => cat}
+          keyExtractor={([cat], index) => String(cat)}
           ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
           renderItem={({ item: [cat, v] }) => (
             <View style={styles.rowBetween}>
@@ -347,7 +347,7 @@ export default function ReportScreen() {
       </View>
 
       {/* Monthly averages */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.sectionH}>Monthly Averages ({rollups.monthlyAvg.monthCount} month{rollups.monthlyAvg.monthCount === 1 ? '' : 's'})</Text>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Avg Income</Text>

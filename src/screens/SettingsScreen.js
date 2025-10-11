@@ -123,7 +123,7 @@ export default function SettingsScreen() {
       <Text style={styles.subtle}>Preferences & Data</Text>
 
       {/* Prefs */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Use Face/Touch ID</Text>
           <Switch value={useBio} onValueChange={setUseBio} />
@@ -158,7 +158,7 @@ export default function SettingsScreen() {
       </View>
 
       {/* Backup / Restore */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.label}>Data Backup</Text>
         <View style={{ height: 8 }} />
         <Pressable style={styles.btnSave} onPress={onExport}>

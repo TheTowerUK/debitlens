@@ -20,8 +20,8 @@ export default function ActionFab({ items = [] }) {
       {open && (
         <View style={styles.panel}>
           {items.map((it, idx) => (
-            <Pressable
-              key={it.label + idx}
+             <Pressable
+              key={it.key ?? it.id ?? `${idx}-${it.label}`}
               onPress={() => onPick(it.onPress)}
               style={({ pressed }) => [
                 styles.item,

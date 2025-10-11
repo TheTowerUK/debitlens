@@ -70,7 +70,7 @@ export default function AccountScreen({ route, navigation }) {
       {/* LIST */}
       <FlatList
         data={txns}
-        keyExtractor={(t) => t.id}
+        keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
         contentContainerStyle={{ paddingBottom: 32 }}
         ItemSeparatorComponent={() => <View style={styles.sep} />}
         renderItem={({ item }) => (

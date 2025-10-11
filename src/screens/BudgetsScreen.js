@@ -149,7 +149,7 @@ export default function BudgetsScreen() {
       <Text style={styles.subtle}>Monthly limits per category — {thisMonthStr}</Text>
 
       {/* Rollover toggle */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Rollover unused from last month</Text>
           <Switch value={!!prefs.budgetRollover} onValueChange={toggleRollover} />
@@ -166,7 +166,7 @@ export default function BudgetsScreen() {
       </View>
 
       {/* Overall summary */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Base Limit</Text>
           <Text style={styles.amount}>{money(totals.limitBase, prefs)}</Text>
@@ -187,17 +187,17 @@ export default function BudgetsScreen() {
       </View>
 
       {/* List */}
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.itemLeft}>{item.category}</Text>
-              <Text style={styles.amount}>{money(item.effectiveLimit, prefs)}</Text>
-            </View>
+  <FlatList
+    data={rows}
+    keyExtractor={(item, index) => String(item.id ?? `${item.category}-${item.month}-${index}`)}
+    contentContainerStyle={{ paddingBottom: 16 }}
+    ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+    renderItem={({ item }) => (
+      <View key={r.id ?? r.category} style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.itemLeft}>{item.category}</Text>
+          <Text style={styles.amount}>{money(item.effectiveLimit, prefs)}</Text>
+        </View>
 
             {/* breakdown */}
             <View style={styles.rowBetween}>
@@ -236,7 +236,7 @@ export default function BudgetsScreen() {
       />
 
       {/* Form */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <Text style={styles.label}>{editingId ? 'Edit budget' : 'Add budget'}</Text>
         <TextInput
           value={category}

@@ -109,7 +109,7 @@ export default function HistoryScreen({ navigation }) {
       <Text style={styles.subtle}>Filter, review, and export</Text>
 
       {/* Filters */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         {/* Type */}
         <View style={styles.row}>
           <Pressable style={[styles.pill, type === 'all' && styles.pillActive]} onPress={() => setType('all')}>
@@ -174,7 +174,7 @@ export default function HistoryScreen({ navigation }) {
       </View>
 
       {/* Totals */}
-      <View style={styles.card}>
+      <View key={r.id ?? r.category} style={styles.card}>
         <View style={styles.rowBetween}>
           <Text style={styles.label}>Income</Text>
           <Text style={[styles.amount, styles.green]}>{money(totals.income, prefs)}</Text>
@@ -192,40 +192,40 @@ export default function HistoryScreen({ navigation }) {
       </View>
 
       {/* List */}
-      <FlatList
-        data={filtered}
-        keyExtractor={(t) => t.id}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        renderItem={({ item }) => {
-          const isExpense = item.type === 'expense';
-          const sign = isExpense ? '-' : '+';
-          return (
-            <Pressable
-              style={styles.rowItem}
-              onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}
-              onLongPress={() => onDelete(item.id)}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemTop}>
-                  {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
-                </Text>
-                <Text style={styles.itemSub}>
-                  {(byAccount[item.accountId]?.name || item.accountName || 'Account') + ' • ' + item.date}
-                </Text>
-              </View>
-              <Text style={[styles.amount, isExpense ? styles.red : styles.green]}>
-                {sign}{money(item.amount, prefs)}
-              </Text>
-            </Pressable>
-          );
-        }}
-        ListEmptyComponent={
-          <Text style={[styles.subtle, { padding: 16 }]}>
-            No transactions match the current filters.
+  <FlatList
+    data={filtered}
+    keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
+    contentContainerStyle={{ paddingBottom: 32 }}
+    ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+    renderItem={({ item }) => {
+      const isExpense = item.type === 'expense';
+      const sign = isExpense ? '-' : '+';
+      return (
+        <Pressable
+          style={styles.rowItem}
+          onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}
+          onLongPress={() => onDelete(item.id)}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemTop}>
+              {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
+            </Text>
+            <Text style={styles.itemSub}>
+              {(byAccount[item.accountId]?.name || item.accountName || 'Account') + ' • ' + item.date}
+            </Text>
+          </View>
+          <Text style={[styles.amount, isExpense ? styles.red : styles.green]}>
+            {sign}{money(item.amount, prefs)}
           </Text>
-        }
-      />
+        </Pressable>
+      );
+    }}
+    ListEmptyComponent={
+      <Text style={[styles.subtle, { padding: 16 }]}>
+        No transactions match the current filters.
+      </Text>
+    }
+  />
     </View>
   );
 }

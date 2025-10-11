@@ -83,7 +83,7 @@ export default function DashboardScreen({ navigation }) {
 
           return (
             <Pressable
-              key={a.id}
+              key={String(a.id)}
               style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
               onPress={() => navigation.navigate('Account', { accountId: a.id })}
             >
@@ -137,13 +137,13 @@ export default function DashboardScreen({ navigation }) {
       {/* Floating menu (replaces the quick actions + old add FAB) */}
       <ActionFab
         items={[
-          { label: 'Add Account', onPress: () => setAdding(true) },
-          { label: 'History', onPress: () => navigation.navigate('History') },
-          { label: 'Reports', onPress: () => navigation.navigate('Report') },
-          { label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
-          { label: 'Settings', onPress: () => navigation.navigate('Settings') },
-          { label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
-          { label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
+          { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
+          { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
+          { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Report') },
+          { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
+          { key: 'settings', label: 'Settings', onPress: () => navigation.navigate('Settings') },
+          { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
+          { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
         ]}
       />
     </View>
