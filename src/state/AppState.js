@@ -2,8 +2,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
-import * as Notifications from 'expo-notifications';
-
 
 // ---------- Persistence keys ----------
 const STORAGE_KEY = '@base44/state/v1';
@@ -199,16 +197,20 @@ function effectiveLimitFor(state, category) {
   return { base, carry, effective: base + carry };
 }
 
-// Fire local notification now
-async function notifyBudgetCrossed(category, pct, spent, effective, currencyPrefs) {
+// Fire local notification now (dynamic import to avoid Expo Go push warnings on load)
+async function notifyBudgetCrossed(category, pct, spent, effective) {
+  const Notifications = await import('expo-notifications');
   const percent = Math.round(pct * 100);
-  const title = `Budget at ${percent}%: ${category}`;
-  const body = `Spent ${spent.toFixed(2)} of ${effective.toFixed(2)}. Tap to review.`;
   await Notifications.scheduleNotificationAsync({
-    content: { title, body, data: { screen: 'Budgets', category } },
-    trigger: null, // immediate
+    content: {
+      title: `Budget at ${percent}%: ${category}`,
+      body: `Spent ${spent.toFixed(2)} of ${effective.toFixed(2)}. Tap to review.`,
+      data: { screen: 'Budgets', category },
+    },
+    trigger: null,
   });
 }
+
 
 // ----- Recurring helpers -----
 const isoToday = () => new Date().toISOString().slice(0,10);
