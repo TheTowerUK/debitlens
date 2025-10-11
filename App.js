@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { AppProvider } from './src/state/AppState';
 import NotificationBootstrapper from './src/notifications/bootstrapper';
+import RecurringBootstrapper from './src/recurring/bootstrapper';
 
 // Screens
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
@@ -17,30 +18,26 @@ import ReportScreen from './src/screens/ReportScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
-import RecurringBootstrapper from './src/recurring/bootstrapper';
 import RecurringScreen from './src/screens/RecurringScreen';
 
 const Stack = createNativeStackNavigator();
-
-// Reusable back button option
 const withBack = { headerBackTitleVisible: false };
 
 export default function App() {
   return (
-    // ✅ Provider wraps the whole app — NOT inside a navigator
     <AppProvider>
-      {/* ✅ This mounts once; not a child of Stack.Navigator */}
-      <NotificationBootstrapper />
+      {/* Bootstrappers mount once, outside the navigator */}
       <NotificationBootstrapper />
       <RecurringBootstrapper />
-      <NavigationContainer>...</NavigationContainer>
 
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="SplashAuth"
-          screenOptions={{ headerStyle: { backgroundColor: '#0B0D13' }, headerTintColor: '#fff' }}
+          screenOptions={{
+            headerStyle: { backgroundColor: '#0B0D13' },
+            headerTintColor: '#fff',
+          }}
         >
-          {/* ✅ Only Screen/Group/Fragment as direct children of the navigator */}
           <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
@@ -49,11 +46,10 @@ export default function App() {
           <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
           <Stack.Screen name="Report" component={ReportScreen} options={withBack} />
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
+          <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
-          <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
-          
-         </Stack.Navigator>
+        </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
   );
