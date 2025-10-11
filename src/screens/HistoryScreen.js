@@ -193,39 +193,41 @@ export default function HistoryScreen({ navigation }) {
 
       {/* List */}
   <FlatList
-    data={filtered}
-    keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
-    contentContainerStyle={{ paddingBottom: 32 }}
-    ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-    renderItem={({ item }) => {
-      const isExpense = item.type === 'expense';
-      const sign = isExpense ? '-' : '+';
-      return (
-        <Pressable
-          style={styles.rowItem}
-          onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}
-          onLongPress={() => onDelete(item.id)}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={styles.itemTop}>
-              {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
-            </Text>
-            <Text style={styles.itemSub}>
-              {(byAccount[item.accountId]?.name || item.accountName || 'Account') + ' • ' + item.date}
-            </Text>
-          </View>
-          <Text style={[styles.amount, isExpense ? styles.red : styles.green]}>
-            {sign}{money(item.amount, prefs)}
-          </Text>
-        </Pressable>
-      );
-    }}
-    ListEmptyComponent={
-      <Text style={[styles.subtle, { padding: 16 }]}>
-        No transactions match the current filters.
+  data={items}  // <- the array of recurring rules (from state.recurring)
+  keyExtractor={(r) => String(r.id)}
+  contentContainerStyle={{ paddingBottom: 16 }}
+  ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+  ListHeaderComponent={<View style={{ height: 12 }} />}
+  renderItem={({ item: r }) => (
+    <View style={styles.card}>
+      <View style={styles.rowBetween}>
+        <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
+        <Text style={styles.itemRight}>
+          {r.type === 'expense' ? '-' : '+'}{Number(r.amount).toFixed(2)}
+        </Text>
+      </View>
+      <Text style={styles.subtle}>
+        {accounts.find(a => a.id === r.accountId)?.name || 'Account'} •
+        {' '}from {r.startDate}{r.endDate ? ` to ${r.endDate}` : ''}{r.autoPost ? ' • auto' : ''}
       </Text>
-    }
-  />
+
+      <View style={styles.row}>
+        <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(r)}>
+          <Text style={styles.btnTinyText}>Edit</Text>
+        </Pressable>
+        <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(r.id)}>
+          <Text style={styles.btnTinyText}>Delete</Text>
+        </Pressable>
+      </View>
+    </View>
+  )}
+  ListEmptyComponent={
+    <Text style={[styles.subtle, { paddingHorizontal: 16 }]}>
+      No schedules yet.
+    </Text>
+  }
+/>
+
     </View>
   );
 }
