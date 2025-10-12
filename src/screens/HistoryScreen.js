@@ -1,275 +1,369 @@
 // src/screens/HistoryScreen.js
 import React, { useMemo, useState } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, FlatList, Pressable, Alert, Platform
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  FlatList,
+  Alert,
+  Platform,
 } from 'react-native';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useApp } from '../state/AppState';
 import { money } from '../utils/money';
-import { toCSV } from '../utils/csv';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
-const isISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
+const pad = (n) => String(n).padStart(2, '0');
+const addDays = (d, delta) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + delta);
+  return x;
+};
+const weekStart = (d) => {
+  const x = new Date(d);
+  const day = x.getDay(); // 0 Sun..6 Sat
+  const diff = (day + 6) % 7; // Mon-based week
+  x.setDate(x.getDate() - diff);
+  return x;
+};
+const toISO = (d) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+const PRESETS = ['This week', 'This month', 'Last month', 'This year', 'All time'];
 
 export default function HistoryScreen({ navigation }) {
   const { state, actions } = useApp();
   const prefs = state?.prefs || {};
-  const accounts = state?.accounts || [];
-  const txns = state?.transactions || [];
+  const accounts = state?.accounts ?? [];
+  const allTxns = state?.transactions ?? [];
 
-  // -------- Filters --------
-  const [accountId, setAccountId] = useState(null);       // null => all
-  const [type, setType] = useState('all');                // all | expense | income
-  const [startDate, setStartDate] = useState('');         // YYYY-MM-DD
-  const [endDate, setEndDate] = useState(todayISO());
-  const [query, setQuery] = useState('');                 // match category/note
+  // ------- Filters -------
+  const [type, setType] = useState('all'); // all | expense | income
+  const [query, setQuery] = useState('');
+  const [preset, setPreset] = useState('This month');
+  const [start, setStart] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  });
+  const [end, setEnd] = useState(todayISO());
+  const [accountId, setAccountId] = useState(null); // null = all
 
-  const byAccount = useMemo(
-    () => Object.fromEntries(accounts.map((a) => [a.id, a])),
-    [accounts]
-  );
+  // Derive account lookup
+  const byAccount = useMemo(() => {
+    const m = {};
+    for (const a of accounts) m[String(a.id)] = a;
+    return m;
+  }, [accounts]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return [...txns]
-      .filter((t) => (accountId ? t.accountId === accountId : true))
-      .filter((t) => (type === 'all' ? true : t.type === type))
-      .filter((t) => (startDate && isISO(startDate) ? t.date >= startDate : true))
-      .filter((t) => (endDate && isISO(endDate) ? t.date <= endDate : true))
-      .filter((t) => {
-        if (!q) return true;
-        const blob = `${t.category || ''} ${t.note || ''}`.toLowerCase();
-        return blob.includes(q);
-      })
-      .sort((a, b) => b.date.localeCompare(a.date)); // newest first
-  }, [txns, accountId, type, startDate, endDate, query]);
-
-  const totals = useMemo(() => {
-    let income = 0, expense = 0;
-    for (const t of filtered) {
-      if (t.type === 'income') income += Number(t.amount || 0);
-      else expense += Number(t.amount || 0);
+  // Apply preset -> start/end
+  const applyPreset = (name) => {
+    const now = new Date();
+    if (name === 'This week') {
+      const ws = weekStart(now);
+      setStart(toISO(ws));
+      setEnd(toISO(now));
+    } else if (name === 'This month') {
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
+      setStart(toISO(s));
+      setEnd(toISO(now));
+    } else if (name === 'Last month') {
+      const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const e = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStart(toISO(s));
+      setEnd(toISO(e));
+    } else if (name === 'This year') {
+      const s = new Date(now.getFullYear(), 0, 1);
+      setStart(toISO(s));
+      setEnd(toISO(now));
+    } else {
+      // All time
+      setStart('');
+      setEnd('');
     }
-    return { income, expense, net: income - expense };
-  }, [filtered]);
+    setPreset(name);
+  };
 
+  // Cycle account picker (simple, no modal)
   const cycleAccount = () => {
     if (!accounts.length) return;
-    if (!accountId) return setAccountId(accounts[0].id);
-    const ids = accounts.map((a) => a.id);
-    const idx = ids.indexOf(accountId);
-    setAccountId(idx === -1 || idx === ids.length - 1 ? null : ids[idx + 1]);
+    if (accountId == null) return setAccountId(String(accounts[0].id));
+    const ids = accounts.map((a) => String(a.id));
+    const i = ids.indexOf(String(accountId));
+    setAccountId(i === -1 || i === ids.length - 1 ? null : ids[i + 1]); // go to "all" after last
   };
 
-  const accountLabel = accountId ? (byAccount[accountId]?.name || 'Account') : 'All Accounts';
+  // ------- Filtered list -------
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const s = (start || '').trim();
+    const e = (end || '').trim();
+    return allTxns
+      .filter((t) => {
+        if (type !== 'all' && t.type !== type) return false;
+        if (accountId != null && String(t.accountId) !== String(accountId)) return false;
 
-  const exportCSV = async () => {
-    try {
-      if (!filtered.length) return Alert.alert('Export', 'No transactions match the current filters.');
-      const rows = filtered.map((t) => ({
-        id: t.id,
-        date: t.date,
-        type: t.type,
-        account: t.accountName || byAccount[t.accountId]?.name || '',
-        category: t.category || '',
-        note: t.note || '',
-        amount: Number(t.amount || 0).toFixed(2),
-      }));
-      const csv = toCSV(rows);
-      const fname = `base44-history-${new Date().toISOString().replace(/[:T]/g,'-').slice(0,19)}.csv`;
-      const uri = FileSystem.cacheDirectory + fname;
-      await FileSystem.writeAsStringAsync(uri, csv);
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export filtered transactions',
-          UTI: 'public.comma-separated-values-text',
-        });
-      } else {
-        Alert.alert('Exported', `Saved to cache:\n${uri}`);
-      }
-    } catch (e) {
-      console.warn('[history] export failed', e);
-      Alert.alert('Export failed', String(e?.message || e));
+        // date range (inclusive)
+        const d = t.date || '';
+        if (s && d < s) return false;
+        if (e && d > e) return false;
+
+        if (q) {
+          const hay =
+            `${t.category || ''} ${t.note || ''} ${byAccount[t.accountId]?.name || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }, [allTxns, type, accountId, start, end, query, byAccount]);
+
+  const totals = useMemo(() => {
+    let inc = 0,
+      exp = 0;
+    for (const t of filtered) {
+      const v = Number(t.amount || 0);
+      if (t.type === 'income') inc += v;
+      else exp += v;
     }
-  };
+    return { inc, exp, net: inc - exp };
+  }, [filtered]);
 
   const onDelete = (id) => {
     Alert.alert('Delete transaction?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await actions.deleteTransaction(id); } },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => actions.deleteTransaction(id),
+      },
     ]);
   };
 
   return (
     <View style={styles.wrap}>
+      {/* Header */}
       <Text style={styles.h1}>History</Text>
-      <Text style={styles.subtle}>Filter, review, and export</Text>
+      <Text style={styles.subtle}>Browse, filter and edit transactions</Text>
 
       {/* Filters */}
-      <View key={r.id ?? r.category} style={styles.card}>
-        {/* Type */}
+      <View style={styles.card}>
+        {/* Type pills */}
         <View style={styles.row}>
-          <Pressable style={[styles.pill, type === 'all' && styles.pillActive]} onPress={() => setType('all')}>
-            <Text style={[styles.pillText, type === 'all' && styles.pillTextActive]}>All</Text>
-          </Pressable>
-          <Pressable style={[styles.pill, type === 'expense' && styles.pillActive]} onPress={() => setType('expense')}>
-            <Text style={[styles.pillText, type === 'expense' && styles.pillTextActive]}>Expense</Text>
-          </Pressable>
-          <Pressable style={[styles.pill, type === 'income' && styles.pillActive]} onPress={() => setType('income')}>
-            <Text style={[styles.pillText, type === 'income' && styles.pillTextActive]}>Income</Text>
-          </Pressable>
+          {['all', 'expense', 'income'].map((t) => (
+            <Pressable
+              key={t}
+              style={[styles.pill, type === t && styles.pillActive]}
+              onPress={() => setType(t)}
+            >
+              <Text style={[styles.pillText, type === t && styles.pillTextActive]}>
+                {t[0].toUpperCase() + t.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
-        {/* Account */}
-        <Pressable style={styles.accountBtn} onPress={cycleAccount}>
-          <Text style={styles.accountBtnText}>Account: {accountLabel}</Text>
-        </Pressable>
-
-        {/* Dates */}
-        <View style={styles.row}>
-          <View style={{ flex: 1, marginRight: 8 }}>
-            <TextInput
-              value={startDate}
-              onChangeText={setStartDate}
-              placeholder="Start (YYYY-MM-DD)"
-              placeholderTextColor="#6B7280"
-              style={styles.input}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <TextInput
-              value={endDate}
-              onChangeText={setEndDate}
-              placeholder="End (YYYY-MM-DD)"
-              placeholderTextColor="#6B7280"
-              style={styles.input}
-            />
-          </View>
+        {/* Presets */}
+        <View style={[styles.row, { marginTop: 8 }]}>
+          {PRESETS.map((p) => (
+            <Pressable
+              key={p}
+              style={[styles.pillSm, preset === p && styles.pillActive]}
+              onPress={() => applyPreset(p)}
+            >
+              <Text style={[styles.pillTextSm, preset === p && styles.pillTextActive]}>{p}</Text>
+            </Pressable>
+          ))}
         </View>
 
-        {/* Search */}
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search category or note"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        {/* Date inputs */}
+        <View style={[styles.row, { marginTop: 8 }]}>
+          <TextInput
+            value={start}
+            onChangeText={setStart}
+            placeholder="Start YYYY-MM-DD"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, { flex: 1, marginRight: 8 }]}
+          />
+          <TextInput
+            value={end}
+            onChangeText={setEnd}
+            placeholder="End YYYY-MM-DD"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, { flex: 1 }]}
+          />
+        </View>
 
-        {/* Actions */}
-        <View style={styles.rowBetween}>
-          <Pressable
-            style={styles.btnSecondary}
-            onPress={() => { setAccountId(null); setType('all'); setStartDate(''); setEndDate(todayISO()); setQuery(''); }}
-          >
-            <Text style={styles.btnText}>Reset</Text>
-          </Pressable>
-          <Pressable style={styles.btnSave} onPress={exportCSV}>
-            <Text style={styles.btnText}>Export CSV</Text>
+        {/* Search + Account cycler */}
+        <View style={[styles.row, { marginTop: 8 }]}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search category, note or account"
+            placeholderTextColor="#6B7280"
+            style={[styles.input, { flex: 1, marginRight: 8 }]}
+          />
+          <Pressable style={styles.accountBtn} onPress={cycleAccount}>
+            <Text style={styles.accountBtnText}>
+              {accountId == null
+                ? 'All accounts'
+                : byAccount[accountId]?.name || 'Account'}
+            </Text>
           </Pressable>
         </View>
       </View>
 
       {/* Totals */}
-      <View key={r.id ?? r.category} style={styles.card}>
+      <View style={[styles.card, { paddingVertical: 12 }]}>
         <View style={styles.rowBetween}>
-          <Text style={styles.label}>Income</Text>
-          <Text style={[styles.amount, styles.green]}>{money(totals.income, prefs)}</Text>
+          <Text style={styles.totLabel}>Income</Text>
+          <Text style={[styles.totVal, styles.green]}>{money(totals.inc, prefs)}</Text>
         </View>
         <View style={styles.rowBetween}>
-          <Text style={styles.label}>Expenses</Text>
-          <Text style={[styles.amount, styles.red]}>{money(totals.expense, prefs)}</Text>
+          <Text style={styles.totLabel}>Expenses</Text>
+          <Text style={[styles.totVal, styles.red]}>{money(totals.exp, prefs)}</Text>
         </View>
-        <View style={[styles.rowBetween, { marginTop: 6 }]}>
-          <Text style={styles.label}>Net</Text>
-          <Text style={[styles.amount, totals.net < 0 ? styles.red : styles.green]}>
-            {money(Math.abs(totals.net), prefs)}
+        <View style={[styles.rowBetween, { marginTop: 4 }]}>
+          <Text style={styles.totLabel}>Net</Text>
+          <Text
+            style={[
+              styles.totVal,
+              totals.net >= 0 ? styles.green : styles.red,
+            ]}
+          >
+            {money(totals.net, prefs)}
           </Text>
         </View>
       </View>
 
       {/* List */}
-  <FlatList
-  data={items}  // <- the array of recurring rules (from state.recurring)
-  keyExtractor={(r) => String(r.id)}
-  contentContainerStyle={{ paddingBottom: 16 }}
-  ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-  ListHeaderComponent={<View style={{ height: 12 }} />}
-  renderItem={({ item: r }) => (
-    <View style={styles.card}>
-      <View style={styles.rowBetween}>
-        <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
-        <Text style={styles.itemRight}>
-          {r.type === 'expense' ? '-' : '+'}{Number(r.amount).toFixed(2)}
-        </Text>
-      </View>
-      <Text style={styles.subtle}>
-        {accounts.find(a => a.id === r.accountId)?.name || 'Account'} •
-        {' '}from {r.startDate}{r.endDate ? ` to ${r.endDate}` : ''}{r.autoPost ? ' • auto' : ''}
-      </Text>
-
-      <View style={styles.row}>
-        <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(r)}>
-          <Text style={styles.btnTinyText}>Edit</Text>
-        </Pressable>
-        <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(r.id)}>
-          <Text style={styles.btnTinyText}>Delete</Text>
-        </Pressable>
-      </View>
-    </View>
-  )}
-  ListEmptyComponent={
-    <Text style={[styles.subtle, { paddingHorizontal: 16 }]}>
-      No schedules yet.
-    </Text>
-  }
-/>
-
+      <FlatList
+        data={filtered}
+        keyExtractor={(item, index) =>
+          String(item.id ?? `${item.accountId}-${item.date}-${index}`)
+        }
+        contentContainerStyle={{ paddingBottom: 32 }}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        renderItem={({ item }) => {
+          const isExpense = item.type === 'expense';
+          const sign = isExpense ? '-' : '+';
+          return (
+            <Pressable
+              style={styles.rowItem}
+              onPress={() =>
+                navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })
+              }
+              onLongPress={() => onDelete(item.id)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.itemTop}>
+                  {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
+                </Text>
+                <Text style={styles.itemSub}>
+                  {(byAccount[item.accountId]?.name ||
+                    item.accountName ||
+                    'Account') + ' • ' + (item.date || '')}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.amount,
+                  isExpense ? styles.red : styles.green,
+                ]}
+              >
+                {sign}
+                {money(item.amount, prefs)}
+              </Text>
+            </Pressable>
+          );
+        }}
+        ListEmptyComponent={
+          <Text style={[styles.subtle, { padding: 16 }]}>
+            No transactions match the current filters.
+          </Text>
+        }
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+  },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
   subtle: { color: '#9CA3AF', marginBottom: 12 },
 
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
-
-  // Filters
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-
-  pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8, marginBottom: 8 },
-  pillActive: { backgroundColor: '#2563EB' },
-  pillText: { color: '#fff', fontWeight: '700' },
-  pillTextActive: { color: '#fff' },
-
-  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8 },
-  accountBtnText: { color: '#fff', fontWeight: '700' },
-
-  input: {
-    backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937',
-    borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8,
+  // Cards / rows
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  rowBetween: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 
-  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnSecondary: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
+  // Inputs / buttons
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+  },
 
-  label: { color: '#E5E7EB', fontWeight: '700' },
-  amount: { color: '#E5E7EB', fontWeight: '800' },
-  red: { color: '#DC2626' },
+  pill: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  pillSm: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  pillActive: { backgroundColor: '#2563EB' },
+  pillText: { color: '#fff', fontWeight: '700' },
+  pillTextSm: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  pillTextActive: { color: '#fff' },
+
+  accountBtn: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  accountBtnText: { color: '#fff', fontWeight: '700' },
+
+  // Totals
+  totLabel: { color: '#9CA3AF', fontWeight: '700' },
+  totVal: { color: '#E5E7EB', fontWeight: '800' },
+  red: { color: '#F87171' },
   green: { color: '#34D399' },
 
-  // List items
+  // List rows
   rowItem: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#111827', paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   itemTop: { color: '#E5E7EB', fontWeight: '700' },
   itemSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
+  amount: { marginLeft: 12, fontWeight: '800' },
 });
