@@ -103,38 +103,34 @@ export default function RecurringScreen() {
       <Text style={styles.subtle}>Auto-post transactions on a schedule</Text>
 
       {/* List */}
-      <FlatList
-          data={items}                       // array of recurring rules
-          keyExtractor={(r) => String(r.id)}
-          renderItem={({ item: r }) => (
-            <View style={styles.card}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
-                <Text style={styles.itemRight}>
-                  {r.type === 'expense' ? '-' : '+'}{Number(r.amount).toFixed(2)}
-                </Text>
-              </View>
-              <Text style={styles.subtle}>
-                {accounts.find(a => a.id === r.accountId)?.name || 'Account'} •
-                {' '}from {r.startDate}{r.endDate ? ` to ${r.endDate}` : ''}{r.autoPost ? ' • auto' : ''}
-              </Text>
+  <FlatList
+    data={items}
+    keyExtractor={(item) => String(item.id)}
+    renderItem={({ item }) => (
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.itemLeft}>{item.category} • {item.freq}</Text>
+          <Text style={styles.itemRight}>
+            {item.type === 'expense' ? '-' : '+'}{Number(item.amount).toFixed(2)}
+          </Text>
+        </View>
+        <Text style={styles.subtle}>
+          {accounts.find(a => String(a.id) === String(item.accountId))?.name || 'Account'} •
+          {' '}from {item.startDate}{item.endDate ? ` to ${item.endDate}` : ''}{item.autoPost ? ' • auto' : ''}
+        </Text>
+        <View style={styles.row}>
+          <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(item)}>
+            <Text style={styles.btnTinyText}>Edit</Text>
+          </Pressable>
+          <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(item.id)}>
+            <Text style={styles.btnTinyText}>Delete</Text>
+          </Pressable>
+        </View>
+      </View>
+    )}
+  />
 
-              <View style={styles.row}>
-                <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(r)}>
-                  <Text style={styles.btnTinyText}>Edit</Text>
-                </Pressable>
-                <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(r.id)}>
-                  <Text style={styles.btnTinyText}>Delete</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-          ListEmptyComponent={
-            <Text style={[styles.subtle, { paddingHorizontal: 16 }]}>
-              No schedules yet.
-            </Text>
-          }
-        />
+
 
 
       {/* Form */}
