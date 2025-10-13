@@ -1,6 +1,14 @@
 // src/screens/TxnEditorScreen.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Alert,
+  Platform,
+} from 'react-native';
 import { useApp } from '../state/AppState';
 import { money } from '../utils/money';
 
@@ -19,7 +27,10 @@ export default function TxnEditorScreen({ route, navigation }) {
 
   const accounts = state?.accounts ?? [];
   const txns = state?.transactions ?? [];
-  const existing = useMemo(() => (mode === 'edit' ? txns.find(t => t.id === editId) || null : null), [mode, editId, txns]);
+  const existing = useMemo(
+    () => (mode === 'edit' ? txns.find(t => t.id === editId) || null : null),
+    [mode, editId, txns]
+  );
 
   // form state
   const [type, setType] = useState(existing?.type || 'expense'); // 'expense' | 'income'
@@ -156,8 +167,6 @@ export default function TxnEditorScreen({ route, navigation }) {
     </View>
   );
 }
-
-import { TextInput } from 'react-native'; // keep imports together if your linter prefers
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
