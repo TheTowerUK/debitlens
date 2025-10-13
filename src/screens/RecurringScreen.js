@@ -104,36 +104,38 @@ export default function RecurringScreen() {
 
       {/* List */}
       <FlatList
-        data={accountTxns}
-        keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        ListHeaderComponent={<View style={{ height: 12 }} />}
-        renderItem={({ item: r }) => (
-          <View key={r.id ?? r.category} style={styles.card}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
-              <Text style={styles.itemRight}>
-                {r.type === 'expense' ? '-' : '+'}{Number(r.amount).toFixed(2)}
+          data={items}                       // array of recurring rules
+          keyExtractor={(r) => String(r.id)}
+          renderItem={({ item: r }) => (
+            <View style={styles.card}>
+              <View style={styles.rowBetween}>
+                <Text style={styles.itemLeft}>{r.category} • {r.freq}</Text>
+                <Text style={styles.itemRight}>
+                  {r.type === 'expense' ? '-' : '+'}{Number(r.amount).toFixed(2)}
+                </Text>
+              </View>
+              <Text style={styles.subtle}>
+                {accounts.find(a => a.id === r.accountId)?.name || 'Account'} •
+                {' '}from {r.startDate}{r.endDate ? ` to ${r.endDate}` : ''}{r.autoPost ? ' • auto' : ''}
               </Text>
-            </View>
-            <Text style={styles.subtle}>
-              {accounts.find(a=>a.id===r.accountId)?.name || 'Account'} •
-              {' '}from {r.startDate}{r.endDate ? ` to ${r.endDate}` : ''}{r.autoPost ? ' • auto' : ''}
-            </Text>
 
-            <View style={styles.row}>
-              <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(r)}>
-                <Text style={styles.btnTinyText}>Edit</Text>
-              </Pressable>
-              <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(r.id)}>
-                <Text style={styles.btnTinyText}>Delete</Text>
-              </Pressable>
+              <View style={styles.row}>
+                <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(r)}>
+                  <Text style={styles.btnTinyText}>Edit</Text>
+                </Pressable>
+                <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(r.id)}>
+                  <Text style={styles.btnTinyText}>Delete</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={[styles.subtle, { paddingHorizontal: 16 }]}>No schedules yet.</Text>}
-      />
+          )}
+          ListEmptyComponent={
+            <Text style={[styles.subtle, { paddingHorizontal: 16 }]}>
+              No schedules yet.
+            </Text>
+          }
+        />
+
 
       {/* Form */}
       <View key={r.id ?? r.category} style={styles.card}>

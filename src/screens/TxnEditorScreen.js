@@ -1,103 +1,102 @@
 // src/screens/TxnEditorScreen.js
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Platform, Alert } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TextInput, Pressable, Alert, Platform } from 'react-native';
 import { useApp } from '../state/AppState';
+import { money } from '../utils/money';
 
-const isISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const pad = n => String(n).padStart(2, '0');
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+};
 
 export default function TxnEditorScreen({ route, navigation }) {
   const { state, actions } = useApp();
-  const { mode = 'add', txnId = null, accountId = null } = route.params || {};
+  const prefs = state?.prefs || {};
+  const mode = route.params?.mode || 'add'; // 'add' | 'edit'
+  const editId = route.params?.txnId || null;
+  const presetAccountId = route.params?.accountId ? String(route.params.accountId) : null;
 
-  const accounts = state?.accounts || [];
-  const txns = state?.transactions || [];
-  const existing = useMemo(() => txns.find(t => t.id === txnId) || null, [txns, txnId]);
+  const accounts = state?.accounts ?? [];
+  const txns = state?.transactions ?? [];
+  const existing = useMemo(() => (mode === 'edit' ? txns.find(t => t.id === editId) || null : null), [mode, editId, txns]);
 
   // form state
   const [type, setType] = useState(existing?.type || 'expense'); // 'expense' | 'income'
   const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
   const [date, setDate] = useState(existing?.date || todayISO());
-  const [category, setCategory] = useState(existing?.category || '');
+  const [category, setCategory] = useState(existing?.category || (type === 'expense' ? 'General' : 'Income'));
   const [note, setNote] = useState(existing?.note || '');
-  const [acctId, setAcctId] = useState(existing?.accountId || accountId || (accounts[0]?.id || null));
+  const [accountId, setAccountId] = useState(
+    existing?.accountId ? String(existing.accountId) :
+    presetAccountId ?? (accounts[0] ? String(accounts[0].id) : '')
+  );
 
-  useEffect(() => {
-    navigation.setOptions({ title: mode === 'edit' ? 'Edit Transaction' : 'Add Transaction' });
-  }, [mode, navigation]);
+  const cycleAccount = () => {
+    if (!accounts.length) return;
+    if (!accountId) return setAccountId(String(accounts[0].id));
+    const ids = accounts.map(a => String(a.id));
+    const i = ids.indexOf(String(accountId));
+    setAccountId(i === -1 || i === ids.length - 1 ? ids[0] : ids[i + 1]);
+  };
 
   const onSave = async () => {
     const amt = Number(amount);
-    if (!acctId) return Alert.alert('Account required', 'Please pick an account first.');
-    if (!isFinite(amt) || amt <= 0) return Alert.alert('Amount', 'Enter a positive amount.');
-    if (!isISO(date)) return Alert.alert('Date', 'Use YYYY-MM-DD format.');
+    if (!accountId) return Alert.alert('Account', 'Choose an account');
+    if (!isFinite(amt) || amt <= 0) return Alert.alert('Amount', 'Enter a positive amount');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Alert.alert('Date', 'Use YYYY-MM-DD');
 
     const payload = {
-      id: existing?.id,
-      accountId: acctId,
+      accountId: String(accountId),
       type,
       amount: amt,
       date,
-      category: category.trim() || (type === 'expense' ? 'General' : 'Income'),
-      note: note.trim(),
+      category: category?.trim() || (type === 'expense' ? 'General' : 'Income'),
+      note: note?.trim(),
     };
 
-    if (mode === 'edit' && existing) {
-      await actions.updateTransaction(payload);
-    } else {
-      await actions.addTransaction(payload);
+    try {
+      if (mode === 'edit' && existing) {
+        await actions.updateTransaction({ ...payload, id: existing.id });
+      } else {
+        await actions.addTransaction(payload);
+      }
+      navigation.goBack();
+    } catch (e) {
+      console.warn('[txnEditor] save failed', e);
+      Alert.alert('Save failed', 'Please try again.');
     }
-    navigation.goBack();
   };
 
   const onDelete = async () => {
-    if (!existing) return;
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
+    if (!(mode === 'edit' && existing)) return;
+    Alert.alert('Delete this transaction?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await actions.deleteTransaction(existing.id);
-          navigation.goBack();
-        },
-      },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await actions.deleteTransaction(existing.id);
+        navigation.goBack();
+      }},
     ]);
   };
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>{mode === 'edit' ? 'Edit' : 'Add'} Transaction</Text>
+      <Text style={styles.h1}>{mode === 'edit' ? 'Edit Transaction' : 'Add Transaction'}</Text>
 
       {/* Type */}
       <View style={styles.row}>
-        <Pressable
-          style={[styles.pill, type === 'expense' && styles.pillActive]}
-          onPress={() => setType('expense')}
-        >
-          <Text style={[styles.pillText, type === 'expense' && styles.pillTextActive]}>Expense</Text>
+        <Pressable style={[styles.pill, type==='expense' && styles.pillActive]} onPress={() => { setType('expense'); if(!category) setCategory('General'); }}>
+          <Text style={[styles.pillText, type==='expense' && styles.pillTextActive]}>Expense</Text>
         </Pressable>
-        <Pressable
-          style={[styles.pill, type === 'income' && styles.pillActive]}
-          onPress={() => setType('income')}
-        >
-          <Text style={[styles.pillText, type === 'income' && styles.pillTextActive]}>Income</Text>
+        <Pressable style={[styles.pill, type==='income' && styles.pillActive]} onPress={() => { setType('income'); if(!category) setCategory('Income'); }}>
+          <Text style={[styles.pillText, type==='income' && styles.pillTextActive]}>Income</Text>
         </Pressable>
       </View>
 
-      {/* Account (simple cycler) */}
-      <Pressable
-        style={styles.accountBtn}
-        onPress={() => {
-          if (!accounts.length) return;
-          if (!acctId) return setAcctId(accounts[0].id);
-          const ids = accounts.map(a => a.id);
-          const i = ids.indexOf(acctId);
-          setAcctId(i === -1 || i === ids.length - 1 ? ids[0] : ids[i + 1]);
-        }}
-      >
+      {/* Account cycler */}
+      <Pressable style={styles.accountBtn} onPress={cycleAccount}>
         <Text style={styles.accountBtnText}>
-          Account: {accounts.find(a => a.id === acctId)?.name || '—'}
+          Account: {accounts.find(a => String(a.id) === String(accountId))?.name || '—'}
         </Text>
       </Pressable>
 
@@ -106,7 +105,7 @@ export default function TxnEditorScreen({ route, navigation }) {
         value={amount}
         onChangeText={setAmount}
         keyboardType="decimal-pad"
-        placeholder="Amount (e.g., 12.34)"
+        placeholder="Amount"
         placeholderTextColor="#6B7280"
         style={styles.input}
       />
@@ -120,16 +119,14 @@ export default function TxnEditorScreen({ route, navigation }) {
         style={styles.input}
       />
 
-      {/* Category */}
+      {/* Category / Note */}
       <TextInput
         value={category}
         onChangeText={setCategory}
-        placeholder={type === 'expense' ? 'Category (e.g., Groceries)' : 'Category (e.g., Salary)'}
+        placeholder={type==='expense' ? 'Category (e.g., Groceries)' : 'Category (e.g., Salary)'}
         placeholderTextColor="#6B7280"
         style={styles.input}
       />
-
-      {/* Note */}
       <TextInput
         value={note}
         onChangeText={setNote}
@@ -139,45 +136,43 @@ export default function TxnEditorScreen({ route, navigation }) {
       />
 
       {/* Actions */}
-      <View style={styles.row}>
-        <Pressable style={[styles.btnSave, { marginRight: 8 }]} onPress={onSave}>
+      <View style={[styles.row, { marginTop: 8 }]}>
+        {mode === 'edit' && (
+          <Pressable style={[styles.btnDanger, { marginRight: 8 }]} onPress={onDelete}>
+            <Text style={styles.btnText}>Delete</Text>
+          </Pressable>
+        )}
+        <Pressable style={styles.btnSave} onPress={onSave}>
           <Text style={styles.btnText}>{mode === 'edit' ? 'Save' : 'Add'}</Text>
-        </Pressable>
-        <Pressable style={styles.btnCancel} onPress={() => navigation.goBack()}>
-          <Text style={styles.btnText}>Cancel</Text>
         </Pressable>
       </View>
 
-      {mode === 'edit' && existing && (
-        <Pressable style={[styles.btnDanger, { marginTop: 10 }]} onPress={onDelete}>
-          <Text style={styles.btnText}>Delete</Text>
-        </Pressable>
-      )}
+      {/* Preview */}
+      <View style={[styles.card, { marginTop: 12 }]}>
+        <Text style={styles.preview}>
+          {type === 'expense' ? '-' : '+'}{money(Number(amount || 0), prefs)} • {category || '—'} • {date}
+        </Text>
+      </View>
     </View>
   );
 }
 
+import { TextInput } from 'react-native'; // keep imports together if your linter prefers
+
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 8 },
-
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8 },
   pillActive: { backgroundColor: '#2563EB' },
   pillText: { color: '#fff', fontWeight: '700' },
   pillTextActive: { color: '#fff' },
-
-  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginTop: 8 },
+  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8 },
   accountBtnText: { color: '#fff', fontWeight: '700' },
-
-  input: {
-    backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937',
-    borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 8,
-  },
-
+  input: { backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8 },
   btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnCancel: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   btnDanger: { backgroundColor: '#7F1D1D', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700' },
+  card: { backgroundColor: '#111827', borderRadius: 12, padding: 12 },
+  preview: { color: '#E5E7EB', fontWeight: '700' },
 });
