@@ -208,15 +208,8 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700' },
   card: { backgroundColor: '#111827', borderRadius: 12, padding: 12 },
   preview: { color: '#E5E7EB', fontWeight: '700' },
-  // add inside StyleSheet.create({...}) in TxnEditorScreen.js
-btn: {
-  paddingVertical: 12,
-  paddingHorizontal: 16,
-  borderRadius: 10,
-  alignItems: 'center',
-  justifyContent: 'center',
-},
-btnGhost: { backgroundColor: '#1F2937' },  // dark neutral (matches your theme)
-btnText: { color: '#fff', fontWeight: '700' },
+  btn: {  paddingVertical: 12,  paddingHorizontal: 16,  borderRadius: 10,  alignItems: 'center',  justifyContent: 'center',},
+  btnGhost: { backgroundColor: '#1F2937' },  // dark neutral (matches your theme)
+  btnText: { color: '#fff', fontWeight: '700' },
 
 });
