@@ -250,33 +250,27 @@ export default function HistoryScreen({ navigation }) {
           return (
             <Pressable
               style={styles.rowItem}
-              onPress={() =>
-                navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })
-              }
+              onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}
               onLongPress={() => onDelete(item.id)}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.itemTop}>
+              {/* LEFT */}
+              <View style={styles.itemLeftWrap}>
+                <Text style={styles.itemTop} numberOfLines={1} ellipsizeMode="tail">
                   {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
                 </Text>
-                <Text style={styles.itemSub}>
-                  {(byAccount[item.accountId]?.name ||
-                    item.accountName ||
-                    'Account') + ' • ' + (item.date || '')}
+                <Text style={styles.itemSub} numberOfLines={1} ellipsizeMode="tail">
+                  {(byAccount[item.accountId]?.name || item.accountName || 'Account') + ' • ' + (item.date || '')}
                 </Text>
               </View>
-              <Text
-                style={[
-                  styles.amount,
-                  isExpense ? styles.red : styles.green,
-                ]}
-              >
-                {sign}
-                {money(item.amount, prefs)}
+
+              {/* RIGHT */}
+              <Text style={[styles.amount, isExpense ? styles.red : styles.green]}>
+                {sign}{money(item.amount, prefs)}
               </Text>
             </Pressable>
           );
         }}
+
         ListEmptyComponent={
           <Text style={[styles.subtle, { padding: 16 }]}>
             No transactions match the current filters.
@@ -305,11 +299,48 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   row: { flexDirection: 'row', alignItems: 'center' },
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+    rowBetween: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    itemTitle: {
+      color: '#E5E7EB',
+      fontWeight: '800',
+      fontSize: 16,
+      flex: 1,       // 👈 take remaining width
+      minWidth: 0,   // 👈 allow ellipsis
+      paddingRight: 8,
+    },
+    itemRight: {
+      color: '#E5E7EB',
+      fontWeight: '800',
+      flexShrink: 0, // 👈 don’t shrink
+    },
+    rowWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap', // 👈 buttons wrap to next line
+      marginTop: 10,
+      marginRight: -8,
+      marginBottom: -8,
+    },
+    btnTiny: {
+      backgroundColor: '#374151',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      marginRight: 8,
+      marginBottom: 8, // 👈 gives space when wrapped
+    },
+    btnTinyDanger: {
+      backgroundColor: '#7F1D1D',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+
 
   // Inputs / buttons
   input: {
@@ -363,7 +394,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  itemLeftWrap: {
+    flex: 1,
+    minWidth: 0,      // 👈 allows text truncation instead of overflow
+    paddingRight: 8,
+  },
   itemTop: { color: '#E5E7EB', fontWeight: '700' },
   itemSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
-  amount: { marginLeft: 12, fontWeight: '800' },
+  amount: {
+    fontWeight: '800',
+    flexShrink: 0,     // 👈 amount never shrinks, stays visible
+  },
+
 });

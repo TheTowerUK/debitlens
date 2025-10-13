@@ -168,37 +168,42 @@ export default function BudgetsScreen() {
     }
 
     return (
-      <View style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.itemTitle}>{item.category}</Text>
-          <Text style={styles.itemRight}>
-            {money(Number(item.limit || 0), prefs)}
-          </Text>
-        </View>
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle}>
-            {ym} • Spent
-          </Text>
-          <Text style={[styles.bold, over ? styles.red : styles.green]}>
-            {money(spent, prefs)}
-          </Text>
-        </View>
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle}>Remaining</Text>
-          <Text style={[styles.bold, over ? styles.red : styles.green]}>
-            {money(Math.abs(remaining), prefs)} {over ? 'over' : 'left'}
-          </Text>
-        </View>
-
-        <View style={[styles.row, { marginTop: 10 }]}>
-          <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(item)}>
-            <Text style={styles.btnTinyText}>Edit</Text>
-          </Pressable>
-          <Pressable style={styles.btnTinyDanger} onPress={() => deleteBudget(item.id)}>
-            <Text style={styles.btnTinyText}>Delete</Text>
-          </Pressable>
-        </View>
+    <View style={styles.card}>
+      <View style={styles.rowBetween}>
+        <Text style={styles.itemTitle} numberOfLines={1} ellipsizeMode="tail">
+          {item.category}
+        </Text>
+        <Text style={styles.itemRight}>
+          {money(Number(item.limit || 0), prefs)}
+        </Text>
       </View>
+
+      <View style={styles.rowBetween}>
+        <Text style={styles.subtle} numberOfLines={1} ellipsizeMode="tail">
+          {ym} • Spent
+        </Text>
+        <Text style={[styles.bold, over ? styles.red : styles.green]}>
+          {money(spent, prefs)}
+        </Text>
+      </View>
+
+      <View style={styles.rowBetween}>
+        <Text style={styles.subtle}>Remaining</Text>
+        <Text style={[styles.bold, over ? styles.red : styles.green]}>
+          {money(Math.abs(remaining), prefs)} {over ? 'over' : 'left'}
+        </Text>
+      </View>
+
+      <View style={styles.rowWrap}>
+        <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(item)}>
+          <Text style={styles.btnTinyText}>Edit</Text>
+        </Pressable>
+        <Pressable style={styles.btnTinyDanger} onPress={() => deleteBudget(item.id)}>
+          <Text style={styles.btnTinyText}>Delete</Text>
+        </Pressable>
+      </View>
+    </View>
+
     );
   };
 
