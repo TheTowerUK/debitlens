@@ -125,7 +125,7 @@ export default function ReportScreen() {
 
   // ---------- Category roll-up ----------
   const categoryRows = useMemo(() => {
-    const map = new Map(); // key: category string, value: { category, income, expense, net }
+    const map = new Map();
     for (const t of filtered) {
       const cat = (t.category || (t.type === 'income' ? 'Income' : 'General')).trim();
       const row = map.get(cat) || { id: cat, category: cat, income: 0, expense: 0, net: 0 };
@@ -139,7 +139,6 @@ export default function ReportScreen() {
       }
       map.set(cat, row);
     }
-    // sort by absolute net descending
     return Array.from(map.values()).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
   }, [filtered]);
 
@@ -151,8 +150,8 @@ export default function ReportScreen() {
 
       {/* Filters card */}
       <View style={styles.card}>
-        {/* Type */}
-        <View style={styles.row}>
+        {/* Type (wrap) */}
+        <View style={styles.rowWrap}>
           {['all', 'expense', 'income'].map((t) => (
             <Pressable
               key={t}
@@ -166,15 +165,17 @@ export default function ReportScreen() {
           ))}
         </View>
 
-        {/* Presets */}
-        <View style={[styles.row, { marginTop: 8 }]}>
+        {/* Presets (wrap) */}
+        <View style={[styles.rowWrap, { marginTop: 8 }]}>
           {PRESETS.map((p) => (
             <Pressable
               key={p}
               style={[styles.pillSm, preset === p && styles.pillActive]}
               onPress={() => applyPreset(p)}
             >
-              <Text style={[styles.pillTextSm, preset === p && styles.pillTextActive]}>{p}</Text>
+              <Text style={[styles.pillTextSm, preset === p && styles.pillTextActive]} numberOfLines={1}>
+                {p}
+              </Text>
             </Pressable>
           ))}
         </View>
@@ -207,7 +208,7 @@ export default function ReportScreen() {
             style={[styles.input, { flex: 1, marginRight: 8 }]}
           />
           <Pressable style={styles.accountBtn} onPress={cycleAccount}>
-            <Text style={styles.accountBtnText}>
+            <Text style={styles.accountBtnText} numberOfLines={1}>
               {accountId == null ? 'All accounts' : (byAccount[accountId]?.name || 'Account')}
             </Text>
           </Pressable>
@@ -218,15 +219,19 @@ export default function ReportScreen() {
       <View style={[styles.card, { paddingVertical: 12 }]}>
         <View style={styles.rowBetween}>
           <Text style={styles.totLabel}>Income</Text>
-          <Text style={[styles.totVal, styles.green]}>{money(totals.inc, prefs)}</Text>
+          <Text style={[styles.totVal, styles.green]} numberOfLines={1}>
+            {money(totals.inc, prefs)}
+          </Text>
         </View>
         <View style={styles.rowBetween}>
           <Text style={styles.totLabel}>Expenses</Text>
-          <Text style={[styles.totVal, styles.red]}>{money(totals.exp, prefs)}</Text>
+          <Text style={[styles.totVal, styles.red]} numberOfLines={1}>
+            {money(totals.exp, prefs)}
+          </Text>
         </View>
         <View style={[styles.rowBetween, { marginTop: 4 }]}>
           <Text style={styles.totLabel}>Net</Text>
-          <Text style={[styles.totVal, totals.net >= 0 ? styles.green : styles.red]}>
+          <Text style={[styles.totVal, totals.net >= 0 ? styles.green : styles.red]} numberOfLines={1}>
             {money(totals.net, prefs)}
           </Text>
         </View>
@@ -247,13 +252,15 @@ export default function ReportScreen() {
           }
           renderItem={({ item }) => (
             <View style={styles.rowBetween}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={styles.itemTop}>{item.category}</Text>
-                <Text style={styles.itemSub}>
+              <View style={styles.leftClamp}>
+                <Text style={styles.itemTop} numberOfLines={1} ellipsizeMode="tail">
+                  {item.category}
+                </Text>
+                <Text style={styles.itemSub} numberOfLines={1} ellipsizeMode="tail">
                   +{money(item.income, prefs)} / -{money(item.expense, prefs)}
                 </Text>
               </View>
-              <Text style={[styles.amount, item.net >= 0 ? styles.green : styles.red]}>
+              <Text style={[styles.amount, item.net >= 0 ? styles.green : styles.red]} numberOfLines={1}>
                 {item.net >= 0 ? '+' : '-'}
                 {money(Math.abs(item.net), prefs)}
               </Text>
@@ -286,6 +293,15 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
+  // NEW: wrap rows for pills
+  rowWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginRight: -8,
+    marginBottom: -8,
+  },
+
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
@@ -301,6 +317,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     marginRight: 8,
+    marginBottom: 8, // allow clean wrap
   },
   pillSm: {
     backgroundColor: '#1F2937',
@@ -308,6 +325,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 10,
     marginRight: 8,
+    marginBottom: 8, // allow clean wrap
   },
   pillActive: { backgroundColor: '#2563EB' },
   pillText: { color: '#fff', fontWeight: '700' },
@@ -323,11 +341,13 @@ const styles = StyleSheet.create({
   accountBtnText: { color: '#fff', fontWeight: '700' },
 
   totLabel: { color: '#9CA3AF', fontWeight: '700' },
-  totVal: { color: '#E5E7EB', fontWeight: '800' },
+  totVal: { color: '#E5E7EB', fontWeight: '800', flexShrink: 0 },
 
+  // Clamp left column in list rows; keep right-side amount visible
+  leftClamp: { flex: 1, minWidth: 0, paddingRight: 8 },
   itemTop: { color: '#E5E7EB', fontWeight: '700' },
   itemSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
-  amount: { color: '#E5E7EB', fontWeight: '800' },
+  amount: { color: '#E5E7EB', fontWeight: '800', flexShrink: 0 },
 
   red: { color: '#F87171' },
   green: { color: '#34D399' },
