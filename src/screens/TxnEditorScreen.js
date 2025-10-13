@@ -168,6 +168,30 @@ export default function TxnEditorScreen({ route, navigation }) {
   );
 }
 
+// after your Save/Delete buttons
+<Pressable
+  style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
+  onPress={async () => {
+    // assumes you have `txn` in scope (the current transaction being edited or created)
+    const source = txn; // or build from your form state
+    if (!source?.id) return;
+    // Prefill RecurringScreen form with tx data
+   navigation.navigate('Recurring', {
+      preset: {
+        accountId: String(txn.accountId),
+        type: txn.type,
+        amount: String(txn.amount),
+        category: txn.category,
+        note: txn.note,
+      },
+      focus: 'NEW',
+    });
+
+  }}
+>
+  <Text style={styles.btnText}>Create recurring from this</Text>
+</Pressable>
+
 const styles = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 8 },

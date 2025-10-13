@@ -1,5 +1,5 @@
 // src/screens/RecurringScreen.js
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,14 @@ const todayISO = () => {
 
 const FREQS = ['daily', 'weekly', 'monthly'];
 
-export default function RecurringScreen({ navigation }) {
+export default function RecurringScreen({ navigation, route }) {
   const { state, actions } = useApp();
   const accounts = state?.accounts ?? [];
   const items = state?.recurring ?? [];
+
+  // Optional preset passed via navigation
+  const preset = route?.params?.preset || null;
+  const autoFocusNew = route?.params?.focus === 'NEW';
 
   const [editingId, setEditingId] = useState(null); // null | 'NEW' | existing id
   const [form, setForm] = useState({
@@ -39,20 +43,28 @@ export default function RecurringScreen({ navigation }) {
     autoPost: true,
   });
 
+  // If caller asked to jump straight into NEW with a preset, do it once
+  useEffect(() => {
+    if (autoFocusNew) {
+      startNew(preset || undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFocusNew]);
+
   const byAccount = useMemo(() => {
     const m = {};
     for (const a of accounts) m[String(a.id)] = a;
     return m;
   }, [accounts]);
 
-  const startNew = () => {
+  const startNew = (seed) => {
     setEditingId('NEW');
     setForm({
-      accountId: accounts[0] ? String(accounts[0].id) : '',
-      type: 'expense',
-      amount: '',
-      category: '',
-      note: '',
+      accountId: seed?.accountId || (accounts[0] ? String(accounts[0].id) : ''),
+      type: seed?.type || 'expense',
+      amount: seed?.amount || '',
+      category: seed?.category || (seed?.type === 'income' ? 'Income' : ''),
+      note: seed?.note || '',
       freq: 'monthly',
       startDate: todayISO(),
       endDate: '',
@@ -154,7 +166,13 @@ export default function RecurringScreen({ navigation }) {
           <Pressable
             key={t}
             style={[styles.pill, form.type === t && styles.pillActive]}
-            onPress={() => setForm((f) => ({ ...f, type: t, category: f.category || (t === 'expense' ? 'General' : 'Income') }))}
+            onPress={() =>
+              setForm((f) => ({
+                ...f,
+                type: t,
+                category: f.category || (t === 'expense' ? 'General' : 'Income'),
+              }))
+            }
           >
             <Text style={[styles.pillText, form.type === t && styles.pillTextActive]}>
               {t[0].toUpperCase() + t.slice(1)}
@@ -269,7 +287,7 @@ export default function RecurringScreen({ navigation }) {
         {item.autoPost ? ' • auto' : ''}
       </Text>
 
-      <View style={[styles.row, { marginTop: 8 }]}>
+      <View style={[styles.row, { marginTop: 8 }]} >
         <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(item)}>
           <Text style={styles.btnTinyText}>Edit</Text>
         </Pressable>
@@ -284,12 +302,17 @@ export default function RecurringScreen({ navigation }) {
     <View style={styles.wrap}>
       <Header />
 
-      {/* Add new or show "Add" button */}
+      {/* Add new / use preset */}
       {editingId === 'NEW' ? (
         <Editor />
       ) : (
-        <Pressable style={[styles.btn, styles.btnSave]} onPress={startNew}>
-          <Text style={styles.btnText}>Add Schedule</Text>
+        <Pressable
+          style={[styles.btn, styles.btnSave]}
+          onPress={() => startNew(preset || undefined)}
+        >
+          <Text style={styles.btnText}>
+            {preset ? 'Add from preset' : 'Add Schedule'}
+          </Text>
         </Pressable>
       )}
 
@@ -303,7 +326,7 @@ export default function RecurringScreen({ navigation }) {
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListEmptyComponent={
           <Text style={[styles.subtle, { padding: 16 }]}>
-            No schedules yet. Tap “Add Schedule” to create one.
+            No schedules yet. Tap “{preset ? 'Add from preset' : 'Add Schedule'}” to create one.
           </Text>
         }
         renderItem={({ item }) => <Row item={item} />}
@@ -334,7 +357,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
-  // Inputs / Pills
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
@@ -363,7 +385,15 @@ const styles = StyleSheet.create({
   pillTextSm: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
   pillTextActive: { color: '#fff' },
 
-  // Buttons
+  accountBtn: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  accountBtnText: { color: '#fff', fontWeight: '700' },
+
   btn: {
     paddingVertical: 12,
     paddingHorizontal: 16,
@@ -389,7 +419,6 @@ const styles = StyleSheet.create({
   },
   btnTinyText: { color: '#fff', fontWeight: '700', fontSize: 12 },
 
-  // Row text
   rowTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
   itemLeft: { color: '#E5E7EB', fontWeight: '800' },
   itemRight: { color: '#E5E7EB', fontWeight: '800' },

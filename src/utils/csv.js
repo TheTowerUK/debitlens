@@ -1,26 +1,73 @@
 // src/utils/csv.js
-export function toCSV(rows) {
-  // rows: array of arrays or array of objects
-  if (!rows?.length) return '';
+// Small CSV parser that handles quotes and commas.
+// Returns { headers: string[], rows: string[][] }
+export function parseCSV(text) {
+  const rows = [];
+  let cur = [];
+  let field = '';
+  let inQuotes = false;
 
-  const isObj = !Array.isArray(rows[0]);
-  const headers = isObj ? Object.keys(rows[0]) : null;
-
-  const esc = (v) => {
-    if (v === null || v === undefined) return '';
-    const s = String(v);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-
-  const lines = [];
-  if (isObj) lines.push(headers.map(esc).join(','));
-  for (const row of rows) {
-    if (isObj) {
-      lines.push(headers.map((h) => esc(row[h])).join(','));
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
     } else {
-      lines.push(row.map(esc).join(','));
+      if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        cur.push(field);
+        field = '';
+      } else if (c === '\r') {
+        // ignore
+      } else if (c === '\n') {
+        cur.push(field);
+        rows.push(cur);
+        cur = [];
+        field = '';
+      } else {
+        field += c;
+      }
     }
   }
-  return lines.join('\n');
+  // last field
+  if (field.length > 0 || cur.length > 0) {
+    cur.push(field);
+    rows.push(cur);
+  }
+
+  if (!rows.length) return { headers: [], rows: [] };
+  const headers = rows[0].map((h) => String(h || '').trim());
+  return { headers, rows: rows.slice(1) };
+}
+
+// normalise a date into YYYY-MM-DD if possible
+export function toISODate(s) {
+  if (!s) return '';
+  const t = String(s).trim();
+  // already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  // DD/MM/YYYY
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const [_, d, mo, y] = m;
+    const dd = String(d).padStart(2, '0');
+    const mm = String(mo).padStart(2, '0');
+    return `${y}-${mm}-${dd}`;
+  }
+  // last resort: Date parsing (may vary)
+  const d = new Date(t);
+  if (!isNaN(d.getTime())) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return '';
 }
