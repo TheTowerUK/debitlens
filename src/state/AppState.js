@@ -1,28 +1,22 @@
 // src/state/AppState.js
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-} from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 // ------------------------------
-// Storage keys & helpers
+// Small helpers
 // ------------------------------
 const STORAGE_KEY = 'base44_app_state_v1';
 const PIN_KEY = 'base44_app_pin_v1';
 
-const genId = (pfx) =>
-  `${pfx}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+const genId = (p) => `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const asId = (x) => String(x ?? '');
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-// Dates
-const todayISO = () => new Date().toISOString().slice(0, 10);
 const pad2 = (n) => String(n).padStart(2, '0');
+
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 const ymOf = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 const thisMonthStr = () => ymOf(new Date());
 const prevMonthStr = () => {
@@ -32,18 +26,14 @@ const prevMonthStr = () => {
 };
 
 // ------------------------------
-// Initial state
+// Initial state (seed demo data)
 // ------------------------------
 const initialState = {
   isHydrated: false,
 
-  accounts: [
-    // seed one account so app isn't empty
-    { id: 'acct_default', name: 'Main', type: 'current' },
-  ],
+  accounts: [{ id: 'acct_default', name: 'Main', type: 'current' }],
 
   transactions: [
-    // seed example
     {
       id: 'txn_seed_1',
       accountId: 'acct_default',
@@ -55,12 +45,8 @@ const initialState = {
     },
   ],
 
-  budgets: [
-    // example: £300 for Groceries this month
-    { id: 'b_1', category: 'Groceries', limit: 300, month: thisMonthStr() },
-  ],
+  budgets: [{ id: 'b_1', category: 'Groceries', limit: 300, month: thisMonthStr() }],
 
-  // Recurring rules & last run marker
   recurring: [],
   lastRecurringRun: null,
 
@@ -68,11 +54,7 @@ const initialState = {
     currency: 'GBP',
     currencySymbol: '£',
     budgetRollover: true,
-    notifications: {
-      enabled: true,
-      threshold: 0.8, // 80%
-      dailyTime: '09:00', // HH:MM
-    },
+    notifications: { enabled: true, threshold: 0.8, dailyTime: '09:00' },
   },
 };
 
@@ -83,19 +65,13 @@ function reducer(state, action) {
   switch (action.type) {
     case 'HYDRATE': {
       const loaded = action.payload || {};
-      const accounts = (loaded.accounts ?? []).map((a) => ({
-        ...a,
-        id: asId(a.id),
-      }));
+      const accounts = (loaded.accounts ?? []).map((a) => ({ ...a, id: asId(a.id) }));
       const transactions = (loaded.transactions ?? []).map((t) => ({
         ...t,
         id: asId(t.id),
         accountId: asId(t.accountId),
       }));
-      const budgets = (loaded.budgets ?? []).map((b) => ({
-        ...b,
-        id: asId(b.id),
-      }));
+      const budgets = (loaded.budgets ?? []).map((b) => ({ ...b, id: asId(b.id) }));
       const recurring = (loaded.recurring ?? []).map((r) => ({
         ...r,
         id: asId(r.id),
@@ -115,10 +91,7 @@ function reducer(state, action) {
 
     // Accounts
     case 'SET_ACCOUNTS': {
-      const list = (action.payload || []).map((a) => ({
-        ...a,
-        id: asId(a.id),
-      }));
+      const list = (action.payload || []).map((a) => ({ ...a, id: asId(a.id) }));
       return { ...state, accounts: list };
     }
 
@@ -132,32 +105,24 @@ function reducer(state, action) {
       return { ...state, transactions: list };
     }
     case 'UPSERT_TRANSACTION': {
-      const t = action.payload || {};
+      const t = { ...(action.payload || {}) };
       const id = asId(t.id);
       const list = state.transactions ?? [];
       const idx = list.findIndex((x) => asId(x.id) === id);
       const next =
         idx === -1
           ? [...list, { ...t, id, accountId: asId(t.accountId) }]
-          : list.map((x) =>
-              asId(x.id) === id
-                ? { ...x, ...t, id, accountId: asId(t.accountId) }
-                : x
-            );
+          : list.map((x) => (asId(x.id) === id ? { ...x, ...t, id, accountId: asId(t.accountId) } : x));
       return { ...state, transactions: next };
     }
     case 'DELETE_TRANSACTION': {
       const id = asId(action.payload);
-      const list = state.transactions ?? [];
-      return { ...state, transactions: list.filter((x) => asId(x.id) !== id) };
+      return { ...state, transactions: (state.transactions || []).filter((x) => asId(x.id) !== id) };
     }
 
     // Budgets
     case 'SET_BUDGETS': {
-      const list = (action.payload || []).map((b) => ({
-        ...b,
-        id: asId(b.id),
-      }));
+      const list = (action.payload || []).map((b) => ({ ...b, id: asId(b.id) }));
       return { ...state, budgets: list };
     }
     case 'UPSERT_BUDGET': {
@@ -165,49 +130,35 @@ function reducer(state, action) {
       const id = asId(b.id);
       const list = state.budgets ?? [];
       const idx = list.findIndex((x) => asId(x.id) === id);
-      const next =
-        idx === -1
-          ? [...list, { ...b, id }]
-          : list.map((x) => (asId(x.id) === id ? { ...x, ...b, id } : x));
+      const next = idx === -1 ? [...list, { ...b, id }] : list.map((x) => (asId(x.id) === id ? { ...x, ...b, id } : x));
       return { ...state, budgets: next };
     }
     case 'DELETE_BUDGET': {
       const id = asId(action.payload);
-      const list = state.budgets ?? [];
-      return { ...state, budgets: list.filter((x) => asId(x.id) !== id) };
+      return { ...state, budgets: (state.budgets || []).filter((x) => asId(x.id) !== id) };
     }
 
     // Recurring
     case 'SET_RECURRING': {
-      const list = (action.payload || []).map((r) => ({
-        ...r,
-        id: asId(r.id),
-        accountId: asId(r.accountId),
-      }));
+      const list = (action.payload || []).map((r) => ({ ...r, id: asId(r.id), accountId: asId(r.accountId) }));
       return { ...state, recurring: list };
     }
     case 'ADD_RECURRING': {
       const r = action.payload || {};
-      return {
-        ...state,
-        recurring: [...(state.recurring || []), { ...r, id: asId(r.id) }],
-      };
+      return { ...state, recurring: [...(state.recurring || []), { ...r, id: asId(r.id), accountId: asId(r.accountId) }] };
     }
     case 'UPDATE_RECURRING': {
       const r = action.payload || {};
       return {
         ...state,
         recurring: (state.recurring || []).map((x) =>
-          asId(x.id) === asId(r.id) ? { ...x, ...r, id: asId(r.id) } : x
+          asId(x.id) === asId(r.id) ? { ...x, ...r, id: asId(r.id), accountId: asId(r.accountId) } : x
         ),
       };
     }
     case 'DELETE_RECURRING': {
       const id = asId(action.payload);
-      return {
-        ...state,
-        recurring: (state.recurring || []).filter((x) => asId(x.id) !== id),
-      };
+      return { ...state, recurring: (state.recurring || []).filter((x) => asId(x.id) !== id) };
     }
     case 'SET_LAST_RECURRING_RUN': {
       return { ...state, lastRecurringRun: action.payload || null };
@@ -229,71 +180,57 @@ function reducer(state, action) {
 async function loadState() {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
-
 async function saveState(st) {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(st));
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 // ------------------------------
-// Budgets helpers (for alerts/rollover)
+// Budget helpers (rollover + alerts)
 // ------------------------------
-function spentForMonth(txns, category, month) {
+function spentForMonth(txns, category, ym) {
   const cat = (category || 'Uncategorized').trim();
   let s = 0;
-  for (const t of txns) {
+  for (const t of txns || []) {
     if (t.type !== 'expense') continue;
-    if (!t.date || !t.date.startsWith(month)) continue;
+    if (!t.date || !t.date.startsWith(ym)) continue;
     const c = (t.category || 'Uncategorized').trim();
     if (c === cat) s += Number(t.amount || 0);
   }
   return s;
 }
-
 function effectiveLimitFor(state, category) {
   const cat = (category || 'Uncategorized').trim();
   const thisM = thisMonthStr();
   const prevM = prevMonthStr();
 
-  const budgets = state?.budgets || [];
-
-  // Base for this month (includes month-less treated as this month)
+  // Base for this month
   let base = 0;
-  for (const b of budgets) {
+  for (const b of state.budgets || []) {
     const m = b.month || thisM;
     if (m !== thisM) continue;
-    if ((b.category || 'Uncategorized').trim() === cat) {
-      base += Number(b.limit || 0);
-    }
+    if ((b.category || 'Uncategorized').trim() === cat) base += Number(b.limit || 0);
   }
-
   if (!state?.prefs?.budgetRollover) return { base, carry: 0, effective: base };
 
-  // Rollover from previous month: max(0, prevLimit - prevSpent)
+  // Rollover from previous month
   let prevLimit = 0;
-  for (const b of budgets) {
+  for (const b of state.budgets || []) {
     const m = b.month || thisM;
     if (m !== prevM) continue;
-    if ((b.category || 'Uncategorized').trim() === cat) {
-      prevLimit += Number(b.limit || 0);
-    }
+    if ((b.category || 'Uncategorized').trim() === cat) prevLimit += Number(b.limit || 0);
   }
-  const prevSpent = spentForMonth(state?.transactions || [], cat, prevM);
+  const prevSpent = spentForMonth(state.transactions || [], cat, prevM);
   const carry = Math.max(0, prevLimit - prevSpent);
-
   return { base, carry, effective: base + carry };
 }
 
-// Dynamic import to keep Expo Go quieter
 async function notifyBudgetCrossed(category, pct, spent, effective) {
   try {
     const Notifications = await import('expo-notifications');
@@ -319,9 +256,7 @@ const parseISO = (s) => {
   const [y, m, d] = s.split('-').map((n) => parseInt(n, 10));
   return new Date(y, m - 1, d);
 };
-const toISO = (d) =>
-  `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-
+const toISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 function* dateRangeDays(startISO, endISO) {
   const s = parseISO(startISO);
   const e = parseISO(endISO);
@@ -330,27 +265,18 @@ function* dateRangeDays(startISO, endISO) {
     yield toISO(d);
   }
 }
-
 function isDueOn(rule, iso) {
   if (rule.startDate && iso < rule.startDate) return false;
   if (rule.endDate && iso > rule.endDate) return false;
-
   const start = parseISO(rule.startDate || iso);
   const cur = parseISO(iso);
   if (!start || !cur) return false;
-
   const freq = rule.freq || 'monthly';
   if (freq === 'daily') return true;
-
-  if (freq === 'weekly') {
-    return start.getDay() === cur.getDay();
-  }
-  if (freq === 'monthly') {
-    return cur.getDate() === start.getDate();
-  }
+  if (freq === 'weekly') return start.getDay() === cur.getDay();
+  if (freq === 'monthly') return cur.getDate() === start.getDate();
   return false;
 }
-
 function txKey(t) {
   return [
     t.originRecurringId,
@@ -371,7 +297,7 @@ const AppCtx = createContext(null);
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // Load on mount
+  // Hydrate on mount
   useEffect(() => {
     (async () => {
       const loaded = await loadState();
@@ -379,14 +305,11 @@ export function AppProvider({ children }) {
     })();
   }, []);
 
-  // Persist helper that uses next state
   const persist = async (next) => {
     await saveState(next);
   };
 
-  // --------------------------
   // Actions
-  // --------------------------
   const actions = useMemo(
     () => ({
       // Accounts
@@ -408,34 +331,24 @@ export function AppProvider({ children }) {
 
       // Transactions
       setTransactions: async (transactions) => {
-        const next = reducer(state, {
-          type: 'SET_TRANSACTIONS',
-          payload: transactions,
-        });
+        const next = reducer(state, { type: 'SET_TRANSACTIONS', payload: transactions });
         dispatch({ type: 'SET_TRANSACTIONS', payload: transactions });
         await persist(next);
       },
-
       addTransaction: async (tx) => {
         const t = { id: genId('txn'), ...tx, accountId: asId(tx.accountId) };
 
-        // Real-time budget alert check (crossing threshold upward)
+        // real-time budget alert (crossing threshold upward)
         try {
           const notif = state?.prefs?.notifications || {};
-          if (
-            notif.enabled &&
-            t.type === 'expense' &&
-            t.date?.startsWith(thisMonthStr())
-          ) {
+          if (notif.enabled && t.type === 'expense' && t.date?.startsWith(thisMonthStr())) {
             const cat = (t.category || 'Uncategorized').trim();
             const { effective } = effectiveLimitFor(state, cat);
             if (effective > 0) {
-              const before = spentForMonth(state?.transactions || [], cat, thisMonthStr());
+              const before = spentForMonth(state.transactions || [], cat, thisMonthStr());
               const after = before + Number(t.amount || 0);
               const th = typeof notif.threshold === 'number' ? notif.threshold : 0.8;
-              const wasBelow = before / effective < th;
-              const nowAtOrAbove = after / effective >= th;
-              if (wasBelow && nowAtOrAbove) {
+              if (before / effective < th && after / effective >= th) {
                 await notifyBudgetCrossed(cat, after / effective, after, effective);
               }
             }
@@ -449,39 +362,32 @@ export function AppProvider({ children }) {
         await persist(next);
         return t;
       },
-
       updateTransaction: async (tx) => {
         const t = { ...tx, id: asId(tx.id), accountId: asId(tx.accountId) };
 
-        // Real-time alert check (edit can cross threshold)
+        // real-time alert for edits
         try {
           const notif = state?.prefs?.notifications || {};
-          if (
-            notif.enabled &&
-            t.type === 'expense' &&
-            t.date?.startsWith(thisMonthStr())
-          ) {
+          if (notif.enabled && t.type === 'expense' && t.date?.startsWith(thisMonthStr())) {
             const cat = (t.category || 'Uncategorized').trim();
             const { effective } = effectiveLimitFor(state, cat);
             if (effective > 0) {
-              // compute spentBefore excluding old version of this txn
-              const txns = state?.transactions || [];
+              // recompute before excluding old version of this txn
+              const txns = state.transactions || [];
               const old = txns.find((x) => asId(x.id) === asId(t.id));
-              const m = thisMonthStr();
+              const ym = thisMonthStr();
               let before = 0;
-              for (const t0 of txns) {
-                if (t0.type !== 'expense') continue;
-                if (!t0.date || !t0.date.startsWith(m)) continue;
-                const c0 = (t0.category || 'Uncategorized').trim();
+              for (const x of txns) {
+                if (x.type !== 'expense') continue;
+                if (!x.date || !x.date.startsWith(ym)) continue;
+                const c0 = (x.category || 'Uncategorized').trim();
                 if (c0 !== cat) continue;
-                if (old && asId(t0.id) === asId(old.id)) continue;
-                before += Number(t0.amount || 0);
+                if (old && asId(x.id) === asId(old.id)) continue;
+                before += Number(x.amount || 0);
               }
               const after = before + Number(t.amount || 0);
               const th = typeof notif.threshold === 'number' ? notif.threshold : 0.8;
-              const wasBelow = before / effective < th;
-              const nowAtOrAbove = after / effective >= th;
-              if (wasBelow && nowAtOrAbove) {
+              if (before / effective < th && after / effective >= th) {
                 await notifyBudgetCrossed(cat, after / effective, after, effective);
               }
             }
@@ -494,12 +400,8 @@ export function AppProvider({ children }) {
         dispatch({ type: 'UPSERT_TRANSACTION', payload: t });
         await persist(next);
       },
-
       deleteTransaction: async (id) => {
-        const next = reducer(state, {
-          type: 'DELETE_TRANSACTION',
-          payload: asId(id),
-        });
+        const next = reducer(state, { type: 'DELETE_TRANSACTION', payload: asId(id) });
         dispatch({ type: 'DELETE_TRANSACTION', payload: asId(id) });
         await persist(next);
       },
@@ -562,36 +464,36 @@ export function AppProvider({ children }) {
         await persist(next);
       },
 
-      // Recurring generator
+      // Recurring generation (idempotent)
       runRecurringGeneration: async () => {
         try {
           const today = todayISO();
           const last = state.lastRecurringRun || today;
           const rules = state.recurring || [];
 
-          // Build set of existing keys to avoid duplicates
-          const existingKeys = new Set((state.transactions || []).map(txKey));
+          const existing = new Set((state.transactions || []).map(txKey));
           const newTxns = [];
 
           for (const d of dateRangeDays(last, today)) {
-            for (const r of rules) {
-              if (!r.autoPost) continue;
-              if (!isDueOn(r, d)) continue;
+            for (const rule of rules) {
+              if (!rule.autoPost) continue;
+              if (!isDueOn(rule, d)) continue;
+
               const t = {
                 id: genId('txn'),
-                originRecurringId: r.id,
-                accountId: asId(r.accountId),
-                type: r.type,
-                amount: Number(r.amount || 0),
+                originRecurringId: rule.id,
+                accountId: asId(rule.accountId),
+                type: rule.type,
+                amount: Number(rule.amount || 0),
                 date: d,
-                category:
-                  r.category || (r.type === 'expense' ? 'General' : 'Income'),
-                note: r.note || 'Recurring',
+                category: rule.category || (rule.type === 'expense' ? 'General' : 'Income'),
+                note: rule.note || 'Recurring',
               };
               if (t.amount <= 0 || !t.accountId) continue;
+
               const key = txKey(t);
-              if (!existingKeys.has(key)) {
-                existingKeys.add(key);
+              if (!existing.has(key)) {
+                existing.add(key);
                 newTxns.push(t);
               }
             }
@@ -603,10 +505,7 @@ export function AppProvider({ children }) {
             next = reducer(next, { type: 'SET_TRANSACTIONS', payload: merged });
             dispatch({ type: 'SET_TRANSACTIONS', payload: merged });
           }
-          next = reducer(next, {
-            type: 'SET_LAST_RECURRING_RUN',
-            payload: today,
-          });
+          next = reducer(next, { type: 'SET_LAST_RECURRING_RUN', payload: today });
           dispatch({ type: 'SET_LAST_RECURRING_RUN', payload: today });
           await persist(next);
         } catch (e) {
@@ -614,9 +513,8 @@ export function AppProvider({ children }) {
         }
       },
 
-      // Auth-ish helpers (PIN)
+      // Simple “sign out”: clear stored PIN so Splash/Login asks again
       signOut: async () => {
-        // simple “sign out”: clear PIN so Splash asks again
         try {
           await SecureStore.deleteItemAsync(PIN_KEY);
         } catch {}
@@ -625,9 +523,7 @@ export function AppProvider({ children }) {
     [state]
   );
 
-  // --------------------------
   // Selectors
-  // --------------------------
   const selectors = useMemo(() => {
     const accountBalance = (accountId) => {
       const id = asId(accountId);
@@ -639,15 +535,10 @@ export function AppProvider({ children }) {
       }
       return bal;
     };
-
-    return {
-      accountBalance,
-    };
+    return { accountBalance };
   }, [state.transactions]);
 
-  // --------------------------
-  // PIN helpers for SplashAuth
-  // --------------------------
+  // PIN helpers
   const getPin = async () => {
     try {
       const v = await SecureStore.getItemAsync(PIN_KEY);
@@ -662,17 +553,12 @@ export function AppProvider({ children }) {
     } catch {}
   };
 
-  // --------------------------
-  // Exposed context value
-  // --------------------------
   const ctx = useMemo(
     () => ({
       state,
       actions,
       selectors,
       isHydrated: state.isHydrated,
-
-      // PIN helpers (used by SplashAuthScreen)
       getPin,
       setPin,
     }),
@@ -684,8 +570,6 @@ export function AppProvider({ children }) {
 
 export function useApp() {
   const v = useContext(AppCtx);
-  if (!v) {
-    throw new Error('useApp must be used within AppProvider');
-  }
+  if (!v) throw new Error('useApp must be used within AppProvider');
   return v;
 }

@@ -1,122 +1,182 @@
 // src/screens/LoginScreen.js
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
-  Switch,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 import { useApp } from '../state/AppState';
 
 export default function LoginScreen({ navigation }) {
-  const { actions, clearPin } = useApp();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [remember, setRemember] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const { getPin, setPin } = useApp();
+  const [mode, setMode] = useState('loading'); // 'loading' | 'signin' | 'setpin'
+  const [pin, setPinInput] = useState('');
+  const [confirm, setConfirm] = useState('');
 
-  const onLogin = async () => {
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const stored = await getPin();
+        if (!mounted) return;
+        setMode(stored ? 'signin' : 'setpin');
+      } catch {
+        if (!mounted) return;
+        setMode('signin');
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [getPin]);
+
+  const onSignIn = async () => {
     try {
-      if (!name.trim()) return Alert.alert('Name required', 'Please enter your name.');
-      setLoading(true);
-      await actions.signIn({ name: name.trim(), email: email.trim(), remember });
-      navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
-    } catch (e) {
-      console.warn('login error', e);
-      Alert.alert('Login failed', 'Please try again.');
-    } finally {
-      setLoading(false);
+      const stored = await getPin();
+      if ((stored || '') === pin.trim()) {
+        navigation.replace('Dashboard');
+      } else {
+        Alert.alert('Incorrect PIN', 'Please try again.');
+        setPinInput('');
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to verify PIN right now.');
     }
   };
 
-  const onGuest = async () => {
+  const onSavePin = async () => {
+    const p1 = pin.trim();
+    const p2 = confirm.trim();
+    if (!/^\d{4,6}$/.test(p1)) {
+      return Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
+    }
+    if (p1 !== p2) {
+      return Alert.alert('Mismatch', 'PINs do not match.');
+    }
     try {
-      setLoading(true);
-      await actions.signIn({ name: 'Guest', email: '', remember: false });
-      navigation.reset({ index: 0, routes: [{ name: 'Dashboard' }] });
-    } catch (e) {
-      Alert.alert('Could not continue as guest');
-    } finally {
-      setLoading(false);
+      await setPin(p1);
+      navigation.replace('Dashboard');
+    } catch {
+      Alert.alert('Error', 'Unable to save PIN right now.');
     }
   };
 
-  const onResetPin = async () => {
-    await clearPin(); // removes stored PIN so SplashAuth won’t prompt for it next time
-    Alert.alert('PIN cleared', 'Your PIN has been cleared. You can set a new one next time on the splash screen.');
-  };
+  if (mode === 'loading') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.subtle}>Preparing…</Text>
+      </View>
+    );
+  }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.wrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View key={r.id ?? r.category} style={styles.card}>
-        <Text style={styles.h1}>Welcome back</Text>
-        <Text style={styles.subtle}>Sign in to continue</Text>
+    <View style={styles.wrap}>
+      <Text style={styles.h1}>Welcome</Text>
+      <Text style={styles.subtle}>
+        {mode === 'signin'
+          ? 'Enter your PIN to continue'
+          : 'Create a PIN for quick access'}
+      </Text>
 
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Full name"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-          autoCapitalize="words"
-        />
+      {mode === 'signin' ? (
+        <>
+          <TextInput
+            value={pin}
+            onChangeText={setPinInput}
+            placeholder="PIN (4–6 digits)"
+            placeholderTextColor="#6B7280"
+            secureTextEntry
+            keyboardType="number-pad"
+            style={styles.input}
+          />
 
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          placeholder="Email (optional)"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
+          <Pressable style={styles.primary} onPress={onSignIn}>
+            <Text style={styles.primaryText}>Sign In</Text>
+          </Pressable>
 
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Remember me</Text>
-          <Switch value={remember} onValueChange={setRemember} />
-        </View>
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => {
+              setPinInput('');
+              setMode('setpin');
+            }}
+          >
+            <Text style={styles.ghostText}>Set / Change PIN</Text>
+          </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [styles.primary, pressed && styles.pressed]}
-          onPress={onLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.primaryText}>Sign in</Text>
-          )}
-        </Pressable>
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => navigation.replace('Dashboard')}
+          >
+            <Text style={styles.ghostText}>Continue without PIN</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <TextInput
+            value={pin}
+            onChangeText={setPinInput}
+            placeholder="New PIN (4–6 digits)"
+            placeholderTextColor="#6B7280"
+            secureTextEntry
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+          <TextInput
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="Confirm PIN"
+            placeholderTextColor="#6B7280"
+            secureTextEntry
+            keyboardType="number-pad"
+            style={styles.input}
+          />
 
-        <Pressable
-          style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
-          onPress={onGuest}
-          disabled={loading}
-        >
-          <Text style={styles.secondaryText}>Continue as Guest</Text>
-        </Pressable>
+          <Pressable style={styles.primary} onPress={onSavePin}>
+            <Text style={styles.primaryText}>Save PIN</Text>
+          </Pressable>
 
-        <Pressable onPress={onResetPin} style={styles.linkBtn}>
-          <Text style={styles.linkText}>Reset PIN</Text>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => {
+              setPinInput('');
+              setConfirm('');
+              setMode('signin');
+            }}
+          >
+            <Text style={styles.ghostText}>Back to Sign In</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => navigation.replace('Dashboard')}
+          >
+            <Text style={styles.ghostText}>Continue without PIN</Text>
+          </Pressable>
+        </>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 24, justifyContent: 'center' },
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 20 },
-  h1: { color: '#fff', fontSize: 24, fontWeight: '700', marginBottom: 6 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 24,
+    paddingTop: Platform.OS === 'ios' ? 64 : 32,
+  },
+  center: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  h1: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 8 },
   subtle: { color: '#9CA3AF', marginBottom: 16 },
   input: {
     backgroundColor: '#0F172A',
@@ -125,19 +185,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  label: { color: '#E5E7EB', fontSize: 14 },
-
-  primary: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 4 },
+  primary: {
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
   primaryText: { color: '#fff', fontWeight: '700' },
-
-  secondary: { backgroundColor: '#374151', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
-  secondaryText: { color: '#fff', fontWeight: '700' },
-
-  linkBtn: { alignItems: 'center', marginTop: 14 },
-  linkText: { color: '#93C5FD', fontWeight: '600' },
-
-  pressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  ghost: {
+    backgroundColor: '#1F2937',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ghostText: { color: '#E5E7EB', fontWeight: '700' },
 });

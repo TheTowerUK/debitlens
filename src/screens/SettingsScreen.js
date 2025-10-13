@@ -1,181 +1,212 @@
 // src/screens/SettingsScreen.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Switch, Pressable, Alert, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as DocumentPicker from 'expo-document-picker';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Switch,
+  Alert,
+  Platform,
+} from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy'; // use legacy to avoid SDK 54 deprecation warning
 import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../state/AppState';
-import { getCurrencyFromPrefs } from '../utils/money';
+import { money } from '../utils/money';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'JPY', 'AUD', 'CAD', 'NZD', 'INR'];
+const SYMBOLS = {
+  GBP: '£', USD: '$', EUR: '€', JPY: '¥',
+  AUD: 'A$', CAD: 'C$', NZD: 'NZ$', INR: '₹',
+};
+const symFor = (code) => SYMBOLS[code] || code;
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const { state, actions } = useApp();
-  const prefs = state?.prefs || {};
-  const [useBio, setUseBio] = useState(!!prefs.useBiometrics);
-  const [themeDark, setThemeDark] = useState((prefs.theme || 'dark') === 'dark');
-  const [currencyCode, setCurrencyCode] = useState(String(prefs.currencyCode || 'GBP').toUpperCase());
 
-  const { symbol } = getCurrencyFromPrefs({ currencyCode });
+  // prefs -> local form
+  const base = state?.prefs || {};
+  const [currency, setCurrency] = useState(base.currency || 'GBP');
+  const [currencySymbol, setCurrencySymbol] = useState(base.currencySymbol || symFor(currency));
+  const [rollover, setRollover] = useState(!!base.budgetRollover);
 
-  const filePrefix = useMemo(() => {
-    const d = new Date(); const pad = (n) => String(n).padStart(2, '0');
-    return `base44-backup-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-  }, []);
+  // quick preview using current prefs
+  const preview = useMemo(() => money(1234.56, { currency, currencySymbol }), [currency, currencySymbol]);
 
   const onSavePrefs = async () => {
-    await actions.updatePrefs({
-      useBiometrics: useBio,
-      theme: themeDark ? 'dark' : 'light',
-      currencyCode,
-    });
-    Alert.alert('Saved', 'Preferences updated.');
+    try {
+      await actions.updatePrefs({
+        currency,
+        currencySymbol: currencySymbol || symFor(currency),
+        budgetRollover: !!rollover,
+      });
+      Alert.alert('Saved', 'Preferences updated.');
+    } catch (e) {
+      console.warn('[settings] save prefs failed', e);
+      Alert.alert('Save failed', 'Please try again.');
+    }
   };
 
   const onExport = async () => {
     try {
-      const payload = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        data: {
-          accounts: state.accounts || [],
-          transactions: state.transactions || [],
-          prefs: state.prefs || {},
-          lastSync: state.lastSync || null,
-        },
-      };
-      const json = JSON.stringify(payload, null, 2);
-      const uri = FileSystem.cacheDirectory + `${filePrefix}.json`;
-      await FileSystem.writeAsStringAsync(uri, json);
+      // Export the *current state object* (what we persist)
+      const data = JSON.stringify(state, null, 2);
+      const name = `base44-backup-${new Date().toISOString().slice(0,10)}.json`;
+      const uri = `${FileSystem.cacheDirectory}${name}`;
 
+      await FileSystem.writeAsStringAsync(uri, data, { encoding: FileSystem.EncodingType.UTF8 });
 
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Export Base44 data', UTI: 'public.json' });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Share backup JSON' });
       } else {
-        Alert.alert('Exported', `Saved to cache:\n${uri}`);
+        Alert.alert('Exported', `Saved to: ${uri}`);
       }
     } catch (e) {
       console.warn('[settings] export failed', e);
-      Alert.alert('Export failed', String(e?.message || e));
+      Alert.alert('Export failed', 'Could not create the backup file.');
     }
   };
 
   const onImport = async () => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({ type: 'application/json', multiple: false, copyToCacheDirectory: true });
-      const cancelled = res.canceled || res.type === 'cancel';
-      if (cancelled) return;
-      const asset = res.assets ? res.assets[0] : res;
-      const uri = asset?.uri;
-      if (!uri) return Alert.alert('Import', 'No file selected.');
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled) return;
 
-      const text = await FileSystem.readAsStringAsync(uri);
-      let parsed;
-      try { parsed = JSON.parse(text); } catch { return Alert.alert('Import failed', 'Selected file is not valid JSON.'); }
-      if (!parsed?.data) return Alert.alert('Import failed', 'File format not recognized.');
+      const asset = picked.assets?.[0];
+      if (!asset?.uri) return;
 
-      const { accounts = [], transactions = [], prefs: importedPrefs = {}, lastSync = null } = parsed.data;
-      Alert.alert(
-        'Restore data?',
-        `Accounts: ${accounts.length}\nTransactions: ${transactions.length}\nThis will replace current data.`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Restore', style: 'destructive', onPress: async () => {
-              await actions.setAccounts(accounts);
-              await actions.setTransactions(transactions);
-              if (importedPrefs && typeof importedPrefs === 'object') {
-                await actions.updatePrefs(importedPrefs);
-              }
-              Alert.alert('Restored', 'Data import complete.');
-            }
-          }
-        ]
-      );
+      const raw = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
+      const parsed = JSON.parse(raw);
+
+      // Very light validation
+      const nextAccounts = Array.isArray(parsed.accounts) ? parsed.accounts : [];
+      const nextTxns     = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+      const nextBudgets  = Array.isArray(parsed.budgets) ? parsed.budgets : [];
+      const nextRecur    = Array.isArray(parsed.recurring) ? parsed.recurring : [];
+      const nextPrefs    = typeof parsed.prefs === 'object' && parsed.prefs ? parsed.prefs : {};
+
+      // Apply via actions (each action persists)
+      await actions.setAccounts(nextAccounts);
+      await actions.setTransactions(nextTxns);
+      await actions.setBudgets(nextBudgets);
+      await actions.setRecurring(nextRecur);
+      await actions.updatePrefs(nextPrefs);
+
+      Alert.alert('Imported', 'Backup restored successfully.');
+      navigation.navigate('Dashboard');
     } catch (e) {
       console.warn('[settings] import failed', e);
-      Alert.alert('Import failed', String(e?.message || e));
+      Alert.alert('Import failed', 'Ensure the file is a valid backup JSON.');
     }
   };
 
-  const onClearAll = async () => {
-    Alert.alert(
-      'Delete ALL data?',
-      'This removes all accounts and transactions. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
+  const onReset = async () => {
+    Alert.alert('Reset all data?', 'This will clear your accounts, transactions, budgets and prefs back to demo defaults.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Reset',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // Minimal reset: set empty arrays + basic prefs; app seeds a default account/txn on next launch if needed
             await actions.setAccounts([]);
             await actions.setTransactions([]);
-            await actions.updatePrefs({ ...prefs, theme: 'dark', useBiometrics: false });
-            Alert.alert('Cleared', 'All local data removed.');
+            await actions.setBudgets([]);
+            await actions.setRecurring([]);
+            await actions.updatePrefs({ currency: 'GBP', currencySymbol: '£', budgetRollover: true });
+            Alert.alert('Reset complete', 'Data cleared to defaults.');
+            navigation.navigate('Dashboard');
+          } catch (e) {
+            console.warn('[settings] reset failed', e);
+            Alert.alert('Reset failed', 'Please try again.');
           }
-        }
-      ]
-    );
+        },
+      },
+    ]);
   };
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Settings</Text>
-      <Text style={styles.subtle}>Preferences & Data</Text>
+      <Text style={styles.subtle}>App preferences, backup & restore</Text>
 
-      {/* Prefs */}
-      <View key={r.id ?? r.category} style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Use Face/Touch ID</Text>
-          <Switch value={useBio} onValueChange={setUseBio} />
-        </View>
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Dark theme</Text>
-          <Switch value={themeDark} onValueChange={setThemeDark} />
-        </View>
-
-        {/* Currency */}
-        <View style={[styles.rowBetween, { marginTop: 8 }]}>
-          <Text style={styles.label}>Currency</Text>
-          <View style={{ flexDirection: 'row' }}>
-            <Text style={[styles.label, { marginRight: 8 }]}>{symbol}</Text>
-            <Text style={[styles.subtle, { marginRight: 12 }]}>{currencyCode}</Text>
+      {/* Currency */}
+      <View style={styles.card}>
+        <Text style={styles.label}>Currency</Text>
+        <View style={[styles.row, { flexWrap: 'wrap', marginTop: 6, marginRight: -8, marginBottom: -8 }]}>
+          {CURRENCIES.map((code) => (
             <Pressable
-              style={styles.btnTiny}
+              key={code}
+              style={[styles.pill, currency === code && styles.pillActive, { marginRight: 8, marginBottom: 8 }]}
               onPress={() => {
-                const idx = CURRENCIES.indexOf(currencyCode);
-                const next = idx === -1 || idx === CURRENCIES.length - 1 ? CURRENCIES[0] : CURRENCIES[idx + 1];
-                setCurrencyCode(next);
+                setCurrency(code);
+                if (!currencySymbol || currencySymbol === symFor(currency)) {
+                  setCurrencySymbol(symFor(code));
+                }
               }}
             >
-              <Text style={styles.btnTinyText}>Change</Text>
+              <Text style={[styles.pillText, currency === code && styles.pillTextActive]}>
+                {code} ({symFor(code)})
+              </Text>
             </Pressable>
-          </View>
+          ))}
         </View>
 
-        <Pressable style={[styles.btnSave, { marginTop: 12 }]} onPress={onSavePrefs}>
+        <Text style={[styles.subtle, { marginTop: 10 }]}>Symbol override</Text>
+        <TextInput
+          value={currencySymbol}
+          onChangeText={setCurrencySymbol}
+          placeholder={symFor(currency)}
+          placeholderTextColor="#6B7280"
+          style={[styles.input, { marginTop: 6 }]}
+        />
+
+        <Text style={[styles.subtle, { marginTop: 10 }]}>Preview</Text>
+        <Text style={styles.preview}>{preview}</Text>
+      </View>
+
+      {/* Rollover */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.label}>Rollover unused budget</Text>
+          <Switch
+            value={rollover}
+            onValueChange={setRollover}
+            trackColor={{ false: '#374151', true: '#2563EB' }}
+            thumbColor="#fff"
+          />
+        </View>
+        <Text style={[styles.subtle, { marginTop: 6 }]}>
+          When enabled, any remaining amount from last month’s budget is added to this month.
+        </Text>
+      </View>
+
+      {/* Save prefs */}
+      <View style={styles.row} >
+        <Pressable style={[styles.btn, styles.btnSave]} onPress={onSavePrefs}>
           <Text style={styles.btnText}>Save Preferences</Text>
         </Pressable>
       </View>
 
       {/* Backup / Restore */}
-      <View key={r.id ?? r.category} style={styles.card}>
-        <Text style={styles.label}>Data Backup</Text>
-        <View style={{ height: 8 }} />
-        <Pressable style={styles.btnSave} onPress={onExport}>
-          <Text style={styles.btnText}>Export JSON</Text>
-        </Pressable>
-        <View style={{ height: 8 }} />
-        <Pressable style={styles.btnSecondary} onPress={onImport}>
-          <Text style={styles.btnText}>Import JSON</Text>
-        </Pressable>
-      </View>
-
-      {/* Danger zone */}
-      <View style={styles.cardDanger}>
-        <Text style={styles.label}>Danger Zone</Text>
-        <View style={{ height: 8 }} />
-        <Pressable style={styles.btnDanger} onPress={onClearAll}>
-          <Text style={styles.btnText}>Clear All Data</Text>
+      <View style={styles.card}>
+        <Text style={styles.label}>Backup & Restore</Text>
+        <View style={[styles.row, { marginTop: 8 }]}>
+          <Pressable style={[styles.btn, styles.btnGhost, { marginRight: 8 }]} onPress={onExport}>
+            <Text style={styles.btnText}>Export backup (JSON)</Text>
+          </Pressable>
+          <Pressable style={[styles.btn, styles.btnGhost]} onPress={onImport}>
+            <Text style={styles.btnText}>Import backup (JSON)</Text>
+          </Pressable>
+        </View>
+        <Pressable style={[styles.btn, styles.btnDanger, { marginTop: 10 }]} onPress={onReset}>
+          <Text style={styles.btnText}>Reset demo data</Text>
         </Pressable>
       </View>
     </View>
@@ -183,22 +214,55 @@ export default function SettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+  },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
+  subtle: { color: '#9CA3AF' },
+  label: { color: '#E5E7EB', fontWeight: '800' },
+  preview: { color: '#E5E7EB', fontWeight: '800', marginTop: 4 },
 
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
-  cardDanger: { backgroundColor: '#1F2937', borderRadius: 16, padding: 16, marginBottom: 12 },
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+  },
 
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
-  label: { color: '#E5E7EB', fontWeight: '700' },
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+  },
 
-  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  btnSecondary: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  btnDanger: { backgroundColor: '#B91C1C', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  pill: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  pillActive: { backgroundColor: '#2563EB' },
+  pillText: { color: '#E5E7EB', fontWeight: '700' },
+  pillTextActive: { color: '#fff' },
+
+  btn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnSave: { backgroundColor: '#2563EB' },
+  btnGhost: { backgroundColor: '#1F2937' },
+  btnDanger: { backgroundColor: '#7F1D1D' },
   btnText: { color: '#fff', fontWeight: '700' },
-
-  btnTiny: { backgroundColor: '#1F2937', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
-  btnTinyText: { color: '#fff', fontWeight: '700' },
 });

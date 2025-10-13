@@ -1,257 +1,396 @@
 // src/screens/RecurringScreen.js
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, Switch, FlatList, Alert, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Switch,
+  FlatList,
+  Alert,
+  Platform,
+} from 'react-native';
 import { useApp } from '../state/AppState';
 
-const isISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s||''));
-const todayISO = () => new Date().toISOString().slice(0,10);
+const pad2 = (n) => String(n).padStart(2, '0');
+const todayISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+};
 
-export default function RecurringScreen() {
+const FREQS = ['daily', 'weekly', 'monthly'];
+
+export default function RecurringScreen({ navigation }) {
   const { state, actions } = useApp();
-  const accounts = state?.accounts || [];
-  const items = (state?.recurring || []).slice().sort((a,b)=> (a.category||'').localeCompare(b.category||''));
+  const accounts = state?.accounts ?? [];
+  const items = state?.recurring ?? [];
 
-  // form
-  const [editingId, setEditingId] = useState(null);
-  const [accountId, setAccountId] = useState(accounts[0]?.id || null);
-  const [type, setType] = useState('expense');
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
-  const [note, setNote] = useState('');
-  const [freq, setFreq] = useState('monthly'); // 'daily'|'weekly'|'monthly'
-  const [startDate, setStartDate] = useState(todayISO());
-  const [endDate, setEndDate] = useState('');
-  const [autoPost, setAutoPost] = useState(true);
+  const [editingId, setEditingId] = useState(null); // null | 'NEW' | existing id
+  const [form, setForm] = useState({
+    accountId: accounts[0] ? String(accounts[0].id) : '',
+    type: 'expense',       // 'expense' | 'income'
+    amount: '',
+    category: '',
+    note: '',
+    freq: 'monthly',       // 'daily' | 'weekly' | 'monthly'
+    startDate: todayISO(),
+    endDate: '',
+    autoPost: true,
+  });
 
-  const resetForm = () => {
+  const byAccount = useMemo(() => {
+    const m = {};
+    for (const a of accounts) m[String(a.id)] = a;
+    return m;
+  }, [accounts]);
+
+  const startNew = () => {
+    setEditingId('NEW');
+    setForm({
+      accountId: accounts[0] ? String(accounts[0].id) : '',
+      type: 'expense',
+      amount: '',
+      category: '',
+      note: '',
+      freq: 'monthly',
+      startDate: todayISO(),
+      endDate: '',
+      autoPost: true,
+    });
+  };
+
+  const startEdit = (item) => {
+    setEditingId(item.id);
+    setForm({
+      accountId: String(item.accountId || ''),
+      type: item.type || 'expense',
+      amount: String(item.amount ?? ''),
+      category: item.category || '',
+      note: item.note || '',
+      freq: item.freq || 'monthly',
+      startDate: item.startDate || todayISO(),
+      endDate: item.endDate || '',
+      autoPost: !!item.autoPost,
+    });
+  };
+
+  const cancelEdit = () => {
     setEditingId(null);
-    setAccountId(accounts[0]?.id || null);
-    setType('expense');
-    setAmount('');
-    setCategory('');
-    setNote('');
-    setFreq('monthly');
-    setStartDate(todayISO());
-    setEndDate('');
-    setAutoPost(true);
   };
 
   const cycleAccount = () => {
     if (!accounts.length) return;
-    if (!accountId) return setAccountId(accounts[0].id);
-    const ids = accounts.map(a=>a.id);
-    const i = ids.indexOf(accountId);
-    setAccountId(i === -1 || i === ids.length-1 ? ids[0] : ids[i+1]);
+    const ids = accounts.map((a) => String(a.id));
+    const cur = form.accountId ? String(form.accountId) : ids[0];
+    const idx = ids.indexOf(cur);
+    const next = idx === -1 || idx === ids.length - 1 ? ids[0] : ids[idx + 1];
+    setForm((f) => ({ ...f, accountId: next }));
   };
 
-  const onSave = async () => {
-    const amt = Number(amount);
-    if (!accountId) return Alert.alert('Account', 'Pick an account.');
-    if (!isFinite(amt) || amt <= 0) return Alert.alert('Amount', 'Enter a positive amount.');
-    if (!isISO(startDate)) return Alert.alert('Start Date', 'Use YYYY-MM-DD format.');
-    if (endDate && !isISO(endDate)) return Alert.alert('End Date', 'Use YYYY-MM-DD or leave blank.');
+  const saveItem = async () => {
+    const amt = Number(form.amount);
+    if (!form.accountId) return Alert.alert('Account', 'Choose an account.');
+    if (!isFinite(amt) || amt <= 0) return Alert.alert('Amount', 'Enter a positive number.');
+    if (!FREQS.includes(form.freq)) return Alert.alert('Frequency', 'Pick daily, weekly, or monthly.');
+    if (form.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.startDate))
+      return Alert.alert('Start date', 'Use YYYY-MM-DD.');
+    if (form.endDate && !/^\d{4}-\d{2}-\d{2}$/.test(form.endDate))
+      return Alert.alert('End date', 'Use YYYY-MM-DD.');
 
     const payload = {
-      id: editingId || undefined,
-      accountId,
-      type,
+      accountId: String(form.accountId),
+      type: form.type,
       amount: amt,
-      category: category.trim() || (type==='expense' ? 'General' : 'Income'),
-      note: note.trim(),
-      freq,
-      startDate,
-      endDate: endDate || undefined,
-      autoPost: !!autoPost,
+      category: form.category?.trim(),
+      note: form.note?.trim(),
+      freq: form.freq,
+      startDate: form.startDate || todayISO(),
+      endDate: form.endDate?.trim() || undefined,
+      autoPost: !!form.autoPost,
     };
 
-    if (editingId) {
-      await actions.updateRecurring(payload);
-    } else {
-      await actions.addRecurring(payload);
+    try {
+      if (editingId && editingId !== 'NEW') {
+        await actions.updateRecurring({ id: editingId, ...payload });
+      } else {
+        await actions.addRecurring(payload);
+      }
+      setEditingId(null);
+    } catch (e) {
+      console.warn('[recurring] save failed', e);
+      Alert.alert('Save failed', 'Please try again.');
     }
-    resetForm();
   };
 
-  const onEdit = (r) => {
-    setEditingId(r.id);
-    setAccountId(r.accountId);
-    setType(r.type);
-    setAmount(String(r.amount));
-    setCategory(r.category || '');
-    setNote(r.note || '');
-    setFreq(r.freq || 'monthly');
-    setStartDate(r.startDate || todayISO());
-    setEndDate(r.endDate || '');
-    setAutoPost(!!r.autoPost);
-  };
-
-  const onDelete = (id) => {
-    Alert.alert('Delete schedule?', 'This will not remove already posted transactions.', [
+  const deleteItem = (id) => {
+    Alert.alert('Delete schedule?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => actions.deleteRecurring(id) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          await actions.deleteRecurring(id);
+          if (editingId === id) setEditingId(null);
+        },
+      },
     ]);
   };
 
-  const accountName = useMemo(
-    () => accounts.find(a=>a.id===accountId)?.name || '—',
-    [accounts, accountId]
+  const Header = () => (
+    <View style={styles.header}>
+      <Text style={styles.h1}>Recurring</Text>
+      <Text style={styles.subtle}>Create rules that auto-post on a schedule.</Text>
+    </View>
+  );
+
+  const Editor = () => (
+    <View style={styles.card}>
+      <Text style={styles.rowTitle}>{editingId === 'NEW' ? 'New Schedule' : 'Edit Schedule'}</Text>
+
+      {/* Type */}
+      <View style={[styles.row, { marginBottom: 8 }]}>
+        {['expense', 'income'].map((t) => (
+          <Pressable
+            key={t}
+            style={[styles.pill, form.type === t && styles.pillActive]}
+            onPress={() => setForm((f) => ({ ...f, type: t, category: f.category || (t === 'expense' ? 'General' : 'Income') }))}
+          >
+            <Text style={[styles.pillText, form.type === t && styles.pillTextActive]}>
+              {t[0].toUpperCase() + t.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Account cycler */}
+      <Pressable style={styles.accountBtn} onPress={cycleAccount}>
+        <Text style={styles.accountBtnText}>
+          Account: {byAccount[form.accountId]?.name || '—'}
+        </Text>
+      </Pressable>
+
+      {/* Amount, Category, Note */}
+      <TextInput
+        value={form.amount}
+        onChangeText={(v) => setForm((f) => ({ ...f, amount: v }))}
+        placeholder="Amount (e.g., 29.99)"
+        placeholderTextColor="#6B7280"
+        keyboardType="decimal-pad"
+        style={styles.input}
+      />
+      <TextInput
+        value={form.category}
+        onChangeText={(v) => setForm((f) => ({ ...f, category: v }))}
+        placeholder={form.type === 'expense' ? 'Category (e.g., Groceries)' : 'Category (e.g., Salary)'}
+        placeholderTextColor="#6B7280"
+        style={styles.input}
+      />
+      <TextInput
+        value={form.note}
+        onChangeText={(v) => setForm((f) => ({ ...f, note: v }))}
+        placeholder="Note (optional)"
+        placeholderTextColor="#6B7280"
+        style={styles.input}
+      />
+
+      {/* Frequency */}
+      <View style={[styles.row, { marginTop: 6 }]}>
+        {FREQS.map((f) => (
+          <Pressable
+            key={f}
+            style={[styles.pillSm, form.freq === f && styles.pillActive]}
+            onPress={() => setForm((x) => ({ ...x, freq: f }))}
+          >
+            <Text style={[styles.pillTextSm, form.freq === f && styles.pillTextActive]}>
+              {f[0].toUpperCase() + f.slice(1)}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Dates */}
+      <View style={[styles.row, { marginTop: 8 }]}>
+        <TextInput
+          value={form.startDate}
+          onChangeText={(v) => setForm((f) => ({ ...f, startDate: v }))}
+          placeholder="Start YYYY-MM-DD"
+          placeholderTextColor="#6B7280"
+          style={[styles.input, { flex: 1, marginRight: 8 }]}
+        />
+        <TextInput
+          value={form.endDate}
+          onChangeText={(v) => setForm((f) => ({ ...f, endDate: v }))}
+          placeholder="End YYYY-MM-DD (optional)"
+          placeholderTextColor="#6B7280"
+          style={[styles.input, { flex: 1 }]}
+        />
+      </View>
+
+      {/* Auto-post */}
+      <View style={[styles.rowBetween, { marginTop: 10 }]}>
+        <Text style={styles.label}>Auto-post on schedule</Text>
+        <Switch
+          value={!!form.autoPost}
+          onValueChange={(v) => setForm((f) => ({ ...f, autoPost: v }))}
+          trackColor={{ false: '#374151', true: '#2563EB' }}
+          thumbColor="#fff"
+        />
+      </View>
+
+      {/* Actions */}
+      <View style={[styles.row, { marginTop: 12 }]}>
+        <Pressable style={[styles.btn, styles.btnGhost, { marginRight: 8 }]} onPress={cancelEdit}>
+          <Text style={styles.btnText}>Cancel</Text>
+        </Pressable>
+        <Pressable style={[styles.btn, styles.btnSave]} onPress={saveItem}>
+          <Text style={styles.btnText}>{editingId === 'NEW' ? 'Add' : 'Save'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const Row = ({ item }) => (
+    <View style={styles.card}>
+      <View style={styles.rowBetween}>
+        <Text style={styles.itemLeft}>
+          {(item.category || (item.type === 'expense' ? 'General' : 'Income'))} • {item.freq}
+        </Text>
+        <Text style={styles.itemRight}>
+          {item.type === 'expense' ? '-' : '+'}
+          {Number(item.amount).toFixed(2)}
+        </Text>
+      </View>
+      <Text style={styles.subtle}>
+        {(byAccount[String(item.accountId)]?.name || 'Account')}
+        {' • '}
+        from {item.startDate || '—'}
+        {item.endDate ? ` to ${item.endDate}` : ''}
+        {item.autoPost ? ' • auto' : ''}
+      </Text>
+
+      <View style={[styles.row, { marginTop: 8 }]}>
+        <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(item)}>
+          <Text style={styles.btnTinyText}>Edit</Text>
+        </Pressable>
+        <Pressable style={styles.btnTinyDanger} onPress={() => deleteItem(item.id)}>
+          <Text style={styles.btnTinyText}>Delete</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>Recurring</Text>
-      <Text style={styles.subtle}>Auto-post transactions on a schedule</Text>
+      <Header />
 
-      {/* List */}
-  <FlatList
-    data={items}
-    keyExtractor={(item) => String(item.id)}
-    renderItem={({ item }) => (
-      <View style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.itemLeft}>{item.category} • {item.freq}</Text>
-          <Text style={styles.itemRight}>
-            {item.type === 'expense' ? '-' : '+'}{Number(item.amount).toFixed(2)}
-          </Text>
-        </View>
-        <Text style={styles.subtle}>
-          {accounts.find(a => String(a.id) === String(item.accountId))?.name || 'Account'} •
-          {' '}from {item.startDate}{item.endDate ? ` to ${item.endDate}` : ''}{item.autoPost ? ' • auto' : ''}
-        </Text>
-        <View style={styles.row}>
-          <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => onEdit(item)}>
-            <Text style={styles.btnTinyText}>Edit</Text>
-          </Pressable>
-          <Pressable style={styles.btnTinyDanger} onPress={() => onDelete(item.id)}>
-            <Text style={styles.btnTinyText}>Delete</Text>
-          </Pressable>
-        </View>
-      </View>
-    )}
-  />
-
-
-
-
-      {/* Form */}
-      <View key={r.id ?? r.category} style={styles.card}>
-        <Text style={styles.label}>{editingId ? 'Edit schedule' : 'Add schedule'}</Text>
-
-        <Pressable style={styles.accountBtn} onPress={cycleAccount}>
-          <Text style={styles.accountBtnText}>Account: {accountName}</Text>
+      {/* Add new or show "Add" button */}
+      {editingId === 'NEW' ? (
+        <Editor />
+      ) : (
+        <Pressable style={[styles.btn, styles.btnSave]} onPress={startNew}>
+          <Text style={styles.btnText}>Add Schedule</Text>
         </Pressable>
+      )}
 
-        <View style={styles.row}>
-          <Pressable style={[styles.pill, type==='expense' && styles.pillActive]} onPress={()=>setType('expense')}>
-            <Text style={[styles.pillText, type==='expense' && styles.pillTextActive]}>Expense</Text>
-          </Pressable>
-          <Pressable style={[styles.pill, type==='income' && styles.pillActive]} onPress={()=>setType('income')}>
-            <Text style={[styles.pillText, type==='income' && styles.pillTextActive]}>Income</Text>
-          </Pressable>
-        </View>
+      {/* Active editor for an existing row */}
+      {editingId && editingId !== 'NEW' && <Editor />}
 
-        <TextInput
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="decimal-pad"
-          placeholder="Amount (e.g., 25.00)"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
-
-        <View style={styles.row}>
-          <Pressable style={[styles.pill, freq==='monthly' && styles.pillActive]} onPress={()=>setFreq('monthly')}>
-            <Text style={[styles.pillText, freq==='monthly' && styles.pillTextActive]}>Monthly</Text>
-          </Pressable>
-          <Pressable style={[styles.pill, freq==='weekly' && styles.pillActive]} onPress={()=>setFreq('weekly')}>
-            <Text style={[styles.pillText, freq==='weekly' && styles.pillTextActive]}>Weekly</Text>
-          </Pressable>
-          <Pressable style={[styles.pill, freq==='daily' && styles.pillActive]} onPress={()=>setFreq('daily')}>
-            <Text style={[styles.pillText, freq==='daily' && styles.pillTextActive]}>Daily</Text>
-          </Pressable>
-        </View>
-
-        <TextInput
-          value={category}
-          onChangeText={setCategory}
-          placeholder={type==='expense' ? 'Category (e.g., Rent)' : 'Category (e.g., Salary)'}
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="Note (optional)"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
-
-        <View style={styles.row}>
-          <TextInput
-            value={startDate}
-            onChangeText={setStartDate}
-            placeholder="Start YYYY-MM-DD"
-            placeholderTextColor="#6B7280"
-            style={[styles.input, { flex: 1, marginRight: 8 }]}
-          />
-          <TextInput
-            value={endDate}
-            onChangeText={setEndDate}
-            placeholder="End YYYY-MM-DD (optional)"
-            placeholderTextColor="#6B7280"
-            style={[styles.input, { flex: 1 }]}
-          />
-        </View>
-
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Auto-post</Text>
-          <Switch value={!!autoPost} onValueChange={setAutoPost} />
-        </View>
-
-        <View style={styles.row}>
-          <Pressable style={[styles.btnSave, { marginRight: 8 }]} onPress={onSave}>
-            <Text style={styles.btnText}>{editingId ? 'Save' : 'Add'}</Text>
-          </Pressable>
-          <Pressable style={styles.btnCancel} onPress={resetForm}>
-            <Text style={styles.btnText}>Clear</Text>
-          </Pressable>
-        </View>
-      </View>
+      <FlatList
+        data={items}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ListEmptyComponent={
+          <Text style={[styles.subtle, { padding: 16 }]}>
+            No schedules yet. Tap “Add Schedule” to create one.
+          </Text>
+        }
+        renderItem={({ item }) => <Row item={item} />}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+  },
+  header: { marginBottom: 4 },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
+  subtle: { color: '#9CA3AF' },
+  label: { color: '#E5E7EB', fontWeight: '800' },
 
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginBottom: 12 },
-
-  row: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-
-  label: { color: '#E5E7EB', fontWeight: '700' },
-
-  pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8 },
-  pillActive: { backgroundColor: '#2563EB' },
-  pillText: { color: '#fff', fontWeight: '700' },
-  pillTextActive: { color: '#fff' },
-
-  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginTop: 8 },
-  accountBtnText: { color: '#fff', fontWeight: '700' },
-
-  input: {
-    backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937',
-    borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 8,
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
   },
 
-  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnCancel: { backgroundColor: '#6B7280', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnTiny: { backgroundColor: '#1F2937', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginTop: 8 },
-  btnTinyDanger: { backgroundColor: '#7F1D1D', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, marginTop: 8 },
-  btnTinyText: { color: '#fff', fontWeight: '700' },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 
-  itemLeft: { color: '#E5E7EB', fontWeight: '700' },
+  // Inputs / Pills
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+  },
+  pill: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  pillSm: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  pillActive: { backgroundColor: '#2563EB' },
+  pillText: { color: '#fff', fontWeight: '700' },
+  pillTextSm: { color: '#E5E7EB', fontWeight: '700', fontSize: 12 },
+  pillTextActive: { color: '#fff' },
+
+  // Buttons
+  btn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnSave: { backgroundColor: '#2563EB' },
+  btnGhost: { backgroundColor: '#1F2937' },
+  btnText: { color: '#fff', fontWeight: '700' },
+
+  btnTiny: {
+    backgroundColor: '#374151',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  btnTinyDanger: {
+    backgroundColor: '#7F1D1D',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  btnTinyText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+
+  // Row text
+  rowTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
+  itemLeft: { color: '#E5E7EB', fontWeight: '800' },
   itemRight: { color: '#E5E7EB', fontWeight: '800' },
 });
