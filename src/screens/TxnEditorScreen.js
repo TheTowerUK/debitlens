@@ -203,13 +203,14 @@ const styles = StyleSheet.create({
   accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8 },
   accountBtnText: { color: '#fff', fontWeight: '700' },
   input: { backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8 },
+  btn: {  paddingVertical: 12,  paddingHorizontal: 16,  borderRadius: 10,  alignItems: 'center',  justifyContent: 'center',},
+  btnGhost: { backgroundColor: '#1F2937' },  // dark neutral (matches your theme)
+  btnText: { color: '#fff', fontWeight: '700' },
   btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   btnDanger: { backgroundColor: '#7F1D1D', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
   btnText: { color: '#fff', fontWeight: '700' },
   card: { backgroundColor: '#111827', borderRadius: 12, padding: 12 },
   preview: { color: '#E5E7EB', fontWeight: '700' },
-  btn: {  paddingVertical: 12,  paddingHorizontal: 16,  borderRadius: 10,  alignItems: 'center',  justifyContent: 'center',},
-  btnGhost: { backgroundColor: '#1F2937' },  // dark neutral (matches your theme)
-  btnText: { color: '#fff', fontWeight: '700' },
+  
 
 });
