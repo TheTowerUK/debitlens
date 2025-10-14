@@ -6,8 +6,13 @@
       "expo-notifications",
       "expo-secure-store"
     ],
-    "platforms": ["ios", "android", "web"]
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "android": {
+      "package": "com.thetower.base44app"
+    }
   }
 }
-
-
