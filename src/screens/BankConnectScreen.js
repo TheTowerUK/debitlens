@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
 import { usePlaidLink } from 'react-native-plaid-link-sdk';
 import { useApp } from '../state/AppState';
+import * as Plaid from 'react-native-plaid-link-sdk';
+console.log('[Plaid keys]', Object.keys(Plaid)); // should include usePlaidLink or PlaidLink
 
 const BACKEND = 'http://192.168.178.94:4000'; // e.g., http://192.168.1.23:4000;
 
