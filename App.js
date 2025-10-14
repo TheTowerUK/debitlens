@@ -20,6 +20,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RecurringScreen from './src/screens/RecurringScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
+import BankConnectScreen from './src/screens/BankConnectScreen';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
@@ -51,6 +52,8 @@ export default function App() {
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
           <Stack.Screen name="ImportCsv" component={ImportCsvScreen} options={{ title: 'Import CSV' }} />
+          <Stack.Screen name="BankConnect" component={BankConnectScreen} options={{ title: 'Bank Connect' }} />
+          
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
