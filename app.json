@@ -4,13 +4,10 @@
     "slug": "base44-app",
     "plugins": [
       "expo-notifications",
-      "expo-secure-store",
-      [
-        "react-native-plaid-link-sdk",
-        { "iosLinkKitVersion": "next" }
-      ]
+      "expo-secure-store"
     ],
     "platforms": ["ios", "android", "web"]
   }
 }
+
 
