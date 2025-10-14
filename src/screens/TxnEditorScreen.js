@@ -1,5 +1,5 @@
 // src/screens/TxnEditorScreen.js
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,206 +10,306 @@ import {
   Platform,
 } from 'react-native';
 import { useApp } from '../state/AppState';
-import { money } from '../utils/money';
 
-const pad = n => String(n).padStart(2, '0');
+const pad2 = (n) => String(n).padStart(2, '0');
 const todayISO = () => {
   const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 };
 
-export default function TxnEditorScreen({ route, navigation }) {
+export default function TxnEditorScreen({ navigation, route }) {
   const { state, actions } = useApp();
-  const prefs = state?.prefs || {};
-  const mode = route.params?.mode || 'add'; // 'add' | 'edit'
-  const editId = route.params?.txnId || null;
-  const presetAccountId = route.params?.accountId ? String(route.params.accountId) : null;
-
   const accounts = state?.accounts ?? [];
-  const txns = state?.transactions ?? [];
-  const existing = useMemo(
-    () => (mode === 'edit' ? txns.find(t => t.id === editId) || null : null),
-    [mode, editId, txns]
-  );
+  const params = route?.params || {};
+  const mode = params.mode === 'edit' ? 'edit' : 'add';
+  const editId = mode === 'edit' ? String(params.txnId || '') : null;
 
-  // form state
-  const [type, setType] = useState(existing?.type || 'expense'); // 'expense' | 'income'
-  const [amount, setAmount] = useState(existing ? String(existing.amount) : '');
-  const [date, setDate] = useState(existing?.date || todayISO());
-  const [category, setCategory] = useState(existing?.category || (type === 'expense' ? 'General' : 'Income'));
-  const [note, setNote] = useState(existing?.note || '');
+  const editingTxn = useMemo(() => {
+    if (!editId) return null;
+    return (state.transactions || []).find((t) => String(t.id) === editId) || null;
+  }, [state.transactions, editId]);
+
+  // Form state
   const [accountId, setAccountId] = useState(
-    existing?.accountId ? String(existing.accountId) :
-    presetAccountId ?? (accounts[0] ? String(accounts[0].id) : '')
+    String(editingTxn?.accountId || params.accountId || (accounts[0]?.id ?? ''))
   );
+  const [type, setType] = useState(editingTxn?.type || 'expense'); // 'expense' | 'income'
+  const [amount, setAmount] = useState(
+    editingTxn?.amount != null ? String(editingTxn.amount) : ''
+  );
+  const [date, setDate] = useState(editingTxn?.date || todayISO());
+  const [category, setCategory] = useState(
+    editingTxn?.category || (type === 'income' ? 'Income' : 'General')
+  );
+  const [note, setNote] = useState(editingTxn?.note || '');
+
+  // If editingTxn changes (hot reload), refresh form
+  useEffect(() => {
+    if (editingTxn) {
+      setAccountId(String(editingTxn.accountId || accounts[0]?.id || ''));
+      setType(editingTxn.type || 'expense');
+      setAmount(editingTxn.amount != null ? String(editingTxn.amount) : '');
+      setDate(editingTxn.date || todayISO());
+      setCategory(editingTxn.category || (editingTxn.type === 'income' ? 'Income' : 'General'));
+      setNote(editingTxn.note || '');
+    }
+  }, [editingTxn, accounts]);
+
+  const byAccount = useMemo(() => {
+    const map = {};
+    for (const a of accounts) map[String(a.id)] = a;
+    return map;
+  }, [accounts]);
 
   const cycleAccount = () => {
     if (!accounts.length) return;
-    if (!accountId) return setAccountId(String(accounts[0].id));
-    const ids = accounts.map(a => String(a.id));
-    const i = ids.indexOf(String(accountId));
-    setAccountId(i === -1 || i === ids.length - 1 ? ids[0] : ids[i + 1]);
+    const ids = accounts.map((a) => String(a.id));
+    const cur = accountId || ids[0];
+    const idx = ids.indexOf(cur);
+    const next = idx === -1 || idx === ids.length - 1 ? ids[0] : ids[idx + 1];
+    setAccountId(next);
+  };
+
+  const validate = () => {
+    const amt = Number(amount);
+    if (!accountId) {
+      Alert.alert('Account', 'Please choose an account.');
+      return null;
+    }
+    if (!isFinite(amt) || amt <= 0) {
+      Alert.alert('Amount', 'Enter a positive number.');
+      return null;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      Alert.alert('Date', 'Use YYYY-MM-DD.');
+      return null;
+    }
+    return { amt };
   };
 
   const onSave = async () => {
-    const amt = Number(amount);
-    if (!accountId) return Alert.alert('Account', 'Choose an account');
-    if (!isFinite(amt) || amt <= 0) return Alert.alert('Amount', 'Enter a positive amount');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return Alert.alert('Date', 'Use YYYY-MM-DD');
-
+    const v = validate();
+    if (!v) return;
     const payload = {
       accountId: String(accountId),
       type,
-      amount: amt,
+      amount: v.amt,
       date,
-      category: category?.trim() || (type === 'expense' ? 'General' : 'Income'),
-      note: note?.trim(),
+      category: (category || (type === 'income' ? 'Income' : 'General')).trim(),
+      note: (note || '').trim(),
     };
-
     try {
-      if (mode === 'edit' && existing) {
-        await actions.updateTransaction({ ...payload, id: existing.id });
+      if (mode === 'edit' && editingTxn?.id) {
+        await actions.updateTransaction({ id: String(editingTxn.id), ...payload });
       } else {
         await actions.addTransaction(payload);
       }
       navigation.goBack();
     } catch (e) {
-      console.warn('[txnEditor] save failed', e);
+      console.warn('[txn] save failed', e);
       Alert.alert('Save failed', 'Please try again.');
     }
   };
 
-  const onDelete = async () => {
-    if (!(mode === 'edit' && existing)) return;
-    Alert.alert('Delete this transaction?', 'This cannot be undone.', [
+  const onDelete = () => {
+    if (!(mode === 'edit' && editingTxn?.id)) return;
+    Alert.alert('Delete transaction?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await actions.deleteTransaction(existing.id);
-        navigation.goBack();
-      }},
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await actions.deleteTransaction(String(editingTxn.id));
+            navigation.goBack();
+          } catch (e) {
+            console.warn('[txn] delete failed', e);
+            Alert.alert('Delete failed', 'Please try again.');
+          }
+        },
+      },
     ]);
   };
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>{mode === 'edit' ? 'Edit Transaction' : 'Add Transaction'}</Text>
+      <Text style={styles.h1}>{mode === 'edit' ? 'Edit Transaction' : 'New Transaction'}</Text>
+      <Text style={styles.subtle}>
+        {mode === 'edit' ? 'Update the details below' : 'Enter the details below'}
+      </Text>
 
-      {/* Type */}
-      <View style={styles.row}>
-        <Pressable style={[styles.pill, type==='expense' && styles.pillActive]} onPress={() => { setType('expense'); if(!category) setCategory('General'); }}>
-          <Text style={[styles.pillText, type==='expense' && styles.pillTextActive]}>Expense</Text>
+      <View style={styles.card}>
+        {/* Type toggle */}
+        <View style={[styles.row, { marginBottom: 8 }]}>
+          {['expense', 'income'].map((t) => (
+            <Pressable
+              key={t}
+              style={[styles.pill, type === t && styles.pillActive]}
+              onPress={() => {
+                setType(t);
+                if (!category) setCategory(t === 'income' ? 'Income' : 'General');
+              }}
+            >
+              <Text style={[styles.pillText, type === t && styles.pillTextActive]}>
+                {t[0].toUpperCase() + t.slice(1)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Account cycler */}
+        <Pressable style={styles.accountBtn} onPress={cycleAccount}>
+          <Text style={styles.accountBtnText}>
+            Account: {byAccount[accountId]?.name || '—'}
+          </Text>
         </Pressable>
-        <Pressable style={[styles.pill, type==='income' && styles.pillActive]} onPress={() => { setType('income'); if(!category) setCategory('Income'); }}>
-          <Text style={[styles.pillText, type==='income' && styles.pillTextActive]}>Income</Text>
-        </Pressable>
-      </View>
 
-      {/* Account cycler */}
-      <Pressable style={styles.accountBtn} onPress={cycleAccount}>
-        <Text style={styles.accountBtnText}>
-          Account: {accounts.find(a => String(a.id) === String(accountId))?.name || '—'}
-        </Text>
-      </Pressable>
+        {/* Amount */}
+        <TextInput
+          value={amount}
+          onChangeText={setAmount}
+          placeholder="Amount (e.g., 19.99)"
+          placeholderTextColor="#6B7280"
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
 
-      {/* Amount */}
-      <TextInput
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="decimal-pad"
-        placeholder="Amount"
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
+        {/* Date */}
+        <TextInput
+          value={date}
+          onChangeText={setDate}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor="#6B7280"
+          style={styles.input}
+        />
 
-      {/* Date */}
-      <TextInput
-        value={date}
-        onChangeText={setDate}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
+        {/* Category */}
+        <TextInput
+          value={category}
+          onChangeText={setCategory}
+          placeholder={type === 'income' ? 'Category (e.g., Salary)' : 'Category (e.g., Groceries)'}
+          placeholderTextColor="#6B7280"
+          style={styles.input}
+        />
 
-      {/* Category / Note */}
-      <TextInput
-        value={category}
-        onChangeText={setCategory}
-        placeholder={type==='expense' ? 'Category (e.g., Groceries)' : 'Category (e.g., Salary)'}
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder="Note (optional)"
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
+        {/* Note */}
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="Note (optional)"
+          placeholderTextColor="#6B7280"
+          style={styles.input}
+        />
 
-      {/* Actions */}
-      <View style={[styles.row, { marginTop: 8 }]}>
-        {mode === 'edit' && (
-          <Pressable style={[styles.btnDanger, { marginRight: 8 }]} onPress={onDelete}>
-            <Text style={styles.btnText}>Delete</Text>
+        {/* Actions */}
+        <View style={[styles.row, { marginTop: 12 }]}>
+          {mode === 'edit' && (
+            <Pressable style={[styles.btn, styles.btnDanger, { marginRight: 8 }]} onPress={onDelete}>
+              <Text style={styles.btnText}>Delete</Text>
+            </Pressable>
+          )}
+          <Pressable style={[styles.btn, styles.btnSave]} onPress={onSave}>
+            <Text style={styles.btnText}>{mode === 'edit' ? 'Save' : 'Add'}</Text>
+          </Pressable>
+        </View>
+
+        {/* Create recurring from this (inline style to avoid style key issues) */}
+        {mode === 'edit' && editingTxn?.id && (
+          <Pressable
+            style={{
+              backgroundColor: '#1F2937',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 8,
+            }}
+            onPress={() => {
+              const source = {
+                accountId,
+                type,
+                amount,
+                category,
+                note,
+              };
+              navigation.navigate('Recurring', {
+                preset: {
+                  accountId: String(source.accountId),
+                  type: source.type,
+                  amount: String(source.amount),
+                  category: source.category || (source.type === 'income' ? 'Income' : 'General'),
+                  note: source.note || '',
+                },
+                focus: 'NEW',
+              });
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Create recurring from this</Text>
           </Pressable>
         )}
-        <Pressable style={styles.btnSave} onPress={onSave}>
-          <Text style={styles.btnText}>{mode === 'edit' ? 'Save' : 'Add'}</Text>
-        </Pressable>
       </View>
-
-      {/* Preview */}
-      <View style={[styles.card, { marginTop: 12 }]}>
-        <Text style={styles.preview}>
-          {type === 'expense' ? '-' : '+'}{money(Number(amount || 0), prefs)} • {category || '—'} • {date}
-        </Text>
-      </View>
-      // after your Save/Delete buttons
-      <Pressable
-        style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-        onPress={async () => {
-          // assumes you have `txn` in scope (the current transaction being edited or created)
-          const source = txn; // or build from your form state
-          if (!source?.id) return;
-          // Prefill RecurringScreen form with tx data
-        navigation.navigate('Recurring', {
-            preset: {
-              accountId: String(txn.accountId),
-              type: txn.type,
-              amount: String(txn.amount),
-              category: txn.category,
-              note: txn.note,
-            },
-            focus: 'NEW',
-          });
-
-        }}
-      >
-        <Text style={styles.btnText}>Create recurring from this</Text>
-      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 16, paddingTop: Platform.OS === 'ios' ? 44 : 16 },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 8 },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  pill: { backgroundColor: '#1F2937', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, marginRight: 8 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+  },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  subtle: { color: '#9CA3AF' },
+
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+  },
+
+  row: { flexDirection: 'row', alignItems: 'center' },
+
+  input: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+  },
+
+  pill: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginRight: 8,
+  },
   pillActive: { backgroundColor: '#2563EB' },
   pillText: { color: '#fff', fontWeight: '700' },
   pillTextActive: { color: '#fff' },
-  accountBtn: { backgroundColor: '#1F2937', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10, marginBottom: 8 },
-  accountBtnText: { color: '#fff', fontWeight: '700' },
-  input: { backgroundColor: '#0F172A', color: '#fff', borderColor: '#1F2937', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 8 },
-  btn: {  paddingVertical: 12,  paddingHorizontal: 16,  borderRadius: 10,  alignItems: 'center',  justifyContent: 'center',},
-  btnGhost: { backgroundColor: '#1F2937' },  // dark neutral (matches your theme)
-  btnText: { color: '#fff', fontWeight: '700' },
-  btnSave: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnDanger: { backgroundColor: '#7F1D1D', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '700' },
-  card: { backgroundColor: '#111827', borderRadius: 12, padding: 12 },
-  preview: { color: '#E5E7EB', fontWeight: '700' },
-  
 
+  accountBtn: {
+    backgroundColor: '#1F2937',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  accountBtnText: { color: '#fff', fontWeight: '700' },
+
+  btn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnSave: { backgroundColor: '#2563EB' },
+  btnDanger: { backgroundColor: '#7F1D1D' },
+  btnText: { color: '#fff', fontWeight: '700' },
 });
