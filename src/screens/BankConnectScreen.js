@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform }
 import { useApp } from '../state/AppState';
 import * as PlaidSDK from 'react-native-plaid-link-sdk'; // import namespace to detect available exports
 
-const BACKEND = 'http://YOUR-LAN-IP:4000'; // change to your LAN IP
+const BACKEND = 'http://192.168.178.94'; // change to your LAN IP
 
 export default function BankConnectScreen({ navigation }) {
   const { state, actions } = useApp();
