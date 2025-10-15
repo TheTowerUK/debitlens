@@ -14,7 +14,6 @@ import * as FileSystem from 'expo-file-system/legacy'; // use legacy to avoid SD
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../state/AppState';
-import * as Sharing from 'expo-sharing';
 import { CSV_TEMPLATE } from '../utils/csvTemplate';
 import { money } from '../utils/money';
 
