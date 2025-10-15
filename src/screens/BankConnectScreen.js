@@ -1,20 +1,20 @@
 // src/screens/BankConnectScreen.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform } from 'react-native';
-import { usePlaidLink } from 'react-native-plaid-link-sdk';
 import { useApp } from '../state/AppState';
-import * as Plaid from 'react-native-plaid-link-sdk';
-console.log('[Plaid keys]', Object.keys(Plaid)); // should include usePlaidLink or PlaidLink
+import * as PlaidSDK from 'react-native-plaid-link-sdk'; // import namespace to detect available exports
 
-const BACKEND = 'http://192.168.178.94:4000'; // e.g., http://192.168.1.23:4000;
+const BACKEND = 'http://YOUR-LAN-IP:4000'; // change to your LAN IP
 
 export default function BankConnectScreen({ navigation }) {
   const { state, actions } = useApp();
-  const prefs = state?.prefs || {};
   const accounts = state?.accounts || [];
 
   const [linkToken, setLinkToken] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const hasHook = typeof PlaidSDK.usePlaidLink === 'function';
+  const hasComponent = typeof PlaidSDK.PlaidLink !== 'undefined';
 
   const fetchLinkToken = async () => {
     try {
@@ -35,92 +35,106 @@ export default function BankConnectScreen({ navigation }) {
     fetchLinkToken();
   }, []);
 
-  const { open, ready } = usePlaidLink({
-    token: linkToken || '',
-    onSuccess: async (success) => {
-      try {
-        setBusy(true);
-        const pub = success?.publicToken;
-        const r = await fetch(`${BACKEND}/api/exchange_public_token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ public_token: pub }),
-        });
-        const j = await r.json();
-        if (!j.ok) throw new Error('exchange failed');
+  // Shared success handler
+  const onSuccess = async (publicToken) => {
+    try {
+      setBusy(true);
+      const r = await fetch(`${BACKEND}/api/exchange_public_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_token: publicToken }),
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error('exchange failed');
 
-        // Now pull transactions from backend and merge locally
-        const syncRes = await fetch(`${BACKEND}/api/transactions/sync`);
-        const data = await syncRes.json();
+      const syncRes = await fetch(`${BACKEND}/api/transactions/sync`);
+      const data = await syncRes.json();
 
-        // Map provider accounts to local accounts (by name). Create missing ones.
-        const byName = {};
-        for (const a of accounts) byName[String(a.name).toLowerCase()] = String(a.id);
+      // Map accounts & import
+      const byName = {};
+      for (const a of accounts) byName[String(a.name).toLowerCase()] = String(a.id);
 
-        for (const t of data.transactions || []) {
-          // resolve accountId
-          const key = String(t.accountName || 'Bank').toLowerCase();
-          let accountId = byName[key];
-          if (!accountId) {
-            const created = await actions.addAccount(t.accountName || 'Bank', 'current');
-            accountId = String(created.id);
-            byName[key] = accountId;
-          }
-
-          // dedupe: skip if we already imported this providerId
-          const already = (state.transactions || []).some(x => x.note?.includes(t.providerId));
-          if (already) continue;
-
-          await actions.addTransaction({
-            accountId,
-            type: t.type,
-            amount: t.amount,
-            date: t.date,
-            category: t.category || (t.type === 'income' ? 'Income' : 'General'),
-            // keep providerId in note for simple dedupe; in prod, keep a separate field
-            note: (t.note ? `${t.note} · ` : '') + `(${t.providerId})`,
-          });
+      for (const t of data.transactions || []) {
+        const key = String(t.accountName || 'Bank').toLowerCase();
+        let accountId = byName[key];
+        if (!accountId) {
+          const created = await actions.addAccount(t.accountName || 'Bank', 'current');
+          accountId = String(created.id);
+          byName[key] = accountId;
         }
+        // naive dedupe using providerId in note
+        const already = (state.transactions || []).some(x => x.note?.includes(t.providerId));
+        if (already) continue;
 
-        Alert.alert('Linked!', 'Bank connected and transactions synced.');
-        navigation.goBack();
-      } catch (e) {
-        console.warn('exchange/sync failed', e);
-        Alert.alert('Sync failed', 'Please try again.');
-      } finally {
-        setBusy(false);
+        await actions.addTransaction({
+          accountId,
+          type: t.type,
+          amount: t.amount,
+          date: t.date,
+          category: t.category || (t.type === 'income' ? 'Income' : 'General'),
+          note: (t.note ? `${t.note} · ` : '') + `(${t.providerId})`,
+        });
       }
-    },
-    onExit: (exit) => {
-      console.log('Link exit', exit);
-    },
-  });
+      Alert.alert('Linked!', 'Bank connected and transactions synced.');
+      navigation.goBack();
+    } catch (e) {
+      console.warn('exchange/sync failed', e);
+      Alert.alert('Sync failed', 'Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Hook-based flow (preferred on v12+)
+  const linkProps = useMemo(() => ({
+    token: linkToken || '',
+    onSuccess: (success) => onSuccess(success.publicToken),
+    onExit: (exit) => console.log('Link exit', exit),
+  }), [linkToken]);
+
+  const hook = hasHook ? PlaidSDK.usePlaidLink(linkProps) : null;
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Connect a bank</Text>
-      <Text style={styles.subtle}>Use Plaid to securely link your bank and import transactions.</Text>
+      <Text style={styles.subtle}>Plaid Link requires a development build (not Expo Go).</Text>
 
       <View style={styles.card}>
-        <Pressable
-          style={[styles.btn, (!ready || !linkToken || busy) ? styles.btnDisabled : styles.btnSave]}
-          disabled={!ready || !linkToken || busy}
-          onPress={() => open()}
-        >
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Open Plaid Link</Text>}
-        </Pressable>
+        {/* Hook path */}
+        {hasHook && (
+          <Pressable
+            style={[styles.btn, (!hook?.ready || !linkToken || busy) ? styles.btnDisabled : styles.btnSave]}
+            disabled={!hook?.ready || !linkToken || busy}
+            onPress={() => hook.open()}
+          >
+            {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Open Plaid Link</Text>}
+          </Pressable>
+        )}
 
-        <Pressable
-          style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-          onPress={fetchLinkToken}
-        >
+        {/* Component path (fallback) */}
+        {!hasHook && hasComponent && linkToken && (
+          <PlaidSDK.PlaidLink
+            tokenConfig={{ token: linkToken }}
+            onSuccess={(success) => onSuccess(success.publicToken)}
+            onExit={(exit) => console.log('Link exit', exit)}
+          >
+            <View style={[styles.btn, styles.btnSave]}>
+              <Text style={styles.btnText}>Open Plaid Link</Text>
+            </View>
+          </PlaidSDK.PlaidLink>
+        )}
+
+        {/* If neither API is present, you’re in Expo Go or the SDK didn’t link */}
+        {!hasHook && !hasComponent && (
+          <View style={[styles.btn, styles.btnDisabled]}>
+            <Text style={styles.btnText}>Plaid SDK not available (Use dev build)</Text>
+          </View>
+        )}
+
+        <Pressable style={[styles.btn, styles.btnGhost, { marginTop: 8 }]} onPress={fetchLinkToken}>
           <Text style={styles.btnText}>Refresh Link Token</Text>
         </Pressable>
       </View>
-
-      <Text style={[styles.subtle, { marginTop: 8 }]}>
-        Requires a development build (not Expo Go).
-      </Text>
     </View>
   );
 }
@@ -134,7 +148,6 @@ const styles = StyleSheet.create({
   },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
   subtle: { color: '#9CA3AF' },
-
   card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginTop: 12 },
 
   btn: {
