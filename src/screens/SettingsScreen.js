@@ -198,10 +198,6 @@ export default function SettingsScreen({ navigation }) {
         <Text style={styles.btnText}>Import transactions (CSV)</Text>
       </Pressable>
 
-      <Pressable style={[styles.btn, styles.btnSave]} onPress={() => navigation.navigate('BankConnect')}>
-        <Text style={styles.btnText}>Connect a bank (beta)</Text>
-      </Pressable>
-
       {/* Backup / Restore */}
       <View style={styles.card}>
         <Text style={styles.label}>Backup & Restore</Text>

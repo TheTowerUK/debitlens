@@ -20,7 +20,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import RecurringScreen from './src/screens/RecurringScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
-import BankConnectScreen from './src/screens/BankConnectScreen';
+
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
