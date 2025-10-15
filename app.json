@@ -1,18 +1,15 @@
 {
   "expo": {
-    "name": "base44-app",
-    "slug": "base44-app",
+    "name": "DebitLens",
+    "slug": "debitlens",
+    "ios": { "bundleIdentifier": "com.debitlens.app" },
+    "android": { "package": "com.debitlens.app" },
     "plugins": [
       "expo-notifications",
       "expo-secure-store"
     ],
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
-    "android": {
-      "package": "com.thetower.base44app"
-    }
+    "platforms": ["ios", "android", "web"],
+    "scheme": "debitlens"
   }
 }
+
