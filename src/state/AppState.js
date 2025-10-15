@@ -6,8 +6,8 @@ import * as SecureStore from 'expo-secure-store';
 // ------------------------------
 // Small helpers
 // ------------------------------
-const STORAGE_KEY = 'base44_app_state_v1';
-const PIN_KEY = 'base44_app_pin_v1';
+const STORAGE_KEY = 'DebitLens_app_state_v1';
+const PIN_KEY = 'DebitLens_app_pin_v1';
 
 const genId = (p) => `${p}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 const asId = (x) => String(x ?? '');

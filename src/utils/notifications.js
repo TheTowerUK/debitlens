@@ -58,7 +58,7 @@ function parseTimeHHMM(hhmm, fallback = { hour: 9, minute: 0 }) {
 }
 
 /** Schedules a local notification soon (for testing) */
-export async function scheduleTestNotification({ title = 'Test', body = 'Hello from Base44', seconds = 3 } = {}) {
+export async function scheduleTestNotification({ title = 'Test', body = 'Hello from DebitLens', seconds = 3 } = {}) {
   const ok = await ensurePermissions();
   if (!ok) throw new Error('Notification permissions not granted');
   return Notifications.scheduleNotificationAsync({
@@ -76,7 +76,7 @@ export async function scheduleDailySummary(timeHHMM = '09:00') {
   return Notifications.scheduleNotificationAsync({
     content: {
       title: 'Daily cashflow',
-      body: 'Open Base44 for today’s balance & transactions.',
+      body: 'Open DebitLens for today’s balance & transactions.',
     },
     trigger: { hour, minute, repeats: true, channelId: ANDROID_CHANNEL_ID },
   });

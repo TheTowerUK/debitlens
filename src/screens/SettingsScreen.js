@@ -53,7 +53,7 @@ export default function SettingsScreen({ navigation }) {
     try {
       // Export the *current state object* (what we persist)
       const data = JSON.stringify(state, null, 2);
-      const name = `base44-backup-${new Date().toISOString().slice(0,10)}.json`;
+      const name = `DebitLens-backup-${new Date().toISOString().slice(0,10)}.json`;
       const uri = `${FileSystem.cacheDirectory}${name}`;
 
       await FileSystem.writeAsStringAsync(uri, data, { encoding: FileSystem.EncodingType.UTF8 });

@@ -20,12 +20,12 @@ async function scheduleDailyLocal(timeHHMM) {
   // Cancel previous schedules we manage
   const all = await Notifications.getAllScheduledNotificationsAsync();
   for (const n of all) {
-    if (n.identifier?.startsWith?.('base44_daily_')) {
+    if (n.identifier?.startsWith?.('DebitLens_daily_')) {
       await Notifications.cancelScheduledNotificationAsync(n.identifier);
     }
   }
   await Notifications.scheduleNotificationAsync({
-    identifier: `base44_daily_${hh}_${mm}`,
+    identifier: `DebitLens_daily_${hh}_${mm}`,
     content: {
       title: 'Daily budget check',
       body: 'Tap to review budgets and alerts.',
@@ -35,7 +35,7 @@ async function scheduleDailyLocal(timeHHMM) {
       hour: hh,
       minute: mm,
       repeats: true,
-      channelId: Platform.OS === 'android' ? 'base44-default' : undefined,
+      channelId: Platform.OS === 'android' ? 'DebitLens-default' : undefined,
     },
   });
 }
@@ -50,8 +50,8 @@ export default function NotificationBootstrapper() {
     // We still skip any channel setup on web.
     (async () => {
       if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('base44-default', {
-          name: 'Base44',
+        await Notifications.setNotificationChannelAsync('DebitLens-default', {
+          name: 'DebitLens',
           importance: Notifications.AndroidImportance.DEFAULT,
         });
       }
