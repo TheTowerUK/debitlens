@@ -208,10 +208,6 @@ export default function SettingsScreen({ navigation }) {
         </Pressable>
       </View>
 
-      <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => navigation.navigate('ImportCsv')}>
-        <Text style={styles.btnText}>Import transactions (CSV)</Text>
-      </Pressable>
-
       <Pressable style={[styles.btn, styles.btnSave]} onPress={() => navigation.navigate('ImportCSV')}>
         <Text style={styles.btnText}>Import from CSV</Text>
       </Pressable>
