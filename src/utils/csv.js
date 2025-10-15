@@ -71,3 +71,19 @@ export function toISODate(s) {
   }
   return '';
 }
+
+export function rowHash(obj) {
+  // stable hash based on key fields
+  const base = [
+    obj.date || '',
+    obj.amount != null ? Number(obj.amount).toFixed(2) : '',
+    obj.type || '',
+    (obj.accountName || obj.accountId || ''),
+    (obj.category || ''),
+    (obj.note || '')
+  ].join('|');
+  let h = 0;
+  for (let i = 0; i < base.length; i++) h = ((h << 5) - h) + base.charCodeAt(i) | 0;
+  return String(h);
+}
+

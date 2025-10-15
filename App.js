@@ -53,6 +53,7 @@ export default function App() {
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
           <Stack.Screen name="ImportCsv" component={ImportCsvScreen} options={{ title: 'Import CSV' }} />
           <Stack.Screen name="BankConnect" component={BankConnectScreen} options={{ title: 'Bank Connect' }} />
+          <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title: 'Import CSV' }} />
           
         </Stack.Navigator>
       </NavigationContainer>

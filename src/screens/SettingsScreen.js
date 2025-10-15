@@ -14,6 +14,9 @@ import * as FileSystem from 'expo-file-system/legacy'; // use legacy to avoid SD
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../state/AppState';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { CSV_TEMPLATE } from '../utils/csvTemplate';
 import { money } from '../utils/money';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'JPY', 'AUD', 'CAD', 'NZD', 'INR'];
@@ -22,6 +25,17 @@ const SYMBOLS = {
   AUD: 'A$', CAD: 'C$', NZD: 'NZ$', INR: '₹',
 };
 const symFor = (code) => SYMBOLS[code] || code;
+
+const exportTemplate = async () => {
+  try {
+    const path = FileSystem.cacheDirectory + 'debitlens_template.csv';
+    await FileSystem.writeAsStringAsync(path, CSV_TEMPLATE, { encoding: FileSystem.EncodingType.UTF8 });
+    await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'CSV template' });
+  } catch (e) {
+    console.warn('[template] export failed', e);
+    alert('Could not export template.');
+  }
+};
 
 export default function SettingsScreen({ navigation }) {
   const { state, actions } = useApp();
@@ -197,6 +211,15 @@ export default function SettingsScreen({ navigation }) {
       <Pressable style={[styles.btn, styles.btnGhost]} onPress={() => navigation.navigate('ImportCsv')}>
         <Text style={styles.btnText}>Import transactions (CSV)</Text>
       </Pressable>
+
+      <Pressable style={[styles.btn, styles.btnSave]} onPress={() => navigation.navigate('ImportCSV')}>
+        <Text style={styles.btnText}>Import from CSV</Text>
+      </Pressable>
+
+
+      <Pressable style={[styles.btn, styles.btnGhost]} onPress={exportTemplate}>
+         <Text style={styles.btnText}>Export CSV template</Text>
+      </Pressable>  
 
       {/* Backup / Restore */}
       <View style={styles.card}>

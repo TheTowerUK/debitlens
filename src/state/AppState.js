@@ -120,6 +120,7 @@ function reducer(state, action) {
       return { ...state, transactions: (state.transactions || []).filter((x) => asId(x.id) !== id) };
     }
 
+ 
     // Budgets
     case 'SET_BUDGETS': {
       const list = (action.payload || []).map((b) => ({ ...b, id: asId(b.id) }));
