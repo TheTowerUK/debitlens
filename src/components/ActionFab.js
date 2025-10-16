@@ -10,6 +10,11 @@ import {
   Platform,
 } from 'react-native';
 
+<Text style={styles.menuText}>
+  {typeof it.label === 'string' ? it.label : String(it.label)}
+</Text>
+
+
 export default function ActionFab({
   items = [],
   footer,                 // { label, onPress }
@@ -195,3 +200,7 @@ const styles = StyleSheet.create({
   },
   fabPlus: { color: '#fff', fontSize: 36, marginTop: Platform.OS === 'ios' ? -2 : -1 },
 });
+
+<Text style={[styles.menuText, styles.menuTextDim]}>
+  {typeof footer.label === 'string' ? footer.label : String(footer.label)}
+</Text>
