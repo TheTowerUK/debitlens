@@ -138,12 +138,12 @@ export default function SettingsScreen({ navigation }) {
         <Pressable style={[styles.btn, styles.btnGhost, { marginTop: 8 }]} onPress={exportTemplate}>
           <Text style={styles.btnText}>Export CSV template</Text>
         </Pressable>
+console.log('routes:', navigation.getState()?.routeNames);
 
         <Pressable
           style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
           onPress={() => navigation.navigate('ImportCSV')}
-        >
-          <Text style={styles.btnText}>Import from CSV</Text>
+        ><Text style={styles.btnText}>Import from CSV</Text>
         </Pressable>
       </View>
 
