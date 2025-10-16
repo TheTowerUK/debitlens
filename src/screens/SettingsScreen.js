@@ -4,139 +4,102 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
   Pressable,
-  Switch,
   Alert,
   Platform,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system/legacy'; // use legacy to avoid SDK 54 deprecation warning
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../state/AppState';
-import { CSV_TEMPLATE } from '../utils/csvTemplate';
-import { money } from '../utils/money';
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'JPY', 'AUD', 'CAD', 'NZD', 'INR'];
-const SYMBOLS = {
-  GBP: '£', USD: '$', EUR: '€', JPY: '¥',
-  AUD: 'A$', CAD: 'C$', NZD: 'NZ$', INR: '₹',
-};
-const symFor = (code) => SYMBOLS[code] || code;
 
-const exportTemplate = async () => {
-  try {
-    const path = FileSystem.cacheDirectory + 'debitlens_template.csv';
-    await FileSystem.writeAsStringAsync(path, CSV_TEMPLATE, { encoding: FileSystem.EncodingType.UTF8 });
-    await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: 'CSV template' });
-  } catch (e) {
-    console.warn('[template] export failed', e);
-    alert('Could not export template.');
-  }
-};
+// Simple CSV template users can download
+const CSV_TEMPLATE = `date,amount,type,account,category,note
+2025-10-01,12.50,expense,Main,Groceries,Milk & bread
+2025-10-03,2500,income,Main,Salary,October
+`;
 
 export default function SettingsScreen({ navigation }) {
   const { state, actions } = useApp();
+  const prefs = state?.prefs || {};
+  const [busy, setBusy] = useState(false);
 
-  // prefs -> local form
-  const base = state?.prefs || {};
-  const [currency, setCurrency] = useState(base.currency || 'GBP');
-  const [currencySymbol, setCurrencySymbol] = useState(base.currencySymbol || symFor(currency));
-  const [rollover, setRollover] = useState(!!base.budgetRollover);
+  const currency = prefs.currency || 'GBP';
+  const totals = useMemo(() => {
+    const txns = state?.transactions || [];
+    const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const expense = txns.filter(t => t.type !== 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    return { income, expense, net: income - expense };
+  }, [state?.transactions]);
 
-  // quick preview using current prefs
-  const preview = useMemo(() => money(1234.56, { currency, currencySymbol }), [currency, currencySymbol]);
-
-  const onSavePrefs = async () => {
+  const setCurrency = async (code) => {
     try {
-      await actions.updatePrefs({
-        currency,
-        currencySymbol: currencySymbol || symFor(currency),
-        budgetRollover: !!rollover,
-      });
-      Alert.alert('Saved', 'Preferences updated.');
+      await actions.setPrefs({ ...(state?.prefs || {}), currency: code });
+      Alert.alert('Currency updated', `Currency set to ${code}.`);
     } catch (e) {
-      console.warn('[settings] save prefs failed', e);
-      Alert.alert('Save failed', 'Please try again.');
+      console.warn('[settings] set currency failed', e);
+      Alert.alert('Error', 'Could not update currency.');
     }
   };
 
-  const onExport = async () => {
+  const exportData = async () => {
     try {
-      // Export the *current state object* (what we persist)
-      const data = JSON.stringify(state, null, 2);
-      const name = `DebitLens-backup-${new Date().toISOString().slice(0,10)}.json`;
-      const uri = `${FileSystem.cacheDirectory}${name}`;
-
-      await FileSystem.writeAsStringAsync(uri, data, { encoding: FileSystem.EncodingType.UTF8 });
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/json', dialogTitle: 'Share backup JSON' });
-      } else {
-        Alert.alert('Exported', `Saved to: ${uri}`);
-      }
+      setBusy(true);
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+        prefs: state?.prefs || {},
+        accounts: state?.accounts || [],
+        transactions: state?.transactions || [],
+        budgets: state?.budgets || [],
+        recurring: state?.recurring || [],
+      };
+      const path = FileSystem.cacheDirectory + 'debitlens_export.json';
+      await FileSystem.writeAsStringAsync(path, JSON.stringify(payload, null, 2), {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      await Sharing.shareAsync(path, {
+        mimeType: 'application/json',
+        dialogTitle: 'Export data',
+      });
     } catch (e) {
       console.warn('[settings] export failed', e);
-      Alert.alert('Export failed', 'Could not create the backup file.');
+      Alert.alert('Export failed', 'Could not export your data.');
+    } finally {
+      setBusy(false);
     }
   };
 
-  const onImport = async () => {
+  const exportTemplate = async () => {
     try {
-      const picked = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
-        multiple: false,
-        copyToCacheDirectory: true,
+      const path = FileSystem.cacheDirectory + 'debitlens_template.csv';
+      await FileSystem.writeAsStringAsync(path, CSV_TEMPLATE, {
+        encoding: FileSystem.EncodingType.UTF8,
       });
-      if (picked.canceled) return;
-
-      const asset = picked.assets?.[0];
-      if (!asset?.uri) return;
-
-      const raw = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.UTF8 });
-      const parsed = JSON.parse(raw);
-
-      // Very light validation
-      const nextAccounts = Array.isArray(parsed.accounts) ? parsed.accounts : [];
-      const nextTxns     = Array.isArray(parsed.transactions) ? parsed.transactions : [];
-      const nextBudgets  = Array.isArray(parsed.budgets) ? parsed.budgets : [];
-      const nextRecur    = Array.isArray(parsed.recurring) ? parsed.recurring : [];
-      const nextPrefs    = typeof parsed.prefs === 'object' && parsed.prefs ? parsed.prefs : {};
-
-      // Apply via actions (each action persists)
-      await actions.setAccounts(nextAccounts);
-      await actions.setTransactions(nextTxns);
-      await actions.setBudgets(nextBudgets);
-      await actions.setRecurring(nextRecur);
-      await actions.updatePrefs(nextPrefs);
-
-      Alert.alert('Imported', 'Backup restored successfully.');
-      navigation.navigate('Dashboard');
+      await Sharing.shareAsync(path, {
+        mimeType: 'text/csv',
+        dialogTitle: 'CSV template',
+      });
     } catch (e) {
-      console.warn('[settings] import failed', e);
-      Alert.alert('Import failed', 'Ensure the file is a valid backup JSON.');
+      console.warn('[settings] template export failed', e);
+      Alert.alert('Error', 'Could not export the template.');
     }
   };
 
-  const onReset = async () => {
-    Alert.alert('Reset all data?', 'This will clear your accounts, transactions, budgets and prefs back to demo defaults.', [
+  const clearAll = async () => {
+    Alert.alert('Reset app?', 'This will remove all accounts, transactions, budgets and schedules on this device.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Reset',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
-            // Minimal reset: set empty arrays + basic prefs; app seeds a default account/txn on next launch if needed
-            await actions.setAccounts([]);
-            await actions.setTransactions([]);
-            await actions.setBudgets([]);
-            await actions.setRecurring([]);
-            await actions.updatePrefs({ currency: 'GBP', currencySymbol: '£', budgetRollover: true });
-            Alert.alert('Reset complete', 'Data cleared to defaults.');
-            navigation.navigate('Dashboard');
+            await actions.resetAll();
+            Alert.alert('Done', 'All local data was cleared.');
           } catch (e) {
             console.warn('[settings] reset failed', e);
-            Alert.alert('Reset failed', 'Please try again.');
+            Alert.alert('Error', 'Could not clear data.');
           }
         },
       },
@@ -146,89 +109,63 @@ export default function SettingsScreen({ navigation }) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Settings</Text>
-      <Text style={styles.subtle}>App preferences, backup & restore</Text>
+      <Text style={styles.subtle}>App preferences & data tools</Text>
 
       {/* Currency */}
       <View style={styles.card}>
-        <Text style={styles.label}>Currency</Text>
-        <View style={[styles.row, { flexWrap: 'wrap', marginTop: 6, marginRight: -8, marginBottom: -8 }]}>
-          {CURRENCIES.map((code) => (
+        <Text style={styles.sectionTitle}>Currency</Text>
+        <View style={styles.rowWrap}>
+          {CURRENCIES.map(code => (
             <Pressable
               key={code}
-              style={[styles.pill, currency === code && styles.pillActive, { marginRight: 8, marginBottom: 8 }]}
-              onPress={() => {
-                setCurrency(code);
-                if (!currencySymbol || currencySymbol === symFor(currency)) {
-                  setCurrencySymbol(symFor(code));
-                }
-              }}
+              onPress={() => setCurrency(code)}
+              style={[styles.pill, currency === code && styles.pillActive]}
             >
-              <Text style={[styles.pillText, currency === code && styles.pillTextActive]}>
-                {code} ({symFor(code)})
-              </Text>
+              <Text style={[styles.pillText, currency === code && styles.pillTextActive]}>{code}</Text>
             </Pressable>
           ))}
         </View>
-
-        <Text style={[styles.subtle, { marginTop: 10 }]}>Symbol override</Text>
-        <TextInput
-          value={currencySymbol}
-          onChangeText={setCurrencySymbol}
-          placeholder={symFor(currency)}
-          placeholderTextColor="#6B7280"
-          style={[styles.input, { marginTop: 6 }]}
-        />
-
-        <Text style={[styles.subtle, { marginTop: 10 }]}>Preview</Text>
-        <Text style={styles.preview}>{preview}</Text>
       </View>
 
-      {/* Rollover */}
+      {/* Data tools */}
       <View style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.label}>Rollover unused budget</Text>
-          <Switch
-            value={rollover}
-            onValueChange={setRollover}
-            trackColor={{ false: '#374151', true: '#2563EB' }}
-            thumbColor="#fff"
-          />
-        </View>
-        <Text style={[styles.subtle, { marginTop: 6 }]}>
-          When enabled, any remaining amount from last month’s budget is added to this month.
+        <Text style={styles.sectionTitle}>Data</Text>
+
+        <Pressable style={[styles.btn, styles.btnSave]} onPress={exportData} disabled={busy}>
+          <Text style={styles.btnText}>{busy ? 'Working…' : 'Export data (JSON)'}</Text>
+        </Pressable>
+
+        <Pressable style={[styles.btn, styles.btnGhost, { marginTop: 8 }]} onPress={exportTemplate}>
+          <Text style={styles.btnText}>Export CSV template</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
+          onPress={() => navigation.navigate('ImportCSV')}
+        >
+          <Text style={styles.btnText}>Import from CSV</Text>
+        </Pressable>
+      </View>
+
+      {/* Totals (read-only) */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Overview</Text>
+        <Text style={styles.kv}>Transactions: <Text style={styles.kvValue}>{(state?.transactions || []).length}</Text></Text>
+        <Text style={styles.kv}>Accounts: <Text style={styles.kvValue}>{(state?.accounts || []).length}</Text></Text>
+        <Text style={styles.kv}>Income (sum): <Text style={[styles.kvValue, styles.green]}>{totals.income.toFixed(2)}</Text></Text>
+        <Text style={styles.kv}>Expense (sum): <Text style={[styles.kvValue, styles.red]}>{totals.expense.toFixed(2)}</Text></Text>
+        <Text style={styles.kv}>Net: <Text style={[styles.kvValue, totals.net >= 0 ? styles.green : styles.red]}>{totals.net.toFixed(2)}</Text></Text>
+      </View>
+
+      {/* Danger */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Danger zone</Text>
+        <Pressable style={[styles.btn, styles.btnDanger]} onPress={clearAll}>
+          <Text style={styles.btnText}>Clear all local data</Text>
+        </Pressable>
+        <Text style={[styles.subtle, { marginTop: 8 }]}>
+          This removes data only on this device. It cannot be undone.
         </Text>
-      </View>
-
-      {/* Save prefs */}
-      <View style={styles.row} >
-        <Pressable style={[styles.btn, styles.btnSave]} onPress={onSavePrefs}>
-          <Text style={styles.btnText}>Save Preferences</Text>
-        </Pressable>
-      </View>
-
-      <Pressable style={[styles.btn, styles.btnSave]} onPress={() => navigation.navigate('ImportCSV')}>
-        <Text style={styles.btnText}>Import from CSV</Text>
-      </Pressable>
-
-
-      <Pressable style={[styles.btn, styles.btnGhost]} onPress={exportTemplate}>
-         <Text style={styles.btnText}>Export CSV template</Text>
-      </Pressable>  
-
-      {/* Backup / Restore */}
-      <View style={styles.card}>
-        <Text style={styles.label}>Backup & Restore</Text>
-        <View style={[styles.row, { marginTop: 8 }]}>
-          <Pressable style={[styles.btn, styles.btnGhost, { marginRight: 8 }]} onPress={onExport}>
-            <Text style={styles.btnText}>Export backup (JSON)</Text>
-          </Pressable>
-          <Pressable style={[styles.btn, styles.btnGhost]} onPress={onImport}>
-            <Text style={styles.btnText}>Import backup (JSON)</Text>
-          </Pressable>
-        </View>
-        <Pressable style={[styles.btn, styles.btnDanger, { marginTop: 10 }]} onPress={onReset}>
-          <Text style={styles.btnText}>Reset demo data</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -243,33 +180,19 @@ const styles = StyleSheet.create({
   },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
   subtle: { color: '#9CA3AF' },
-  label: { color: '#E5E7EB', fontWeight: '800' },
-  preview: { color: '#E5E7EB', fontWeight: '800', marginTop: 4 },
 
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
-  },
+  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginTop: 12 },
 
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
 
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-  },
-
+  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', marginRight: -8, marginBottom: -8 },
   pill: {
     backgroundColor: '#1F2937',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
+    marginRight: 8,
+    marginBottom: 8,
   },
   pillActive: { backgroundColor: '#2563EB' },
   pillText: { color: '#E5E7EB', fontWeight: '700' },
@@ -277,7 +200,7 @@ const styles = StyleSheet.create({
 
   btn: {
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -286,4 +209,9 @@ const styles = StyleSheet.create({
   btnGhost: { backgroundColor: '#1F2937' },
   btnDanger: { backgroundColor: '#7F1D1D' },
   btnText: { color: '#fff', fontWeight: '700' },
+
+  kv: { color: '#9CA3AF', marginTop: 4 },
+  kvValue: { color: '#E5E7EB', fontWeight: '700' },
+  red: { color: '#F87171' },
+  green: { color: '#34D399' },
 });
