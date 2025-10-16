@@ -20,6 +20,11 @@ const CSV_TEMPLATE = `date,amount,type,account,category,note
 2025-10-03,2500,income,Main,Salary,October
 `;
 
+useEffect(() => {
+  console.log('routes:', navigation.getState()?.routeNames);
+}, [navigation]);
+
+
 export default function SettingsScreen({ navigation }) {
   const { state, actions } = useApp();
   const prefs = state?.prefs || {};
@@ -106,6 +111,7 @@ export default function SettingsScreen({ navigation }) {
     ]);
   };
 
+  
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Settings</Text>
@@ -138,7 +144,6 @@ export default function SettingsScreen({ navigation }) {
         <Pressable style={[styles.btn, styles.btnGhost, { marginTop: 8 }]} onPress={exportTemplate}>
           <Text style={styles.btnText}>Export CSV template</Text>
         </Pressable>
-console.log('routes:', navigation.getState()?.routeNames);
 
         <Pressable
           style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
