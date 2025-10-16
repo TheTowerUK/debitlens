@@ -136,16 +136,16 @@ export default function DashboardScreen({ navigation }) {
 
       {/* Floating menu (replaces the quick actions + old add FAB) */}
       <ActionFab
-        items={[
-          { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
-          { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
-          { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Report') },
-          { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
-          { key: 'settings', label: 'Settings', onPress: () => navigation.navigate('Settings') },
-          { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
-          { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
-        ]}
-      />
+  items={[
+    { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
+    { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
+    { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Report') },
+    { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
+    { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
+    { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
+  ]}
+  footer={{ label: 'Settings', onPress: () => navigation.navigate('Settings') }}
+/>
     </View>
   );
 }
