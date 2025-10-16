@@ -1,5 +1,5 @@
 // src/screens/SettingsScreen.js
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,11 +25,21 @@ export default function SettingsScreen({ navigation }) {
   const prefs = state?.prefs || {};
   const [busy, setBusy] = useState(false);
 
+  // If you still want to inspect routes, do it here (NOT inside JSX)
+  useEffect(() => {
+    // console.log('routes:', navigation.getState()?.routeNames);
+  }, [navigation]);
+
   const currency = prefs.currency || 'GBP';
+
   const totals = useMemo(() => {
     const txns = state?.transactions || [];
-    const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-    const expense = txns.filter(t => t.type !== 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const income = txns
+      .filter(t => t.type === 'income')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
+    const expense = txns
+      .filter(t => t.type !== 'income')
+      .reduce((s, t) => s + Number(t.amount || 0), 0);
     return { income, expense, net: income - expense };
   }, [state?.transactions]);
 
@@ -106,10 +116,6 @@ export default function SettingsScreen({ navigation }) {
     ]);
   };
 
-  useEffect(() => {
-  console.log('routes:', navigation.getState()?.routeNames);
-}, [navigation]);
-
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Settings</Text>
@@ -146,7 +152,8 @@ export default function SettingsScreen({ navigation }) {
         <Pressable
           style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
           onPress={() => navigation.navigate('ImportCSV')}
-        ><Text style={styles.btnText}>Import from CSV</Text>
+        >
+          <Text style={styles.btnText}>Import from CSV</Text>
         </Pressable>
       </View>
 
