@@ -24,6 +24,7 @@ import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import { runMigrations } from './src/db/migrate';
+import ReportEditorScreen from './src/screens/ReportEditorScreen';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
@@ -67,6 +68,7 @@ export default function App() {
           <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title: 'Import CSV' }} />
           <Stack.Screen name="Reports" component={ReportListScreen} />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+          <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
