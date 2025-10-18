@@ -26,6 +26,7 @@ import ReportDetailScreen from './src/screens/ReportDetailScreen';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
+console.log('has openDatabase?', typeof SQLite.openDatabase); // should be "function"
 
 export default function App() {
   // Tiny SQLite sanity check: create a table, insert one row, read it back
