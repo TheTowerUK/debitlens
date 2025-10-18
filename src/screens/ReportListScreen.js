@@ -17,9 +17,13 @@ export default function ReportListScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, padding: 16 }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+      {/* Top bar with title + New */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <Text style={{ fontWeight: '700', fontSize: 18 }}>Reports</Text>
-        <Pressable onPress={() => navigation.navigate('ReportEditor')} style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}>
+        <Pressable
+          onPress={() => navigation.navigate('ReportEditor')}
+          style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+        >
           <Text>New</Text>
         </Pressable>
       </View>
