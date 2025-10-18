@@ -27,7 +27,6 @@ import { runMigrations } from './src/db/migrate';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
-console.log('has openDatabase?', typeof SQLite.openDatabase); // should be "function"
 
 export default function App() {
   React.useEffect(() => {
