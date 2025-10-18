@@ -2,14 +2,22 @@
   "expo": {
     "name": "DebitLens",
     "slug": "debitlens",
-    "ios": { "bundleIdentifier": "com.debitlens.app" },
-    "android": { "package": "com.debitlens.app" },
+    "ios": {
+      "bundleIdentifier": "com.debitlens.app"
+    },
+    "android": {
+      "package": "com.debitlens.app"
+    },
     "plugins": [
       "expo-notifications",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-sqlite"
     ],
-    "platforms": ["ios", "android", "web"],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
     "scheme": "debitlens"
   }
 }
-
