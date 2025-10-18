@@ -23,14 +23,14 @@ import RecurringScreen from './src/screens/RecurringScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
+import { runMigrations } from './src/db/migrate';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
 console.log('has openDatabase?', typeof SQLite.openDatabase); // should be "function"
 
 export default function App() {
-  // Tiny SQLite sanity check: create a table, insert one row, read it back
-React.useEffect(() => {
+  React.useEffect(() => {
     (async () => {
       try {
         await runMigrations();
