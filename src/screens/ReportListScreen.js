@@ -2,7 +2,6 @@
 import React from 'react';
 import { View, FlatList, Pressable, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { listReports } from '../services/reporting';
 import { Alert } from 'react-native';
 import { listReports, deleteReport } from '../services/reporting';
 
