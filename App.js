@@ -16,7 +16,6 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import TxnEditorScreen from './src/screens/TxnEditorScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
-import ReportScreen from './src/screens/ReportScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
@@ -61,7 +60,6 @@ export default function App() {
           <Stack.Screen name="Account" component={AccountScreen} options={withBack} />
           <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
           <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
-          <Stack.Screen name="Report" component={ReportScreen} options={withBack} />
           <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
           <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
