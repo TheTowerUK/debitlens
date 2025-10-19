@@ -1,3 +1,4 @@
+// src/screens/ReportListScreen.js
 import React from 'react';
 import { View, FlatList, Pressable, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -24,6 +25,18 @@ export default function ReportListScreen({ navigation }) {
     }, [])
   );
 
+  const Empty = () => (
+    <View style={{ padding: 16 }}>
+      <Text style={{ marginBottom: 12 }}>No reports yet</Text>
+      <Pressable
+        onPress={() => navigation.navigate('ReportEditor')}
+        style={{ paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderRadius: 10, alignSelf: 'flex-start' }}
+      >
+        <Text>Create first report</Text>
+      </Pressable>
+    </View>
+  );
+
   return (
     <View style={{ flex: 1 }}>
       <FlatList
@@ -32,7 +45,7 @@ export default function ReportListScreen({ navigation }) {
         refreshing={refreshing}
         onRefresh={load}
         contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-        ListEmptyComponent={<Text>No reports yet</Text>}
+        ListEmptyComponent={<Empty />}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate('ReportDetail', { id: item.id })}
