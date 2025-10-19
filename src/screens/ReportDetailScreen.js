@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import { getReport, getSpendOverTime, getByCategory } from '../services/reporting';
 import { toCSV } from '../utils/csv';
 import LineChart from '../components/LineChart';
+import { getReport, getSpendOverTime, getByCategory, deleteReport } from '../services/reporting';
 
 export default function ReportDetailScreen({ route }) {
   const { id } = route.params;
@@ -28,6 +29,28 @@ export default function ReportDetailScreen({ route }) {
       }
     })();
   }, [id]);
+
+  React.useLayoutEffect(() => {
+  navigation.setOptions({
+    headerRight: () => (
+      <Pressable
+        onPress={() =>
+          Alert.alert('Delete report', `Delete “${title}”?`, [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: async () => {
+                await deleteReport(id);
+                navigation.goBack();
+              } 
+            },
+          ])
+        }
+        style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, marginRight: 8 }}
+      >
+        <Text>Delete</Text>
+      </Pressable>
+    ),
+  });
+}, [navigation, id, title]);
 
   const exportCSV = async () => {
     try {

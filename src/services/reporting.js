@@ -30,6 +30,12 @@ function paramsForFilter(f = {}) {
   return { where: where.length ? `WHERE ${where.join(' AND ')}` : '', args };
 }
 
+// ---------- Delete Function ---------
+export async function deleteReport(id) {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM reports WHERE id = ?', id);
+}
+
 // ---------- CRUD ----------
 export async function saveReport(r) {
   const db = await getDb();

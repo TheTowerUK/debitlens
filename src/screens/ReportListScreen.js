@@ -3,6 +3,8 @@ import React from 'react';
 import { View, FlatList, Pressable, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { listReports } from '../services/reporting';
+import { Alert } from 'react-native';
+import { listReports, deleteReport } from '../services/reporting';
 
 export default function ReportListScreen({ navigation }) {
   const [items, setItems] = React.useState([]);
@@ -50,6 +52,21 @@ export default function ReportListScreen({ navigation }) {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate('ReportDetail', { id: item.id })}
+            onLongPress={() => {
+              Alert.alert(
+                'Delete report',
+                `Delete “${item.name}”?`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: async () => {
+                      await deleteReport(item.id);
+                      const r = await listReports();
+                      setItems(r);
+                    } 
+                  },
+                ]
+              );
+            }}
             style={{ padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 12 }}
           >
             <Text style={{ fontWeight: '600' }}>{item.name}</Text>
