@@ -1,7 +1,7 @@
 // src/screens/ReportListScreen.js
 import React from 'react';
 import { View, FlatList, Pressable, Text } from 'react-native';
-import { useFocusEffect, useLayoutEffect } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native'; // ⬅️ remove useLayoutEffect here
 import { listReports } from '../services/reporting';
 
 export default function ReportListScreen({ navigation }) {
@@ -9,7 +9,7 @@ export default function ReportListScreen({ navigation }) {
   const [refreshing, setRefreshing] = React.useState(false);
 
   // Header: Income + New
-  useLayoutEffect(() => {
+  React.useLayoutEffect(() => { // ⬅️ use React.useLayoutEffect
     navigation.setOptions({
       title: 'Reports',
       headerRight: () => (
