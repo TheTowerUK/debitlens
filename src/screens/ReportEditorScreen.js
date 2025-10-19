@@ -15,24 +15,24 @@ export default function ReportEditorScreen({ navigation }) {
   const [dateFrom, setDateFrom] = React.useState(ninetyAgo);
   const [dateTo, setDateTo] = React.useState(today);
 
-  const save = async () => {
-    try {
-      if (!name.trim()) return Alert.alert('Name required');
-      const r = {
-        id: genId(),
-        name,
-        type,
-        params: { dateFrom, dateTo, accountIds: [], categoryIds: [] },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      await saveReport(r);
-      Alert.alert('Saved', 'Report created');
-      navigation.replace('Reports'); // go back to list
-    } catch (e) {
-      Alert.alert('Save failed', String(e?.message || e));
-    }
-  };
+const save = async () => {
+  try {
+    if (!name.trim()) return Alert.alert('Name required');
+    const r = {
+      id: `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`,
+      name,
+      type,
+      params: { dateFrom, dateTo, accountIds: [], categoryIds: [] },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await saveReport(r);
+    Alert.alert('Saved', 'Report created');
+    navigation.goBack(); // 👈 ensures Reports regains focus and reloads
+  } catch (e) {
+    Alert.alert('Save failed', String(e?.message || e));
+  }
+};
 
   return (
     <View style={{ flex: 1, padding: 16, gap: 12 }}>
