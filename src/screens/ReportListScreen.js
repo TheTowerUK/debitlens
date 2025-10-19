@@ -7,17 +7,29 @@ import { listReports } from '../services/reporting';
 export default function ReportListScreen({ navigation }) {
   const [items, setItems] = React.useState([]);
 
+  // Header with Income + New buttons, side-by-side
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          onPress={() => navigation.navigate('ReportEditor')}
-          style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, marginRight: 8 }}
-        >
-          <Text>New</Text>
-        </Pressable>
-      ),
       title: 'Reports',
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', gap: 8, marginRight: 8 }}>
+          {/* Income button (wire to whatever your app expects) */}
+          <Pressable
+            onPress={() => navigation.navigate('TxnEditor', { mode: 'income' })}
+            style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+          >
+            <Text>Income</Text>
+          </Pressable>
+
+          {/* New report button */}
+          <Pressable
+            onPress={() => navigation.navigate('ReportEditor')}
+            style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+          >
+            <Text>New</Text>
+          </Pressable>
+        </View>
+      ),
     });
   }, [navigation]);
 
@@ -44,6 +56,7 @@ export default function ReportListScreen({ navigation }) {
             <Text>{item.type}</Text>
           </Pressable>
         )}
+        contentContainerStyle={{ paddingBottom: 24 }}
       />
     </View>
   );

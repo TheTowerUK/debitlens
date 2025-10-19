@@ -46,32 +46,37 @@ export default function ReportDetailScreen({ route }) {
 
   const isTimeSeries = type === 'spend_over_time';
 
-  return (
-    <ScrollView contentContainerStyle={{ padding: 16 }}>
-      <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8 }}>{title}</Text>
+// src/screens/ReportDetailScreen.js (only the return block shown)
+return (
+  <ScrollView
+    style={{ flex: 1 }}
+    contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+  >
+    <Text style={{ fontWeight: '700', fontSize: 18, marginBottom: 8 }}>{title}</Text>
 
-      {isTimeSeries ? (
-        <LineChart data={dataset} />
-      ) : (
-        <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
-          {dataset.map((d, i) => (
-            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
-              <Text>{d.categoryId || 'Uncategorised'}</Text>
-              <Text>£{Number(d.spend || 0).toFixed(2)}</Text>
-            </View>
-          ))}
-          {!dataset.length && <Text>No data</Text>}
-        </View>
-      )}
-
-      <Pressable onPress={exportCSV} style={{ marginTop: 12, padding: 12, borderWidth: 1, borderRadius: 10, alignItems: 'center' }}>
-        <Text>Export CSV</Text>
-      </Pressable>
-
-      {/* Debug view */}
-      <View style={{ marginTop: 16 }}>
-        {dataset.map((d, i) => <Text key={i}>{JSON.stringify(d)}</Text>)}
+    {isTimeSeries ? (
+      <LineChart data={dataset} />
+    ) : (
+      <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
+        {dataset.map((d, i) => (
+          <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 }}>
+            <Text>{d.categoryId || 'Uncategorised'}</Text>
+            <Text>£{Number(d.spend || 0).toFixed(2)}</Text>
+          </View>
+        ))}
+        {!dataset.length && <Text>No data</Text>}
       </View>
-    </ScrollView>
-  );
+    )}
+
+    <Pressable onPress={exportCSV} style={{ marginTop: 12, padding: 12, borderWidth: 1, borderRadius: 10, alignItems: 'center' }}>
+      <Text>Export CSV</Text>
+    </Pressable>
+
+    {/* Debug list */}
+    <View style={{ marginTop: 16 }}>
+      {dataset.map((d, i) => <Text key={i}>{JSON.stringify(d)}</Text>)}
+    </View>
+  </ScrollView>
+);
+
 }
