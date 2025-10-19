@@ -1,5 +1,6 @@
 // App.js
 import React from 'react';
+import { View, Text, Pressable } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -25,7 +26,6 @@ import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import { runMigrations } from './src/db/migrate';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
-import { View, Text, Pressable } from 'react-native';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
@@ -90,6 +90,7 @@ export default function App() {
               ),
             })}
           />
+
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
           <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
         </Stack.Navigator>

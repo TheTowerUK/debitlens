@@ -9,12 +9,8 @@ export default function ReportListScreen({ navigation }) {
 
   const load = React.useCallback(async () => {
     setRefreshing(true);
-    try {
-      const r = await listReports();
-      setItems(r);
-    } finally {
-      setRefreshing(false);
-    }
+    try { setItems(await listReports()); }
+    finally { setRefreshing(false); }
   }, []);
 
   useFocusEffect(
