@@ -139,7 +139,7 @@ export default function DashboardScreen({ navigation }) {
   items={[
     { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
     { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
-    { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Report') },
+    { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Reports') },
     { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
     { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
     { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
