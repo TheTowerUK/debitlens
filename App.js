@@ -25,6 +25,7 @@ import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import { runMigrations } from './src/db/migrate';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
+import { View, Text, Pressable } from 'react-native';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitleVisible: false };
@@ -66,7 +67,29 @@ export default function App() {
           <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
           <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title: 'Import CSV' }} />
-          <Stack.Screen name="Reports" component={ReportListScreen} />
+          <Stack.Screen
+            name="Reports"
+            component={ReportListScreen}
+            options={({ navigation }) => ({
+              title: 'Reports',
+              headerRight: () => (
+                <View style={{ flexDirection: 'row', marginRight: 8 }}>
+                  <Pressable
+                    onPress={() => navigation.navigate('TxnEditor', { mode: 'income' })}
+                    style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, marginRight: 8 }}
+                  >
+                    <Text>Income</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => navigation.navigate('ReportEditor')}
+                    style={{ paddingVertical: 6, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10 }}
+                  >
+                    <Text>New</Text>
+                  </Pressable>
+                </View>
+              ),
+            })}
+          />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
           <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
         </Stack.Navigator>
