@@ -4,6 +4,10 @@ import { View, FlatList, Pressable, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native'; // ⬅️ remove useLayoutEffect here
 import { listReports } from '../services/reporting';
 
+React.useLayoutEffect(() => {
+  navigation.setOptions({ title: 'Reports (NEW)' });
+}, [navigation]);
+
 export default function ReportListScreen({ navigation }) {
   const [items, setItems] = React.useState([]);
   const [refreshing, setRefreshing] = React.useState(false);
