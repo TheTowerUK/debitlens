@@ -44,7 +44,8 @@ export default function ReportListScreen({ navigation }) {
         keyExtractor={(r) => r.id}
         refreshing={refreshing}
         onRefresh={load}
-        contentContainerStyle={{ padding: 16, paddingBottom: 80 }} {/* extra space for FAB */}
+        // extra space for FAB:
+        contentContainerStyle={{ padding: 16, paddingBottom: 80 /* extra space for FAB */ }}
         ListEmptyComponent={<Empty />}
         renderItem={({ item }) => (
           <Pressable
@@ -67,7 +68,7 @@ export default function ReportListScreen({ navigation }) {
           position: 'absolute', right: 16, bottom: 16,
           paddingVertical: 12, paddingHorizontal: 16,
           borderRadius: 9999, borderWidth: 1,
-          backgroundColor: '#111', // tweak to your theme
+          backgroundColor: '#111',
         }}
       >
         <Text style={{ color: '#fff', fontWeight: '600' }}>+ New</Text>
