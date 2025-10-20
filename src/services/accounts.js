@@ -40,8 +40,4 @@ export async function getAccount(accountId) {
     UNASSIGNED_ID, accountId
   );
 
-/** (Optional) get one account by id */
-export async function getAccount(accountId) {
-  const db = await getDb();
-  return await db.getFirstAsync('SELECT * FROM accounts WHERE id = ?', accountId);
-}
+
