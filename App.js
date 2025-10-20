@@ -4,6 +4,9 @@ import { View, ActivityIndicator } from 'react-native';
 import { installGlobalHandlers } from './src/debug/installGlobalHandlers';
 import HealthCheckScreen from './src/screens/HealthCheckScreen';
 import { runMigrationsSafe } from './src/db/migrate';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 
 // call as early as possible
 installGlobalHandlers();
