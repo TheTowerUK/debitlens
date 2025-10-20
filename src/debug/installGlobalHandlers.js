@@ -1,29 +1,34 @@
 // src/debug/installGlobalHandlers.js
 export function installGlobalHandlers() {
-  // Global JS errors
-  if (global.ErrorUtils && !global.__GLOBAL_HANDLER_SET__) {
-    const prev = global.ErrorUtils.getGlobalHandler && global.ErrorUtils.getGlobalHandler();
-    global.ErrorUtils.setGlobalHandler((error, isFatal) => {
-      try {
-        console.log('[GlobalError]', isFatal ? '(FATAL)' : '', String(error && error.stack || error));
-      } catch {}
-      if (prev) try { prev(error, isFatal); } catch {}
-    });
-    global.__GLOBAL_HANDLER_SET__ = true;
-  }
+  // Catch *all* JS errors before RN turns them into a native fatal
+  try {
+    if (global.ErrorUtils && !global.__GLOBAL_HANDLER_SET__) {
+      const prev =
+        global.ErrorUtils.getGlobalHandler &&
+        global.ErrorUtils.getGlobalHandler();
 
-  // Unhandled promise rejections
-  if (!global.__PROMISE_REJECTION_SET__) {
-    const tracking = require('promise/setimmediate/rejection-tracking');
-    tracking.enable({
-      allRejections: true,
-      onUnhandled: (id, error) => {
-        console.log('[UnhandledPromiseRejection]', id, String(error && error.stack || error));
-      },
-      onHandled: (id) => {
-        console.log('[RejectionHandled]', id);
-      }
-    });
-    global.__PROMISE_REJECTION_SET__ = true;
-  }
+      global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+        const msg =
+          (error && (error.stack || error.message)) || String(error);
+        // Log to Metro so we see the *real* cause
+        console.log('[GlobalError]', isFatal ? '(FATAL)' : '', msg);
+        if (prev) {
+          try { prev(error, isFatal); } catch {}
+        }
+      });
+      global.__GLOBAL_HANDLER_SET__ = true;
+    }
+  } catch {}
+
+  // Best-effort unhandled promise rejection logging (RN environment varies)
+  try {
+    if (typeof global.onunhandledrejection === 'undefined') {
+      global.onunhandledrejection = (event) => {
+        const err = event?.reason || event;
+        const msg = (err && (err.stack || err.message)) || String(err);
+        console.log('[UnhandledPromiseRejection]', msg);
+      };
+    }
+  } catch {}
 }
+
