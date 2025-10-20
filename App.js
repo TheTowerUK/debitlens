@@ -27,11 +27,18 @@ function Second() { return <View style={{ flex:1, alignItems:'center', justifyCo
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen name="Home" component={Home} />
-        <Stack.Screen name="Second" component={Second} />
-        <Stack.Screen name="Dashboard" getComponent={() => require('./src/screens/DashboardScreen').default} />
-
+      <Stack.Navigator initialRouteName="Dashboard">
+        <Stack.Screen
+          name="Dashboard"
+          options={{ title: 'Dashboard' }}
+          getComponent={() => require('./src/screens/DashboardScreen').default}
+        />
+        {/* keep your other routes here, lazily if you like */}
+        <Stack.Screen
+          name="Reports"
+          getComponent={() => require('./src/screens/ReportListScreen').default}
+        />
+        {/* ... */}
       </Stack.Navigator>
     </NavigationContainer>
   );
