@@ -24,6 +24,39 @@ import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import { runMigrations } from './src/db/migrate';
+
+import { getDb } from './src/db/db';
+
+React.useEffect(() => {
+  (async () => {
+    try {
+      await runMigrations();
+      console.log('DB migrations complete');
+
+      const db = await getDb();
+      const tables = await db.getAllAsync(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+      );
+      console.log('DB tables:', tables.map(t => t.name));
+
+      // Optional: confirm critical tables
+      const check = async (name) => {
+        const r = await db.getAllAsync(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+          name
+        );
+        console.log(`Table ${name} present?`, r.length > 0);
+      };
+      await check('reports');
+      await check('accounts');
+      await check('transactions'); // this must already exist in your app
+    } catch (e) {
+      console.warn('DB startup error', e);
+    }
+  })();
+}, []);
+
+
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
 
 const Stack = createNativeStackNavigator();

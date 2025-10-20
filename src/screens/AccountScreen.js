@@ -11,6 +11,16 @@ export default function AccountScreen({ route, navigation }) {
   const [account, setAccount] = React.useState(null);
   const [error, setError] = React.useState(null);
 
+  // at the top of AccountScreen component:
+const accountId = route?.params?.accountId;
+if (!accountId) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <Text>No account selected.</Text>
+    </View>
+  );
+}
+
   // Load account details
   const load = React.useCallback(async () => {
     setLoading(true);
