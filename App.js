@@ -11,8 +11,7 @@ import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
-
-//import AccountScreen from './src/screens/AccountScreen';
+import AccountScreen from './src/screens/AccountScreen';
 //import TxnEditorScreen from './src/screens/TxnEditorScreen';
 //import HistoryScreen from './src/screens/HistoryScreen';
 //import BudgetsScreen from './src/screens/BudgetsScreen';
@@ -51,6 +50,7 @@ export default function App() {
         <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
         <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
+        <Stack.Screen name="Account" component={AccountScreen} options={withBack} />
       </Stack.Navigator>
     </NavigationContainer>
   );
