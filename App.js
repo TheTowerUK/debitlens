@@ -13,7 +13,7 @@ import SplashAuthScreen from './src/screens/SplashAuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
 //import AccountScreen from './src/screens/AccountScreen';
 //import TxnEditorScreen from './src/screens/TxnEditorScreen';
-import HistoryScreen from './src/screens/HistoryScreen';
+//import HistoryScreen from './src/screens/HistoryScreen';
 //import BudgetsScreen from './src/screens/BudgetsScreen';
 //import SettingsScreen from './src/screens/SettingsScreen';
 //import NotificationsScreen from './src/screens/NotificationsScreen';
@@ -51,7 +51,7 @@ export default function App() {
         <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
        
-        <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
+
         
       </Stack.Navigator>
     </NavigationContainer>
