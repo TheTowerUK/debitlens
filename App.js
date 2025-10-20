@@ -23,7 +23,7 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import RecurringScreen from './src/screens/RecurringScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
-import { runMigrations } from './src/db/migrate';
+import { runMigrationsSafe } from './src/db/migrate';
 import { getDb } from './src/db/db';
 
 const Stack = createNativeStackNavigator();

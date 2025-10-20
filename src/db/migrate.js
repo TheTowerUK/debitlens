@@ -1,4 +1,5 @@
-// src/db/migrate.js
+// src/db/migrate.js (excerpt)
+import * as FileSystem from 'expo-file-system';
 import { getDb } from './db';
 import * as m003 from './migrations/003_reports';
 import * as m004 from './migrations/004_accounts';
@@ -8,38 +9,39 @@ const MIGRATIONS = [
   { id: m004.id, up: m004.up },
 ];
 
-// Split on semicolons but ignore blanks/comments
-function splitStatements(sql) {
-  return sql
-    .split(';')
-    .map(s => s.trim())
-    .filter(s => s && !s.startsWith('--'));
+async function resetDatabaseFile() {
+  const path = FileSystem.documentDirectory + 'SQLite/app.db';
+  await FileSystem.deleteAsync(path, { idempotent: true });
+  console.log('DB reset: deleted', path);
 }
 
-export async function runMigrations() {
-  const db = await getDb();
+export async function runMigrationsSafe() {
+  try {
+    await runMigrationsOnce();
+  } catch (e) {
+    console.warn('[DB] Migrations failed, resetting DB and retrying once…', e);
+    await resetDatabaseFile();
+    await runMigrationsOnce(); // retry on a clean file
+  }
+}
 
-  // Ensure migrations table
+async function runMigrationsOnce() {
+  const db = await getDb();
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS _migrations (
       id INTEGER PRIMARY KEY,
       applied_at TEXT NOT NULL
     );
   `);
+  const applied = new Set(
+    (await db.getAllAsync(`SELECT id FROM _migrations`)).map(r => r.id)
+  );
 
-  const appliedRows = await db.getAllAsync(`SELECT id FROM _migrations ORDER BY id ASC`);
-  const applied = new Set(appliedRows.map(r => r.id));
-
-  // Run each migration in its own transaction
   for (const m of MIGRATIONS) {
     if (applied.has(m.id)) continue;
-
-    console.log(`[DB] Running migration ${m.id}`);
+    await db.execAsync('BEGIN');
     try {
-      await db.execAsync('BEGIN');
-      const stmts = splitStatements(m.up);
-      for (const stmt of stmts) {
-        console.log(`[DB] SQL: ${stmt}`);
+      for (const stmt of m.up.split(';').map(s => s.trim()).filter(Boolean)) {
         await db.execAsync(stmt + ';');
       }
       await db.runAsync(
@@ -47,11 +49,9 @@ export async function runMigrations() {
         m.id
       );
       await db.execAsync('COMMIT');
-      console.log(`[DB] Migration ${m.id} OK`);
-    } catch (e) {
-      console.warn(`[DB] Migration ${m.id} FAILED`, e);
-      try { await db.execAsync('ROLLBACK'); } catch {}
-      throw e; // bubble up so we see it
+    } catch (err) {
+      await db.execAsync('ROLLBACK');
+      throw err;
     }
   }
 }
