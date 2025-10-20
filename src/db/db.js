@@ -1,13 +1,12 @@
 // src/db/db.js
 import { openDatabaseAsync } from 'expo-sqlite';
 
-let _db = null;
+const DB_NAME = 'app.v2.db'; // ← bump this to start fresh
 
-/** Get (and cache) a single DB handle using the modern async API */
+let _db = null;
 export async function getDb() {
   if (_db) return _db;
-  _db = await openDatabaseAsync('app.db');
-  // optional but safe
+  _db = await openDatabaseAsync(DB_NAME);
   await _db.execAsync('PRAGMA journal_mode = WAL;');
   return _db;
 }
