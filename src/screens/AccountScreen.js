@@ -4,8 +4,9 @@ import { View, Text, Pressable, Alert, ScrollView, ActivityIndicator } from 'rea
 import { deleteAccount, getAccount } from '../services/accounts';
 
 export default function AccountScreen({ route, navigation }) {
-    // at the top of AccountScreen component:
   const accountId = route?.params?.accountId;
+
+  // Guard: if we somehow navigated here without an id, show a friendly message
   if (!accountId) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
@@ -13,14 +14,13 @@ export default function AccountScreen({ route, navigation }) {
       </View>
     );
   }
-  
+
   const isUnassigned = accountId === 'unassigned';
 
   const [loading, setLoading] = React.useState(true);
   const [account, setAccount] = React.useState(null);
   const [error, setError] = React.useState(null);
 
-  // Load account details
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -35,13 +35,8 @@ export default function AccountScreen({ route, navigation }) {
   }, [accountId]);
 
   React.useEffect(() => {
-    if (!accountId) {
-      setError('No accountId provided');
-      setLoading(false);
-      return;
-    }
     load();
-  }, [accountId, load]);
+  }, [load]);
 
   // Header: Delete (hidden for Unassigned)
   React.useLayoutEffect(() => {
@@ -119,7 +114,10 @@ export default function AccountScreen({ route, navigation }) {
         <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 6 }}>Details</Text>
         <Row label="ID" value={account.id} />
         <Row label="Name" value={account.name} />
+        {'type' in account ? <Row label="Type" value={account.type || '—'} /> : null}
         {'archived' in account ? <Row label="Archived" value={account.archived ? 'Yes' : 'No'} /> : null}
+        {'created_at' in account ? <Row label="Created" value={account.created_at} /> : null}
+        {'updated_at' in account ? <Row label="Updated" value={account.updated_at} /> : null}
       </View>
 
       {/* Add more sections here (balances, recent transactions, etc.) */}
