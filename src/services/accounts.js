@@ -21,6 +21,15 @@ async function ensureUnassignedAccount(db) {
  */
 export async function deleteAccount(accountId) {
   const db = await getDb();
+  // reassign txns to 'unassigned' then delete
+  await db.runAsync('UPDATE transactions SET account_id = ? WHERE account_id = ?', 'unassigned', accountId);
+  await db.runAsync('DELETE FROM accounts WHERE id = ?', accountId);
+}
+
+export async function getAccount(accountId) {
+  const db = await getDb();
+  return await db.getFirstAsync('SELECT * FROM accounts WHERE id = ?', accountId);
+}
 
   // make sure fallback exists
   await ensureUnassignedAccount(db);
@@ -30,10 +39,6 @@ export async function deleteAccount(accountId) {
     'UPDATE transactions SET account_id = ? WHERE account_id = ?',
     UNASSIGNED_ID, accountId
   );
-
-  // delete the account itself
-  await db.runAsync('DELETE FROM accounts WHERE id = ?', accountId);
-}
 
 /** (Optional) get one account by id */
 export async function getAccount(accountId) {
