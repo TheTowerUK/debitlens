@@ -8,17 +8,17 @@ import AppProvider from './src/state/AppState';
 import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
-import SplashAuthScreen from './src/screens/SplashAuthScreen';
-import LoginScreen from './src/screens/LoginScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
-import AccountScreen from './src/screens/AccountScreen';
-import TxnEditorScreen from './src/screens/TxnEditorScreen';
-import HistoryScreen from './src/screens/HistoryScreen';
-import BudgetsScreen from './src/screens/BudgetsScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import NotificationsScreen from './src/screens/NotificationsScreen';
-import RecurringScreen from './src/screens/RecurringScreen';
-import ImportCsvScreen from './src/screens/ImportCsvScreen';
+//import SplashAuthScreen from './src/screens/SplashAuthScreen';
+//import LoginScreen from './src/screens/LoginScreen';
+//import DashboardScreen from './src/screens/DashboardScreen';
+//import AccountScreen from './src/screens/AccountScreen';
+//import TxnEditorScreen from './src/screens/TxnEditorScreen';
+//import HistoryScreen from './src/screens/HistoryScreen';
+//import BudgetsScreen from './src/screens/BudgetsScreen';
+//import SettingsScreen from './src/screens/SettingsScreen';
+//import NotificationsScreen from './src/screens/NotificationsScreen';
+//import RecurringScreen from './src/screens/RecurringScreen';
+//import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -47,17 +47,6 @@ export default function App() {
         <Stack.Screen name="Dashboard" getComponent={() => require('./src/screens/DashboardScreen').default} />
           
           <Stack.Screen name="Reports" component={ReportListScreen} />
-          <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
-          <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title:'Dashboard' }} />
-          <Stack.Screen name="Account" component={AccountScreen} options={withBack} />
-          <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
-          <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
-          <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
-          <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
-          <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
-          <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title:'Import CSV' }} />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
           <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
 
