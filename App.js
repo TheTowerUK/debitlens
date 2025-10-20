@@ -9,7 +9,7 @@ import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
-//import LoginScreen from './src/screens/LoginScreen';
+import LoginScreen from './src/screens/LoginScreen';
 //import DashboardScreen from './src/screens/DashboardScreen';
 //import AccountScreen from './src/screens/AccountScreen';
 //import TxnEditorScreen from './src/screens/TxnEditorScreen';
@@ -46,11 +46,11 @@ export default function App() {
         <Stack.Screen name="Second" component={Second} />
         <Stack.Screen name="Dashboard" getComponent={() => require('./src/screens/DashboardScreen').default} />
           
-          <Stack.Screen name="Reports" component={ReportListScreen} />
-          <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-          <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
-          <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
-
+        <Stack.Screen name="Reports" component={ReportListScreen} />
+        <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+        <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
+        <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
+        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
