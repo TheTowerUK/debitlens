@@ -5,12 +5,13 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
+import DashboardScreen from './src/screens/DashboardScreen';
 import ReportListScreen from './src/screens/ReportListScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import ReportEditorScreen from './src/screens/ReportEditorScreen';
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
-//import DashboardScreen from './src/screens/DashboardScreen';
+
 //import AccountScreen from './src/screens/AccountScreen';
 //import TxnEditorScreen from './src/screens/TxnEditorScreen';
 //import HistoryScreen from './src/screens/HistoryScreen';
@@ -45,7 +46,7 @@ export default function App() {
         <Stack.Screen name="Home" component={Home} />
         <Stack.Screen name="Second" component={Second} />
         <Stack.Screen name="Dashboard" getComponent={() => require('./src/screens/DashboardScreen').default} />
-          
+        <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title:'Dashboard' }} />        
         <Stack.Screen name="Reports" component={ReportListScreen} />
         <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
         <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
