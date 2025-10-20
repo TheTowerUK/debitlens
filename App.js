@@ -9,10 +9,16 @@ import AppProvider from './src/state/AppState';
 
 const Stack = createNativeStackNavigator();
 
-function Home({ navigation }) {
+function HomeTest({ navigation }) {
   return (
     <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-      <Text onPress={() => navigation.navigate('Second')}>Go to Second</Text>
+      <Text style={{ fontSize: 18, marginBottom: 16 }}>Isolation Start</Text>
+      <Text onPress={() => navigation.navigate('Second')} style={{ textDecorationLine: 'underline', marginBottom: 12 }}>
+        Go to Second
+      </Text>
+      <Text onPress={() => navigation.navigate('Dashboard')} style={{ textDecorationLine: 'underline' }}>
+        Go to Dashboard
+      </Text>
     </View>
   );
 }
