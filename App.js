@@ -50,7 +50,7 @@ export default function App() {
         <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
         <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
-        <Stack.Screen name="Account" component={AccountScreen} options={withBack} />
+       
         <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
         <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
         <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
