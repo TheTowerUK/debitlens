@@ -24,6 +24,8 @@ export default function App() {
       <Stack.Navigator>
         <Stack.Screen name="Home" component={Home} />
         <Stack.Screen name="Second" component={Second} />
+        <Stack.Screen name="Dashboard" getComponent={() => require('./src/screens/DashboardScreen').default} />
+
       </Stack.Navigator>
     </NavigationContainer>
   );
