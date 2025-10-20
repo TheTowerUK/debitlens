@@ -14,11 +14,11 @@ import LoginScreen from './src/screens/LoginScreen';
 //import AccountScreen from './src/screens/AccountScreen';
 //import TxnEditorScreen from './src/screens/TxnEditorScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
-import BudgetsScreen from './src/screens/BudgetsScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import NotificationsScreen from './src/screens/NotificationsScreen';
-import RecurringScreen from './src/screens/RecurringScreen';
-import ImportCsvScreen from './src/screens/ImportCsvScreen';
+//import BudgetsScreen from './src/screens/BudgetsScreen';
+//import SettingsScreen from './src/screens/SettingsScreen';
+//import NotificationsScreen from './src/screens/NotificationsScreen';
+//import RecurringScreen from './src/screens/RecurringScreen';
+//import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -52,11 +52,7 @@ export default function App() {
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
        
         <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
-        <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
-        <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
-        <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
-        <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
-        <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title:'Import CSV' }} />
+        
       </Stack.Navigator>
     </NavigationContainer>
   );
