@@ -15,7 +15,7 @@ export default function AccountScreen({ route, navigation }) {
     );
   }
 
-  const isUnassigned = accountId === 'unassigned';
+    const isUnassigned = accountId === 'unassigned';
 
   const [loading, setLoading] = React.useState(true);
   const [account, setAccount] = React.useState(null);

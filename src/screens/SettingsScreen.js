@@ -12,6 +12,10 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { useApp } from '../state/AppState';
 
+import { resetDatabase } from '../dev/resetDb';
+await resetDatabase();
+// then re-run runMigrations() or restart the app
+
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'JPY', 'AUD', 'CAD', 'NZD', 'INR'];
 
 // Simple CSV template users can download
