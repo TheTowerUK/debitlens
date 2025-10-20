@@ -1,27 +1,34 @@
-// App.js (only the relevant additions)
+// App.js (minimal sanity template)
+import 'react-native-gesture-handler'; // safe to keep even with native-stack
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
-import { installGlobalHandlers } from './src/debug/installGlobalHandlers';
-import HealthCheckScreen from './src/screens/HealthCheckScreen';
-import { runMigrationsSafe } from './src/db/migrate';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import AppProvider from './src/state/AppState';
 
-
-// call as early as possible
-installGlobalHandlers();
+// Quick test screens
+function Home({ navigation }) {
+  return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+      <Text onPress={() => navigation.navigate('Second')}>Go to Second</Text>
+    </View>
+  );
+}
+function Second() {
+  return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+      <Text>Second screen</Text>
+    </View>
+  );
+}
 
 const Stack = createNativeStackNavigator();
 
 export default function App() {
-  const [ready, setReady] = React.useState(false);
+  const [ready, setReady] = React.useState(true); // set true to bypass DB for this test
 
   React.useEffect(() => {
-    (async () => {
-      try { await runMigrationsSafe(); }
-      catch (e) { console.log('[Startup] migration error', e); }
-      finally { setReady(true); }
-    })();
+    console.log('has native stack?', typeof createNativeStackNavigator); // should be "function"
   }, []);
 
   if (!ready) {
@@ -33,32 +40,11 @@ export default function App() {
   }
 
   return (
-    <AppProvider>
-      <NotificationBootstrapper />
-      <RecurringBootstrapper />
-      <NavigationContainer>
-        <Stack.Navigator
-          initialRouteName="HealthCheck"
-          screenOptions={{ headerStyle:{ backgroundColor:'#0B0D13' }, headerTintColor:'#fff' }}
-        >
-          <Stack.Screen name="HealthCheck" component={HealthCheckScreen} />
-          {/* keep the rest of your screens below */}
-          <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
-          <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
-          <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title:'Dashboard' }} />
-          <Stack.Screen name="Account" component={AccountScreen} />
-          <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
-          <Stack.Screen name="History" component={HistoryScreen} />
-          <Stack.Screen name="Budgets" component={BudgetsScreen} />
-          <Stack.Screen name="Recurring" component={RecurringScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Notifications" component={NotificationsScreen} />
-          <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title:'Import CSV' }} />
-          <Stack.Screen name="Reports" component={ReportListScreen} />
-          <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-          <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AppProvider>
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="Home" component={Home} />
+        <Stack.Screen name="Second" component={Second} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
