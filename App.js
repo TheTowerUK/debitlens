@@ -19,7 +19,7 @@ export default function App() {
     <AppProvider>
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName={ReportListScreen}
+          initialRouteName={START_SCREEN}
           screenOptions={{ headerStyle: { backgroundColor: '#0B0D13' }, headerTintColor: '#fff' }}
         >
           {/* Register ONE screen first (lazy loaded to avoid import-time crashes) */}
@@ -31,7 +31,7 @@ export default function App() {
 
           {/* When Dashboard works, uncomment the next line, test, then continue incrementally */}
           <Stack.Screen
-            name="ReportListScreen"
+            name="Reports"
             options={{ title: 'Reports' }}
             getComponent={() => require('./src/screens/ReportListScreen').default}
           />
