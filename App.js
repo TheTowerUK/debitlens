@@ -43,7 +43,7 @@ export default function App() {
           />
 
           <Stack.Screen
-            name="Busget"
+            name="Budgets"
             options={{ title: 'Budgets' }}
             getComponent={() => require('./src/screens/BudgetsScreen').default}
           />
