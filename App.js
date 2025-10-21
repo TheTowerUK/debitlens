@@ -35,7 +35,12 @@ export default function App() {
             options={{ title: 'Reports' }}
             getComponent={() => require('./src/screens/ReportListScreen').default}
           />
-          <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
+          
+          <Stack.Screen
+            name="History"
+            options={{ title: 'Reports' }}
+            getComponent={() => require('./src/screens/HistoryScreen').default}
+          />
 
 
 
