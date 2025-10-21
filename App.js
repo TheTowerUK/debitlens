@@ -42,7 +42,11 @@ export default function App() {
             getComponent={() => require('./src/screens/HistoryScreen').default}
           />
 
-
+          <Stack.Screen
+            name="Busget"
+            options={{ title: 'Reports' }}
+            getComponent={() => require('./src/screens/BudgetScreen').default}
+          />
 
 
           {/* Example of a detail screen when you’re ready */}
