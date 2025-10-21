@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
 // ---- choose your first screen here ----
-const START_SCREEN = 'Notifications'; // change to 'Reports' or any route name below
+const START_SCREEN = 'Import'; // change to 'Reports' or any route name below
 // --------------------------------------
 
 const Stack = createNativeStackNavigator();
@@ -67,6 +67,12 @@ export default function App() {
             name="Notifications"
             options={{ title: 'Notifications' }}
             getComponent={() => require('./src/screens/NotificationsScreen').default}
+          />
+
+          <Stack.Screen
+            name="Import"
+            options={{ title: 'Import' }}
+            getComponent={() => require('./src/screens/ImportCsvScreen').default}
           />
 
           {/* Example of a detail screen when you’re ready */}
