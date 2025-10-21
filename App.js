@@ -9,7 +9,42 @@ import AppProvider from './src/state/AppState';
 const START_SCREEN = 'Account'// change to 'Reports' or any route name below
 // --------------------------------------
 
+
 const Stack = createNativeStackNavigator();
+
+const [ready, setReady] = React.useState(false);
+React.useEffect(() => {
+  (async () => {
+    try {
+      await runMigrations();
+      const db = await getDb();
+      const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
+      console.log('DB tables:', tables.map(t => t.name));
+    } catch (e) {
+      console.warn('DB startup error', e);
+    } finally {
+      setReady(true);
+    }
+  })();
+}, []);
+if (!ready) {
+    return (
+      <View style={{flex:1, alignItems:'center', justifyContent:'center'}}>
+        <ActivityIndicator size="large"/>
+        <Text style={{ color: '#9CA3AF' }}>Loading…</Text>
+      </View>
+    );
+  }
+
+// inside a useEffect in App.js or bootstrapper
+const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+  const screen = response.notification.request.content.data?.screen;
+  if (screen) {
+    // navigate to your Notifications screen
+    // e.g., navRef.current?.navigate(screen);
+  }
+});
+return () => sub.remove();
 
 // Optional: hide iOS back title (portable)
 const withBack = { headerBackTitle: '' };

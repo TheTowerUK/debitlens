@@ -1,6 +1,22 @@
 // src/state/AppState.js
 import React from 'react';
 
+const value = React.useMemo(() => ({
+  user: null,
+  state: {
+    prefs: {
+      notifications: {
+        enabled: false,   // you can toggle this later in Settings
+        dailyTime: '09:00'
+      }
+    }
+  },
+  actions: {
+    // stub so Settings/others can call later without crashing
+    setPrefs: async () => {}
+  }
+}), []);
+
 // context
 export const AppContext = React.createContext({});
 

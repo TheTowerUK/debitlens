@@ -3,7 +3,10 @@
     "name": "DebitLens",
     "slug": "debitlens",
     "ios": {
-      "bundleIdentifier": "com.debitlens.app"
+      "bundleIdentifier": "com.debitlens.app",
+      "infoPlist": {
+        "NSUserNotificationUsageDescription": "We use notifications to remind you about budgets and reports."
+      }
     },
     "android": {
       "package": "com.debitlens.app"
@@ -13,11 +16,7 @@
       "expo-secure-store",
       "expo-sqlite"
     ],
-    "platforms": [
-      "ios",
-      "android",
-      "web"
-    ],
+    "platforms": ["ios", "android", "web"],
     "scheme": "debitlens"
   }
 }
