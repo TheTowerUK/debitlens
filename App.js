@@ -24,25 +24,12 @@ import ReportEditorScreen from './src/screens/ReportEditorScreen';
 
 
 const Stack = createNativeStackNavigator();
-const withBack = { headerBackTitle: '' };
+//const withBack = { headerBackTitle: '' };
 
 export default function App() {
   const [ready, setReady] = React.useState(false);
 
-  React.useEffect(() => {
-    (async () => {
-      try {
-        await runMigrations(); // <- runMigrationsSafe alias
-        const db = await getDb();
-        const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
-        console.log('DB tables:', tables.map(t => t.name));
-      } catch (e) {
-        console.warn('DB startup error', e);
-      } finally {
-        setReady(true);
-      }
-    })();
-  }, []);
+
 
   if (!ready) {
     return (
