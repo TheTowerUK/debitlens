@@ -4,132 +4,74 @@ import { View, Text, Pressable, Alert, ScrollView, ActivityIndicator } from 'rea
 import { deleteAccount, getAccount } from '../services/accounts';
 
 export default function AccountScreen({ route, navigation }) {
+
   const accountId = route?.params?.accountId;
 
-  // Guard: if we somehow navigated here without an id, show a friendly message
-  if (!accountId) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-        <Text>No account selected.</Text>
-      </View>
-    );
-  }
-
-    const isUnassigned = accountId === 'unassigned';
-
-  const [loading, setLoading] = React.useState(true);
-  const [account, setAccount] = React.useState(null);
-  const [error, setError] = React.useState(null);
-
-  const load = React.useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const a = await getAccount(accountId);
-      setAccount(a || null);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }, [accountId]);
-
-  React.useEffect(() => {
-    load();
-  }, [load]);
-
-  // Header: Delete (hidden for Unassigned)
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      title: account?.name ? `Account: ${account.name}` : 'Account',
-      headerRight: isUnassigned
-        ? undefined
-        : () => (
-            <Pressable
-              onPress={() => {
-                Alert.alert(
-                  'Delete account',
-                  'This will reassign its transactions to “Unassigned”. Continue?',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete',
-                      style: 'destructive',
-                      onPress: async () => {
-                        try {
-                          await deleteAccount(accountId);
-                          navigation.navigate('Dashboard'); // or navigation.goBack()
-                        } catch (e) {
-                          Alert.alert('Delete failed', String(e?.message || e));
-                        }
-                      },
-                    },
-                  ]
-                );
-              }}
-              style={{
-                paddingVertical: 6,
-                paddingHorizontal: 12,
-                borderWidth: 1,
-                borderRadius: 10,
-                marginRight: 8,
-              }}
-            >
-              <Text>Delete</Text>
-            </Pressable>
-          ),
-    });
-  }, [navigation, accountId, isUnassigned, account?.name]);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={{ flex: 1, padding: 16 }}>
-        <Text style={{ color: '#DC2626', marginBottom: 8 }}>{error}</Text>
-        <Pressable onPress={load} style={{ padding: 10, borderWidth: 1, borderRadius: 10 }}>
-          <Text>Retry</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  if (!account) {
-    return (
-      <View style={{ flex: 1, padding: 16 }}>
-        <Text>Account not found.</Text>
-      </View>
-    );
-  }
-
+  // Guard missing id
+if (!accountId) {
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <View style={{ padding: 12, borderWidth: 1, borderRadius: 12 }}>
-        <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 6 }}>Details</Text>
-        <Row label="ID" value={account.id} />
-        <Row label="Name" value={account.name} />
-        {'type' in account ? <Row label="Type" value={account.type || '—'} /> : null}
-        {'archived' in account ? <Row label="Archived" value={account.archived ? 'Yes' : 'No'} /> : null}
-        {'created_at' in account ? <Row label="Created" value={account.created_at} /> : null}
-        {'updated_at' in account ? <Row label="Updated" value={account.updated_at} /> : null}
-      </View>
-
-      {/* Add more sections here (balances, recent transactions, etc.) */}
-    </ScrollView>
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+      <Text>No account selected.</Text>
+    </View>
   );
 }
 
-function Row({ label, value }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
-      <Text style={{ color: '#6B7280' }}>{label}</Text>
-      <Text>{String(value ?? '')}</Text>
-    </View>
-  );
+  const isUnassigned = accountId === 'unassigned';
+
+const [loading, setLoading] = React.useState(true);
+const [account, setAccount] = React.useState(null);
+const [error, setError] = React.useState(null);
+
+// Load details with try/catch
+const load = React.useCallback(async () => {
+  setLoading(true);
+  setError(null);
+  try {
+    const a = await getAccount(accountId);       // <-- your service call
+    setAccount(a || null);
+  } catch (e) {
+    console.warn('Account load error', e);
+    setError(String(e?.message || e));
+  } finally {
+    setLoading(false);
+  }
+}, [accountId]);
+
+React.useEffect(() => { load(); }, [load]);
+
+// Header (wrap in try, and only set if not unassigned)
+React.useLayoutEffect(() => {
+  try {
+    navigation.setOptions({
+      title: account?.name ? `Account: ${account.name}` : 'Account',
+      headerRight: isUnassigned ? undefined : () => (
+        <Pressable
+          onPress={() => {
+            Alert.alert(
+              'Delete account',
+              'This will reassign its transactions to “Unassigned”. Continue?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: async () => {
+                    try {
+                      await deleteAccount(accountId); // <-- your service call
+                      navigation.navigate('Dashboard');
+                    } catch (e) {
+                      Alert.alert('Delete failed', String(e?.message || e));
+                    }
+                  } 
+                },
+              ]
+            );
+          }}
+          style={{ paddingVertical:6, paddingHorizontal:12, borderWidth:1, borderRadius:10, marginRight:8 }}
+        >
+          <Text>Delete</Text>
+        </Pressable>
+      ),
+    });
+  } catch (e) {
+    console.warn('setOptions error', e);
+  }
+}, [navigation, accountId, isUnassigned, account?.name]);
 }
