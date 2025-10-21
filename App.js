@@ -10,7 +10,7 @@ import { getDb } from './src/db/db';
 import SplashAuthScreen from './src/screens/SplashAuthScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
-import AccountScreen from './src/screens/AccountScreen';
+//import AccountScreen from './src/screens/AccountScreen';
 import TxnEditorScreen from './src/screens/TxnEditorScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
@@ -65,8 +65,7 @@ export default function App() {
             <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
             <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title:'Dashboard' }} />
-            {/* Make Account lazy while stabilizing it */}
-            <Stack.Screen name="Account" options={withBack} getComponent={() => require('./src/screens/AccountScreen').default}/>
+            
             <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
             <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
             <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
