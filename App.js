@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
 // ---- choose your first screen here ----
-const START_SCREEN = 'Account`'// change to 'Reports' or any route name below
+const START_SCREEN = 'Account'// change to 'Reports' or any route name below
 // --------------------------------------
 
 const Stack = createNativeStackNavigator();
