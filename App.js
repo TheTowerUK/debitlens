@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
 // ---- choose your first screen here ----
-const START_SCREEN = 'Budgets'; // change to 'Reports' or any route name below
+const START_SCREEN = 'Recurring'; // change to 'Reports' or any route name below
 // --------------------------------------
 
 const Stack = createNativeStackNavigator();
@@ -48,6 +48,11 @@ export default function App() {
             getComponent={() => require('./src/screens/BudgetsScreen').default}
           />
 
+          <Stack.Screen
+            name="Recurring"
+            options={{ title: 'Recurring' }}
+            getComponent={() => require('./src/screens/RecurringScreen').default}
+          />
 
           {/* Example of a detail screen when you’re ready */}
           {/*
