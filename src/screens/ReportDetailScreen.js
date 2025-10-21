@@ -6,18 +6,19 @@ import * as Sharing from 'expo-sharing';
 import LineChart from '../components/LineChart';
 import { toCSV } from '../utils/csv';
 import {
-  getReport as fetchReport,           // <- alias to avoid any accidental name clash
+  getReport as fetchReport,
   getSpendOverTime,
   getByCategory,
   deleteReport,
 } from '../services/reporting';
 
 export default function ReportDetailScreen({ route, navigation }) {
-  const { id } = route?.params?.id;
+  // ✅ just read the value
+  const id = route?.params?.id;
 
   if (!id) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <Text>No report id provided.</Text>
       </View>
     );
@@ -27,22 +28,29 @@ export default function ReportDetailScreen({ route, navigation }) {
   const [type, setType] = React.useState('spend_over_time');
   const [dataset, setDataset] = React.useState([]);
 
- 
   // Load report + dataset
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const r = await fetchReport(id);
-      if (!r) return;
-      setTitle(r.name);
-      setType(r.type);
-      if (r.type === 'spend_over_time') {
-        const data = await getSpendOverTime(r.params);
-        setDataset(data);
-      } else {
-        const data = await getByCategory(r.params);
-        setDataset(data);
+      try {
+        const r = await fetchReport(id);
+        if (!r || cancelled) return;
+        setTitle(r.name || 'Report');
+        setType(r.type || 'spend_over_time');
+
+        const params = r.params || {};
+        const data =
+          (r.type === 'spend_over_time')
+            ? await getSpendOverTime(params)
+            : await getByCategory(params);
+
+        if (!cancelled) setDataset(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.warn('Report load error', e);
+        if (!cancelled) setDataset([]);
       }
     })();
+    return () => { cancelled = true; };
   }, [id]);
 
   // Header delete button
@@ -81,7 +89,7 @@ export default function ReportDetailScreen({ route, navigation }) {
   // CSV export
   const exportCSV = async () => {
     try {
-      const csv = toCSV(dataset);
+      const csv = toCSV(dataset || []);
       const path = FileSystem.cacheDirectory + `report_${id}.csv`;
       await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
       if (await Sharing.isAvailableAsync()) {
@@ -123,7 +131,7 @@ export default function ReportDetailScreen({ route, navigation }) {
 
       {/* Debug view */}
       <View style={{ marginTop: 16 }}>
-        {dataset.map((d, i) => (
+        {(dataset || []).map((d, i) => (
           <Text key={i}>{JSON.stringify(d)}</Text>
         ))}
       </View>
