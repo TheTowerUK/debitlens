@@ -13,11 +13,21 @@ import {
 } from '../services/reporting';
 
 export default function ReportDetailScreen({ route, navigation }) {
-  const { id } = route.params;
+  const { id } = route?.params?.id;
+
+  if (!id) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+        <Text>No report id provided.</Text>
+      </View>
+    );
+  }
+
   const [title, setTitle] = React.useState('Report');
   const [type, setType] = React.useState('spend_over_time');
   const [dataset, setDataset] = React.useState([]);
 
+ 
   // Load report + dataset
   React.useEffect(() => {
     (async () => {
