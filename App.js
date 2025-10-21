@@ -53,16 +53,7 @@ export default function App() {
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown:false }} />
             <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title:'Dashboard' }} />
             
-            <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={withBack} />
-            <Stack.Screen name="History" component={HistoryScreen} options={withBack} />
-            <Stack.Screen name="Budgets" component={BudgetsScreen} options={withBack} />
-            <Stack.Screen name="Recurring" component={RecurringScreen} options={withBack} />
-            <Stack.Screen name="Settings" component={SettingsScreen} options={withBack} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} options={withBack} />
-            <Stack.Screen name="ImportCSV" component={ImportCsvScreen} options={{ title:'Import CSV' }} />
-            <Stack.Screen name="Reports" component={ReportListScreen} />
-            <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-            <Stack.Screen name="ReportEditor" component={ReportEditorScreen} />
+            
           </Stack.Navigator>
         </NavigationContainer>
       </ErrorBoundary>
