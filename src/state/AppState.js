@@ -1,24 +1,20 @@
 // src/state/AppState.js
 import React from 'react';
 
-// 1) Context
+// context
 export const AppContext = React.createContext({});
 
-// 2) Hook (this is what Dashboard calls)
+// named hook (some screens call this)
 export function useApp() {
   const ctx = React.useContext(AppContext);
-  if (!ctx) {
-    throw new Error('useApp must be used inside <AppProvider>');
-  }
+  if (!ctx) throw new Error('useApp must be used inside <AppProvider>');
   return ctx;
 }
 
-// 3) Provider (default export)
+// default provider (no async/await, no side effects)
 export default function AppProvider({ children }) {
-  // Keep it minimal for now; add real state later
   const value = React.useMemo(() => ({
-    // put any globals you actually use in screens here
-    // e.g. user, theme, accounts, refresh, etc.
+    // add fields here later as screens need them
     user: null,
   }), []);
 
