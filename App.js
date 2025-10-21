@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
 // ---- choose your first screen here ----
-const START_SCREEN = 'Reports'; // change to 'Reports' or any route name below
+const START_SCREEN = 'SplashAuth'; // change to 'Reports' or any route name below
 // --------------------------------------
 
 const Stack = createNativeStackNavigator();
@@ -35,7 +35,10 @@ export default function App() {
             options={{ title: 'Reports' }}
             getComponent={() => require('./src/screens/ReportListScreen').default}
           />
-          
+          <Stack.Screen name="SplashAuth" component={SplashAuthScreen} options={{ headerShown:false }} />
+
+
+
           {/* Example of a detail screen when you’re ready */}
           {/*
           <Stack.Screen
