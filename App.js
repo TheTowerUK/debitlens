@@ -6,7 +6,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 
 // ---- choose your first screen here ----
-const START_SCREEN = 'ReportList'// change to 'Reports' or any route name below
+const START_SCREEN = 'Settings'// change to 'Reports' or any route name below
 // --------------------------------------
 
 const Stack = createNativeStackNavigator();
@@ -54,14 +54,11 @@ export default function App() {
             getComponent={() => require('./src/screens/RecurringScreen').default}
           />
 
-          {/* SettingsScreen}
-          {/*
           <Stack.Screen
             name="Settings"
             options={withBack}
             getComponent={() => require('./src/screens/SettingsScreen').default}
           />
-          */}
 
           <Stack.Screen
             name="Notifications"
