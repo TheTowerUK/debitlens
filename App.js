@@ -56,9 +56,7 @@ export default function App() {
 
           <Stack.Screen
             name="Settings"
-            
-            options={{ title: 'Settings' }}
-  
+            options={withBack}
             getComponent={() => require('./src/screens/SettingsScreen').default}
           />
 
