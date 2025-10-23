@@ -78,7 +78,11 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/HistoryScreen').default}
           />
-
+          <Stack.Screen
+            name="SplashAuth"
+            options={withBack}
+            getComponent={() => require('./src/screens/SplashAuthScreen').default}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
