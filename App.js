@@ -47,6 +47,16 @@ export default function App() {
           screenOptions={{ headerStyle: { backgroundColor: '#0B0D13' }, headerTintColor: '#fff' }}
         >
           <Stack.Screen
+            name="SplashAuth"
+            options={{ headerShown: false }}
+            getComponent={() => require('./src/screens/SplashAuthScreen').default}
+          />
+          <Stack.Screen
+            name="Login"
+            options={{ headerShown: false }}
+            getComponent={() => require('./src/screens/LoginScreen').default}
+          />
+          <Stack.Screen
             name="Dashboard"
             options={{ title: 'Dashboard' }}
             getComponent={() => require('./src/screens/DashboardScreen').default}
@@ -77,16 +87,6 @@ export default function App() {
             name="History"
             options={withBack}
             getComponent={() => require('./src/screens/HistoryScreen').default}
-          />
-          <Stack.Screen
-            name="SplashAuth"
-            options={withBack}
-            getComponent={() => require('./src/screens/SplashAuthScreen').default}
-          />
-          <Stack.Screen
-            name="Login"
-            options={withBack}
-            getComponent={() => require('./src/screens/LoginScreen').default}
           />
           <Stack.Screen
             name="TxnEditor"
