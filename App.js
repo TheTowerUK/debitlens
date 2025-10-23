@@ -93,7 +93,11 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/TxnEditorScreen').default}
           />
-
+          <Stack.Screen
+            name="Recurring"
+            options={withBack}
+            getComponent={() => require('./src/screens/RecurringScreen').default}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
