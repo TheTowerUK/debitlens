@@ -78,11 +78,7 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/HistoryScreen').default}
           />
-          <Stack.Screen
-            name="Budget"
-            options={withBack}
-            getComponent={() => require('./src/screens/BudgetScreen').default}
-          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
