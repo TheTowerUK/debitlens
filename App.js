@@ -108,7 +108,11 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/ImportCsvScreen').default}
           />
-
+          <Stack.Screen
+            name="Notifications"
+            options={withBack}
+            getComponent={() => require('./src/screens/NotificationsScreen').default}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
