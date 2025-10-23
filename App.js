@@ -9,6 +9,8 @@ import AppProvider from './src/state/AppState';
 import { runMigrationsSafe as runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
 
+console.log('React version:', React?.version);
+
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitle: '' };
 const [ready, setReady] = React.useState(false);
