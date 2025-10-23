@@ -98,6 +98,16 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/RecurringScreen').default}
           />
+          <Stack.Screen
+            name="Budgets"
+            options={withBack}
+            getComponent={() => require('./src/screens/BudgetsScreen').default}
+          />
+          <Stack.Screen
+            name="ImportCsvScreen"
+            options={withBack}
+            getComponent={() => require('./src/screens/ImportCsvScreen').default}
+          />
 
         </Stack.Navigator>
       </NavigationContainer>
