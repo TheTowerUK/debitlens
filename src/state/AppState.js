@@ -1,4 +1,3 @@
-// src/state/AppState.js
 import React from 'react';
 
 export const AppContext = React.createContext({});
@@ -10,12 +9,16 @@ export function useApp() {
 }
 
 export default function AppProvider({ children }) {
+  // IMPORTANT: Hooks are only inside the component — no top-level hooks anywhere
   const value = React.useMemo(() => ({
     state: {
       prefs: { notifications: { enabled: false, dailyTime: '09:00' } },
     },
-    actions: { setPrefs: async () => {} },
+    actions: {
+      setPrefs: async () => {},
+    },
     user: null,
   }), []);
+
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
