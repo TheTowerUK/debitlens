@@ -43,7 +43,7 @@ export default function App() {
     <AppProvider>
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName="Dashboard"
+          initialRouteName="SplashAuth"
           screenOptions={{ headerStyle: { backgroundColor: '#0B0D13' }, headerTintColor: '#fff' }}
         >
           <Stack.Screen
