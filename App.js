@@ -93,11 +93,7 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/TxnEditorScreen').default}
           />
-          <Stack.Screen
-            name="Notification"
-            options={withBack}
-            getComponent={() => require('./src/screens/NotificationScreen').default}
-          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
