@@ -9,11 +9,8 @@ import AppProvider from './src/state/AppState';
 import { runMigrationsSafe as runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
 
-console.log('React version:', React?.version);
-
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitle: '' };
-const [ready, setReady] = React.useState(false);
 
 export default function App() {
   const [ready, setReady] = React.useState(false);
@@ -75,46 +72,6 @@ export default function App() {
             name="Account"
             options={withBack}
             getComponent={() => require('./src/screens/AccountScreen').default}
-          />
-          <Stack.Screen
-            name="History"
-            options={withBack}
-            getComponent={() => require('./src/screens/HistoryScreen').default}
-          />
-          <Stack.Screen
-            name="SplashAuth"
-            options={withBack}
-            getComponent={() => require('./src/screens/SplashAuthScreen').default}
-          />
-          <Stack.Screen
-            name="Login"
-            options={withBack}
-            getComponent={() => require('./src/screens/LoginScreen').default}
-          />
-          <Stack.Screen
-            name="TxnEditor"
-            options={withBack}
-            getComponent={() => require('./src/screens/TxnEditorScreen').default}
-          />
-          <Stack.Screen
-            name="Recurring"
-            options={withBack}
-            getComponent={() => require('./src/screens/RecurringScreen').default}
-          />
-          <Stack.Screen
-            name="Budgets"
-            options={withBack}
-            getComponent={() => require('./src/screens/BudgetsScreen').default}
-          />
-          <Stack.Screen
-            name="ImportCsvScreen"
-            options={withBack}
-            getComponent={() => require('./src/screens/ImportCsvScreen').default}
-          />
-          <Stack.Screen
-            name="Notifications"
-            options={withBack}
-            getComponent={() => require('./src/screens/NotificationsScreen').default}
           />
         </Stack.Navigator>
       </NavigationContainer>
