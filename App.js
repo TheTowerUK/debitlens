@@ -9,9 +9,6 @@ import AppProvider from './src/state/AppState';
 import { runMigrationsSafe as runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
 
-const Stack = createNativeStackNavigator();
-const withBack = { headerBackTitle: '' };
-
 export default function App() {
   const [ready, setReady] = React.useState(false);
 
@@ -20,7 +17,9 @@ export default function App() {
       try {
         await runMigrations();
         const db = await getDb();
-        const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
+        const tables = await db.getAllAsync(
+          "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        );
         console.log('DB tables:', tables.map(t => t.name));
       } catch (e) {
         console.warn('DB startup error', e);
@@ -29,6 +28,15 @@ export default function App() {
       }
     })();
   }, []);
+
+  if (!ready) {
+    return (
+      <View style={{flex:1, alignItems:'center', justifyContent:'center'}}>
+        <ActivityIndicator size="large" />
+        <Text style={{ color: '#9CA3AF', marginTop: 8 }}>Loading…</Text>
+      </View>
+    );
+  }
 
   if (!ready) {
     return (
