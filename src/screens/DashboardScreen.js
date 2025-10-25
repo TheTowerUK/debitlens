@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
+import { upsertAccount } from '../services/accounts';
+
 
 export default function DashboardScreen({ navigation }) {
   const { state, selectors, actions } = useApp();
@@ -31,13 +33,22 @@ export default function DashboardScreen({ navigation }) {
   const positiveTrend = totalBalance >= 0;
 
   // ---------- Actions ----------
-  const handleAddAccount = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    await actions.addAccount(name, 'current');
-    setNewName('');
+ const handleAddAccount = async () => {
+  const name = newName.trim();
+  if (!name) return;
+  try {
+    const id = 'acc_' + Date.now(); // simple unique id
+    await upsertAccount({ id, name });
     setAdding(false);
-  };
+    setNewName('');
+    // 👉 jump to the account you just created
+    navigation.replace('Account', { accountId: id });
+  } catch (e) {
+    console.warn('add account failed', e);
+    alert('Could not create account');
+  }
+};
+
 
   const onLogout = async () => {
     await actions.signOut();
