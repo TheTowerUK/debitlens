@@ -27,6 +27,8 @@ export default function AccountEditorScreen({ navigation }) {
     } finally {
       setBusy(false);
     }
+    navigation.replace('Account', { accountId: id });
+
   };
 
   return (

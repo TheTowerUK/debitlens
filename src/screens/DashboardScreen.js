@@ -123,8 +123,6 @@ export default function DashboardScreen({ navigation }) {
               style={styles.input}
             />
 
-            onPress={() => navigation.navigate('AccountEditor')}
-
             <View style={styles.addRow}>
               <Pressable style={styles.btnCancel} onPress={() => setAdding(false)}>
                 <Text style={styles.btnText}>Cancel</Text>
@@ -135,6 +133,7 @@ export default function DashboardScreen({ navigation }) {
             </View>
           </View>
         )}
+
       </ScrollView>
 
       {/* Floating menu (replaces the quick actions + old add FAB) */}
