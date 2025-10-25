@@ -1,17 +1,31 @@
-// src/db/migrations/004_accounts.js
-export const id = 4; // must be higher than any already-applied migration
+// 004_accounts.js
+export default {
+  id: 4,
+  name: 'accounts',
+  async up(db) {
+    // accounts table
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT,
+        createdAt INTEGER NOT NULL DEFAULT(strftime('%s','now')*1000),
+        updatedAt INTEGER NOT NULL DEFAULT(strftime('%s','now')*1000)
+      );
+    `);
 
-export const up = `
-CREATE TABLE IF NOT EXISTS accounts (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  type TEXT,
-  archived INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_accounts_archived ON accounts(archived);
+    // transactions.accountId column (if your schema uses accountId, rename below accordingly)
+    await db.execAsync(`
+      ALTER TABLE transactions ADD COLUMN account_id TEXT;
+    `).catch(() => {}); // ignore if exists
 
--- seed a safe fallback account used for reassignment
-INSERT OR IGNORE INTO accounts (id, name, type) VALUES ('unassigned', 'Unassigned', NULL);
-`;
+    // ensure "unassigned" account
+    await db.execAsync(`
+      INSERT OR IGNORE INTO accounts (id, name, type)
+      VALUES ('unassigned', 'Unassigned', 'virtual');
+    `);
+  },
+  async down(db) {
+    // no-op (keep accounts)
+  },
+};

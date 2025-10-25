@@ -15,6 +15,8 @@ async function resetDatabaseFile() {
   console.log('DB reset: deleted', path);
 }
 
+export const MIGRATIONS = [ /* m001..m003 */, m004 ];
+
 export async function runMigrationsSafe() {
   try {
     await runMigrationsOnce();

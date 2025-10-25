@@ -1,43 +1,34 @@
-// src/services/accounts.js
 import { getDb } from '../db/db';
 
-const UNASSIGNED_ID = 'unassigned';
-const UNASSIGNED_NAME = 'Unassigned';
-
-async function ensureUnassignedAccount(db) {
-  const exists = await db.getFirstAsync('SELECT id FROM accounts WHERE id = ?', UNASSIGNED_ID);
-  if (!exists) {
-    await db.runAsync(
-      'INSERT INTO accounts (id, name) VALUES (?, ?)',
-      UNASSIGNED_ID, UNASSIGNED_NAME
-    );
-  }
-}
-
-/**
- * Delete an account:
- * - reassign its transactions to 'unassigned'
- * - delete the account
- */
-export async function deleteAccount(accountId) {
+export async function listAccounts() {
   const db = await getDb();
-  // reassign txns to 'unassigned' then delete
-  await db.runAsync('UPDATE transactions SET account_id = ? WHERE account_id = ?', 'unassigned', accountId);
-  await db.runAsync('DELETE FROM accounts WHERE id = ?', accountId);
+  const rows = await db.getAllAsync(`SELECT id, name, type, createdAt, updatedAt FROM accounts ORDER BY name`);
+  return rows || [];
 }
 
-export async function getAccount(accountId) {
+export async function getAccount(id) {
   const db = await getDb();
-  return await db.getFirstAsync('SELECT * FROM accounts WHERE id = ?', accountId);
+  const row = await db.getFirstAsync(`SELECT id, name, type, createdAt, updatedAt FROM accounts WHERE id = ?`, [id]);
+  return row || null;
 }
 
-  // make sure fallback exists
-  await ensureUnassignedAccount(db);
-
-  // reassign any transactions
+export async function upsertAccount({ id, name, type = null }) {
+  if (!id || !name) throw new Error('id and name required');
+  const db = await getDb();
+  const now = Date.now();
   await db.runAsync(
-    'UPDATE transactions SET account_id = ? WHERE account_id = ?',
-    UNASSIGNED_ID, accountId
+    `INSERT INTO accounts (id, name, type, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET name=excluded.name, type=excluded.type, updatedAt=excluded.updatedAt`,
+    [id, name, type, now, now]
   );
+}
 
-
+export async function deleteAccount(id) {
+  if (!id || id === 'unassigned') throw new Error('Cannot delete this account');
+  const db = await getDb();
+  // reassign its transactions to "unassigned"
+  await db.runAsync(`UPDATE transactions SET account_id = 'unassigned' WHERE account_id = ?`, [id]);
+  // delete account
+  await db.runAsync(`DELETE FROM accounts WHERE id = ?`, [id]);
+}
