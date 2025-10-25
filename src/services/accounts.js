@@ -1,5 +1,6 @@
 import { getDb } from '../db/db';
 
+
 export async function listAccounts() {
   const db = await getDb();
   const rows = await db.getAllAsync(`SELECT id, name, type, createdAt, updatedAt FROM accounts ORDER BY name`);
@@ -32,3 +33,4 @@ export async function deleteAccount(id) {
   // delete account
   await db.runAsync(`DELETE FROM accounts WHERE id = ?`, [id]);
 }
+

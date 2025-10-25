@@ -122,6 +122,9 @@ export default function DashboardScreen({ navigation }) {
               placeholderTextColor="#6B7280"
               style={styles.input}
             />
+
+            onPress={() => navigation.navigate('AccountEditor')}
+
             <View style={styles.addRow}>
               <Pressable style={styles.btnCancel} onPress={() => setAdding(false)}>
                 <Text style={styles.btnText}>Cancel</Text>

@@ -113,6 +113,12 @@ export default function App() {
             options={withBack}
             getComponent={() => require('./src/screens/NotificationsScreen').default}
           />
+          <Stack.Screen
+            name="AccountEditor"
+            options={{ headerBackTitle: '' }}
+            getComponent={() => require('./src/screens/AccountEditorScreen').default}
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
