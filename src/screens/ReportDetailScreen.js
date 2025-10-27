@@ -4,7 +4,9 @@ import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import LineChart from '../components/LineChart';
-import { toCSV } from '../utils/csv';
+import { toCSV } from '../utils/csvUtils';
+import { SAMPLE_HEADERS, SAMPLE_ROWS } from '../utils/csvTemplate';
+
 import {
   getReport as fetchReport,
   getSpendOverTime,
