@@ -33,20 +33,23 @@ const screenRegistry = {
 export default function App() {
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        await runMigrations();
-        const db = await getDb();
-        const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
-        console.log('DB tables:', tables.map(t => t.name));
-      } catch (e) {
-        console.warn('DB startup error', e);
-      } finally {
-        setReady(true);
-      }
-    })();
-  }, []);
+ const [ready, setReady] = useState(false);
+
+if (!ready) {
+  (async () => {
+    try {
+      await runMigrations();
+      const db = await getDb();
+      const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
+      console.log('DB tables:', tables.map(t => t.name));
+    } catch (e) {
+      console.warn('DB startup error', e);
+    } finally {
+      setReady(true);
+    }
+  })();
+}
+
 
   if (!ready) {
     return (
