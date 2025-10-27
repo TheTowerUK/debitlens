@@ -1,9 +1,9 @@
-// src/utils/csv.js
-// Small CSV parser that handles quotes and commas.
-// Returns { headers: string[], rows: string[][] }
-export function parseCSV(text) {
-  const rows = [];
-  let cur = [];
+// src/utils/csvUtils.ts
+
+/** Parses CSV text into headers and rows */
+export function parseCSV(text: string): { headers: string[], rows: string[][] } {
+  const rows: string[][] = [];
+  let cur: string[] = [];
   let field = '';
   let inQuotes = false;
 
@@ -38,7 +38,7 @@ export function parseCSV(text) {
       }
     }
   }
-  // last field
+
   if (field.length > 0 || cur.length > 0) {
     cur.push(field);
     rows.push(cur);
@@ -49,13 +49,11 @@ export function parseCSV(text) {
   return { headers, rows: rows.slice(1) };
 }
 
-// normalise a date into YYYY-MM-DD if possible
-export function toISODate(s) {
+/** Normalizes a date string into YYYY-MM-DD */
+export function toISODate(s: string): string {
   if (!s) return '';
   const t = String(s).trim();
-  // already ISO
   if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-  // DD/MM/YYYY
   const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (m) {
     const [_, d, mo, y] = m;
@@ -63,27 +61,36 @@ export function toISODate(s) {
     const mm = String(mo).padStart(2, '0');
     return `${y}-${mm}-${dd}`;
   }
-  // last resort: Date parsing (may vary)
   const d = new Date(t);
   if (!isNaN(d.getTime())) {
-    const pad = (n) => String(n).padStart(2, '0');
+    const pad = (n: number) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   }
   return '';
 }
 
-export function rowHash(obj) {
-  // stable hash based on key fields
+/** Generates a stable hash for a transaction row */
+export function rowHash(obj: {
+  date?: string;
+  amount?: number;
+  type?: string;
+  accountId?: string;
+  accountName?: string;
+  category?: string;
+  note?: string;
+}): string {
   const base = [
     obj.date || '',
     obj.amount != null ? Number(obj.amount).toFixed(2) : '',
     obj.type || '',
-    (obj.accountName || obj.accountId || ''),
-    (obj.category || ''),
-    (obj.note || '')
+    obj.accountName || obj.accountId || '',
+    obj.category || '',
+    obj.note || '',
   ].join('|');
   let h = 0;
-  for (let i = 0; i < base.length; i++) h = ((h << 5) - h) + base.charCodeAt(i) | 0;
+  for (let i = 0; i < base.length; i++) {
+    h = ((h << 5) - h) + base.charCodeAt(i);
+    h |= 0;
+  }
   return String(h);
 }
-

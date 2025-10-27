@@ -28,7 +28,7 @@ export default function ReportDetailScreen({ route, navigation }) {
   const [type, setType] = React.useState('spend_over_time');
   const [dataset, setDataset] = React.useState([]);
 
-  // Load report + dataset
+    // Load report + dataset
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
