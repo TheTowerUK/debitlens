@@ -1,5 +1,5 @@
-const SQLite = require('expo-sqlite');
-const db = SQLite.openDatabase('app.db') as any;
+import * as SQLite from 'expo-sqlite';
+const db = (SQLite as any).openDatabase('app.db');
 
 // Each migration has a unique ID and SQL statement
 const MIGRATION_REGISTRY: { id: string; sql: string }[] = [
