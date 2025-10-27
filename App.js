@@ -7,18 +7,17 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppProvider from './src/state/AppState';
 import { runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
-import React, { useEffect } from 'react';
 
 const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitle: '' };
 
 export default function App() {
-  const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
     (async () => {
       try {
         await runMigrations();
+        const [ready, setReady] = React.useState(false);
         const db = await getDb();
         const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
         console.log('DB tables:', tables.map(t => t.name));
