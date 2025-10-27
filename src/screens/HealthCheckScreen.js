@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { getDb } from '../db/db';
-import { runMigrations } from '../db/migrate';
+import { runMigrations } from '.src/db/migrate';
 
 
 export default function HealthCheckScreen({ navigation }) {
