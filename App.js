@@ -12,17 +12,4 @@ export default function App() {
 }
 
 
-export default function App() {
-  const [count, setCount] = useState(0);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setCount(c => c + 1), 1000);
-    return () => clearTimeout(timer);
-  }, [count]);
-
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text>Count: {count}</Text>
-    </View>
-  );
-}
