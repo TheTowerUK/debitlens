@@ -10,7 +10,25 @@ import { runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
 
 const Stack = createNativeStackNavigator();
-const withBack = { headerBackTitle: '' };
+
+// ✅ Static screen registry (component only)
+const screenRegistry = {
+  SplashAuth: require('./src/screens/SplashAuthScreen').default,
+  Login: require('./src/screens/LoginScreen').default,
+  Dashboard: require('./src/screens/DashboardScreen').default,
+  Reports: require('./src/screens/ReportListScreen').default,
+  ReportDetail: require('./src/screens/ReportDetailScreen').default,
+  ReportEditor: require('./src/screens/ReportEditorScreen').default,
+  Settings: require('./src/screens/SettingsScreen').default,
+  Account: require('./src/screens/AccountScreen').default,
+  History: require('./src/screens/HistoryScreen').default,
+  TxnEditor: require('./src/screens/TxnEditorScreen').default,
+  Recurring: require('./src/screens/RecurringScreen').default,
+  Budgets: require('./src/screens/BudgetsScreen').default,
+  ImportCsvScreen: require('./src/screens/ImportCsvScreen').default,
+  Notifications: require('./src/screens/NotificationsScreen').default,
+  AccountEditor: require('./src/screens/AccountEditorScreen').default,
+};
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -49,28 +67,22 @@ export default function App() {
             headerTintColor: '#fff',
           }}
         >
-          {[
-            ['SplashAuth', { headerShown: false }],
-            ['Login', { headerShown: false }],
-            ['Dashboard', { title: 'Dashboard' }],
-            ['Reports'],
-            ['ReportDetail'],
-            ['ReportEditor'],
-            ['Settings', withBack],
-            ['Account', withBack],
-            ['History', withBack],
-            ['TxnEditor', withBack],
-            ['Recurring', withBack],
-            ['Budgets', withBack],
-            ['ImportCsvScreen', withBack],
-            ['Notifications', withBack],
-            ['AccountEditor', { headerBackTitle: '' }],
-          ].map(([name, options]) => (
+          {Object.entries(screenRegistry).map(([name, Component]) => (
             <Stack.Screen
               key={name}
               name={name}
-              options={options}
-              getComponent={() => require(`./src/screens/${name}Screen`).default}
+              component={Component}
+              options={
+                name === 'SplashAuth' || name === 'Login'
+                  ? { headerShown: false }
+                  : name === 'Dashboard'
+                  ? { title: 'Dashboard' }
+                  : ['Settings', 'Account', 'History', 'TxnEditor', 'Recurring', 'Budgets', 'ImportCsvScreen', 'Notifications'].includes(name)
+                  ? { headerBackTitle: '' }
+                  : name === 'AccountEditor'
+                  ? { headerBackTitle: '' }
+                  : undefined
+              }
             />
           ))}
         </Stack.Navigator>
