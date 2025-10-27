@@ -2,9 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import AppProvider from './src/state/AppProvider';
 
-
-
 export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setCount(c => c + 1), 1000);
+    return () => clearTimeout(timer);
+  }, [count]);
+
   return (
     <AppProvider>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
@@ -13,4 +18,3 @@ export default function App() {
     </AppProvider>
   );
 }
-
