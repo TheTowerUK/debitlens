@@ -1,5 +1,5 @@
 // src/screens/HealthCheckScreen.js
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { getDb } from '../db/db';
 import { runMigrations } from 'db/migrate';

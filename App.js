@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-//import AppProvider from './src/state/AppState';
+import AppProvider from './src/state/AppState';
 
 export default function App() {
   const [count, setCount] = useState(0);

@@ -1,5 +1,5 @@
 // src/screens/SplashAuthScreen.js (diagnostic)
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useApp } from '../state/AppState';

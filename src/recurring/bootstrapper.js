@@ -1,5 +1,5 @@
 // src/notifications/bootstrapper.js
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { useApp } from '../state/AppState';

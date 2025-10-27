@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, Alert } from 'react-native';
 import { getAccount, deleteAccount } from '../services/accounts';
 import Center from '../components/Center';
