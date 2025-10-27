@@ -1,3 +1,4 @@
+// App.js
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import AppProvider from './src/state/AppProvider';

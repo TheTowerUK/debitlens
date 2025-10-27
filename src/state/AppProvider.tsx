@@ -1,25 +1,15 @@
 // src/state/AppProvider.tsx
-import React, { useEffect, useState } from 'react';
-import { runMigrations } from '../db/migrate';
-
+import React from 'react';
+import { useAppReady } from '../hooks/useAppReady';
 
 type Props = { children: React.ReactNode };
 
 export function AppProvider({ children }: Props) {
-  useEffect(() => {
-    (async () => {
-      try {
-        await runMigrations();
-        console.log('DB migrations complete');
-      } catch (e) {
-        console.warn('DB migration error', e);
-      }
-    })();
-  }, []);
+  const ready = useAppReady();
 
-  // ...your existing context/provider logic can stay here
+  if (!ready) return null; // Or replace with a loading spinner
+
   return <>{children}</>;
 }
 
 export default AppProvider;
-
