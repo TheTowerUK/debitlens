@@ -1,6 +1,7 @@
 // src/state/AppProvider.tsx
 import React, { useEffect } from 'react';
-import { runMigrations } from '../db/migrate';
+import { runMigrations as runMigrations } from '../db/migrate';
+
 
 type Props = { children: React.ReactNode };
 

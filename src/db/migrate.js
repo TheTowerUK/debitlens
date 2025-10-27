@@ -15,7 +15,7 @@ async function resetDatabaseFile() {
   console.log('DB reset: deleted', path);
 }
 
-export async function runMigrationsSafe() {
+export async function runMigrations() {
   try {
     await runMigrationsOnce();
   } catch (e) {

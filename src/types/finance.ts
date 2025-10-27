@@ -1,7 +1,8 @@
+//src/types/finance.js
+
 export type TxnType = 'income' | 'expense';
 
-export interface Transacti
-on {
+export interface Transaction {
   id: string;
   accountId: string;
   accountName?: string;
