@@ -11,7 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { useApp } from '../state/AppState';
-import { money } from '../utils/money';
+import { money } from '../utils/moneyUtils';
 
 export default function HistoryScreen({ navigation }) {
   const { state, actions } = useApp();

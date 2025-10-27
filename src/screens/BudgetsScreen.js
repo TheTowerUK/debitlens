@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useApp } from '../state/AppState';
-import { money } from '../utils/money';
+import { money } from '../utils/moneyUtils';
 
 // --- date helpers ---
 const pad2 = (n) => String(n).padStart(2, '0');
