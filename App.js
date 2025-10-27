@@ -1,9 +1,10 @@
 // App.js
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 import AppProvider from './src/state/AppState';
 import { runMigrations } from './src/db/migrate';
 import { getDb } from './src/db/db';
@@ -12,12 +13,12 @@ const Stack = createNativeStackNavigator();
 const withBack = { headerBackTitle: '' };
 
 export default function App() {
+  const [ready, setReady] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
         await runMigrations();
-        const [ready, setReady] = React.useState(false);
         const db = await getDb();
         const tables = await db.getAllAsync("SELECT name FROM sqlite_master WHERE type='table'");
         console.log('DB tables:', tables.map(t => t.name));
@@ -43,81 +44,35 @@ export default function App() {
       <NavigationContainer>
         <Stack.Navigator
           initialRouteName="SplashAuth"
-          screenOptions={{ headerStyle: { backgroundColor: '#0B0D13' }, headerTintColor: '#fff' }}
+          screenOptions={{
+            headerStyle: { backgroundColor: '#0B0D13' },
+            headerTintColor: '#fff',
+          }}
         >
-          <Stack.Screen
-            name="SplashAuth"
-            options={{ headerShown: false }}
-            getComponent={() => require('./src/screens/SplashAuthScreen').default}
-          />
-          <Stack.Screen
-            name="Login"
-            options={{ headerShown: false }}
-            getComponent={() => require('./src/screens/LoginScreen').default}
-          />
-          <Stack.Screen
-            name="Dashboard"
-            options={{ title: 'Dashboard' }}
-            getComponent={() => require('./src/screens/DashboardScreen').default}
-          />
-          <Stack.Screen
-            name="Reports"
-            getComponent={() => require('./src/screens/ReportListScreen').default}
-          />
-          <Stack.Screen
-            name="ReportDetail"
-            getComponent={() => require('./src/screens/ReportDetailScreen').default}
-          />
-          <Stack.Screen
-            name="ReportEditor"
-            getComponent={() => require('./src/screens/ReportEditorScreen').default}
-          />
-          <Stack.Screen
-            name="Settings"
-            options={withBack}
-            getComponent={() => require('./src/screens/SettingsScreen').default}
-          />
-          <Stack.Screen
-            name="Account"
-            options={withBack}
-            getComponent={() => require('./src/screens/AccountScreen').default}
-          />
-          <Stack.Screen
-            name="History"
-            options={withBack}
-            getComponent={() => require('./src/screens/HistoryScreen').default}
-          />
-          <Stack.Screen
-            name="TxnEditor"
-            options={withBack}
-            getComponent={() => require('./src/screens/TxnEditorScreen').default}
-          />
-          <Stack.Screen
-            name="Recurring"
-            options={withBack}
-            getComponent={() => require('./src/screens/RecurringScreen').default}
-          />
-          <Stack.Screen
-            name="Budgets"
-            options={withBack}
-            getComponent={() => require('./src/screens/BudgetsScreen').default}
-          />
-          <Stack.Screen
-            name="ImportCsvScreen"
-            options={withBack}
-            getComponent={() => require('./src/screens/ImportCsvScreen').default}
-          />
-          <Stack.Screen
-            name="Notifications"
-            options={withBack}
-            getComponent={() => require('./src/screens/NotificationsScreen').default}
-          />
-          <Stack.Screen
-            name="AccountEditor"
-            options={{ headerBackTitle: '' }}
-            getComponent={() => require('./src/screens/AccountEditorScreen').default}
-          />
-
+          {[
+            ['SplashAuth', { headerShown: false }],
+            ['Login', { headerShown: false }],
+            ['Dashboard', { title: 'Dashboard' }],
+            ['Reports'],
+            ['ReportDetail'],
+            ['ReportEditor'],
+            ['Settings', withBack],
+            ['Account', withBack],
+            ['History', withBack],
+            ['TxnEditor', withBack],
+            ['Recurring', withBack],
+            ['Budgets', withBack],
+            ['ImportCsvScreen', withBack],
+            ['Notifications', withBack],
+            ['AccountEditor', { headerBackTitle: '' }],
+          ].map(([name, options]) => (
+            <Stack.Screen
+              key={name}
+              name={name}
+              options={options}
+              getComponent={() => require(`./src/screens/${name}Screen`).default}
+            />
+          ))}
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
