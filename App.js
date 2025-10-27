@@ -31,8 +31,6 @@ const screenRegistry = {
 };
 
 export default function App() {
-  const [ready, setReady] = useState(false);
-
  const [ready, setReady] = useState(false);
 
 if (!ready) {
