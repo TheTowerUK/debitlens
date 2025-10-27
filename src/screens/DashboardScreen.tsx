@@ -13,8 +13,15 @@ import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
 import { upsertAccount } from '../services/accounts';
 
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-export default function DashboardScreen({ navigation }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
+
+export default function DashboardScreen({ navigation }: Props) {
+  // ...rest of your code
+}
+
   const { state, selectors, actions } = useApp();
 
   // Always guard state reads

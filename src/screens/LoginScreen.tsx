@@ -1,4 +1,4 @@
-// src/screens/LoginScreen.js
+// src/screens/LoginScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -10,10 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import { useApp } from '../state/AppState';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from 'navigations/AppNavigator';
 
-export default function LoginScreen({ navigation }) {
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export default function LoginScreen({ navigation }: Props) {
   const { getPin, setPin } = useApp();
-  const [mode, setMode] = useState('loading'); // 'loading' | 'signin' | 'setpin'
+  const [mode, setMode] = useState<'loading' | 'signin' | 'setpin'>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
 

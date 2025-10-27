@@ -1,7 +1,8 @@
 // App.js
 import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
 import AppProvider from './src/state/AppProvider';
+import { AppNavigator } from './src/navigation/AppNavigator';
 
 export default function App() {
   const [count, setCount] = useState(0);
@@ -12,10 +13,10 @@ export default function App() {
   }, [count]);
 
   return (
-    <AppProvider>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <Text>Count: {count}</Text>
-      </View>
-    </AppProvider>
-  );
-}
+      <AppProvider>
+        <NavigationContainer>
+          <AppNavigator />
+        </NavigationContainer>
+      </AppProvider>
+    );
+  }
