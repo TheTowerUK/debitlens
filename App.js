@@ -6,7 +6,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppState';
-import { runMigrationsSafe as runMigrations } from './src/db/migrate';
+import { runMigrations } from '../db/migrate';
+
 import { getDb } from './src/db/db';
 
 const Stack = createNativeStackNavigator();

@@ -2,7 +2,8 @@
 import React from 'react';
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { getDb } from '../db/db';
-import { runMigrationsSafe as runMigrations } from '../db/migrate';
+import { runMigrations } from '../db/migrate';
+
 
 export default function HealthCheckScreen({ navigation }) {
   const [logs, setLogs] = React.useState([]);
