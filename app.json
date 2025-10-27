@@ -14,9 +14,8 @@
     "plugins": [
       "expo-notifications",
       "expo-secure-store",
-      "expo-sqlite",
-      "expo-react-native-svg"
-    ],
+      "expo-sqlite"
+ ],
     "platforms": ["ios", "android", "web"],
     "scheme": "debitlens"
   }
