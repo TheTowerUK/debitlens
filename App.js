@@ -1,6 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import AppProvider from './src/state/AppState';
+
+const DummyProvider = ({ children }) => <>{children}</>;
+
+export default function App() {
+  return (
+    <DummyProvider>
+      <TestReact />
+    </DummyProvider>
+  );
+}
+
 
 export default function App() {
   const [count, setCount] = useState(0);
