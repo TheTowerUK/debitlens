@@ -1,4 +1,4 @@
-// src/screens/DashboardScreen.js
+// src/screens/DashboardScreen.tsx
 import React, { useMemo, useState } from 'react';
 import {
   View,
@@ -12,50 +12,42 @@ import {
 import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
 import { upsertAccount } from '../services/accounts';
-
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { RootStackParamList } from '../navigations/AppNavigator';
+import type { JSX } from 'react';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
-export default function DashboardScreen({ navigation }: Props) {
-  // ...rest of your code
-}
-
+export default function DashboardScreen({ navigation }: Props): JSX.Element {
   const { state, selectors, actions } = useApp();
 
-  // Always guard state reads
   const accounts = state?.accounts ?? [];
   const txns = state?.transactions ?? [];
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // ---------- Derived totals ----------
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => sum + selectors.accountBalance(a.id), 0);
-    // selectors.accountBalance already reads state safely
-  }, [accounts, state?.transactions]); // re-run when transactions change
+  }, [accounts, state?.transactions]);
 
   const positiveTrend = totalBalance >= 0;
 
-  // ---------- Actions ----------
- const handleAddAccount = async () => {
-  const name = newName.trim();
-  if (!name) return;
-  try {
-    const id = 'acc_' + Date.now(); // simple unique id
-    await upsertAccount({ id, name });
-    setAdding(false);
-    setNewName('');
-    // 👉 jump to the account you just created
-    navigation.replace('Account', { accountId: id });
-  } catch (e) {
-    console.warn('add account failed', e);
-    alert('Could not create account');
-  }
-};
-
+  const handleAddAccount = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    try {
+      const id = 'acc_' + Date.now();
+      await upsertAccount({ id, name });
+      setAdding(false);
+      setNewName('');
+      navigation.replace('Account', { accountId: id });
+    } catch (e) {
+      console.warn('add account failed', e);
+      alert('Could not create account');
+    }
+  };
 
   const onLogout = async () => {
     await actions.signOut();
@@ -64,7 +56,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      {/* HEADER SUMMARY */}
+      {/* HEADER */}
       <View style={styles.header}>
         <View>
           <Text style={styles.heading}>Total Balance</Text>
@@ -77,7 +69,6 @@ export default function DashboardScreen({ navigation }: Props) {
             £{Math.abs(totalBalance).toFixed(2)}
           </Text>
         </View>
-
         <View style={styles.headerRight}>
           <Text style={styles.trend}>{positiveTrend ? '▲ Up' : '▼ Down'}</Text>
           <Pressable onPress={onLogout} hitSlop={8}>
@@ -86,16 +77,13 @@ export default function DashboardScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* ACCOUNTS LIST */}
+      {/* ACCOUNTS */}
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 120 }}>
         {accounts.map((a) => {
           const bal = selectors.accountBalance(a.id);
-
-          // derive last transaction for this account, safely from local txns
           const accountTxns = txns
             .filter((t) => t.accountId === a.id)
-            .sort((x, y) => (y.date || '').localeCompare(x.date || '')); // newest first
-
+            .sort((x, y) => (y.date || '').localeCompare(x.date || ''));
           const lastTx = accountTxns[0] || null;
           const lastDate = lastTx?.date ? new Date(`${lastTx.date}T00:00:00`) : null;
 
@@ -116,7 +104,6 @@ export default function DashboardScreen({ navigation }: Props) {
                   £{Math.abs(bal).toFixed(2)}
                 </Text>
               </View>
-
               {lastTx ? (
                 <Text style={styles.lastTx}>
                   {(lastTx.note || lastTx.category || '—') +
@@ -129,7 +116,7 @@ export default function DashboardScreen({ navigation }: Props) {
           );
         })}
 
-        {/* ADD ACCOUNT FORM */}
+        {/* ADD ACCOUNT */}
         {adding && (
           <View style={styles.addBox}>
             <Text style={styles.addLabel}>New Account Name</Text>
@@ -140,7 +127,6 @@ export default function DashboardScreen({ navigation }: Props) {
               placeholderTextColor="#6B7280"
               style={styles.input}
             />
-
             <View style={styles.addRow}>
               <Pressable style={styles.btnCancel} onPress={() => setAdding(false)}>
                 <Text style={styles.btnText}>Cancel</Text>
@@ -151,21 +137,20 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           </View>
         )}
-
       </ScrollView>
 
-      {/* Floating menu (replaces the quick actions + old add FAB) */}
+      {/* ACTION MENU */}
       <ActionFab
-  items={[
-    { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
-    { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
-    { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Reports') },
-    { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
-    { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
-    { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
-  ]}
-  footer={{ label: 'Settings', onPress: () => navigation.navigate('Settings') }}
-/>
+        items={[
+          { key: 'add-account', label: 'Add Account', onPress: () => setAdding(true) },
+          { key: 'history', label: 'History', onPress: () => navigation.navigate('History') },
+          { key: 'reports', label: 'Reports', onPress: () => navigation.navigate('Reports') },
+          { key: 'budgets', label: 'Budgets', onPress: () => navigation.navigate('Budgets') },
+          { key: 'notifications', label: 'Notifications', onPress: () => navigation.navigate('Notifications') },
+          { key: 'recurring', label: 'Recurring', onPress: () => navigation.navigate('Recurring') },
+        ]}
+        footer={{ label: 'Settings', onPress: () => navigation.navigate('Settings') }}
+      />
     </View>
   );
 }
@@ -184,9 +169,7 @@ const styles = StyleSheet.create({
   total: { fontSize: 32, fontWeight: '800' },
   trend: { color: '#9CA3AF', fontSize: 16, fontWeight: '600' },
   logout: { color: '#93C5FD', marginTop: 6, fontWeight: '700' },
-
   scroll: { flex: 1 },
-
   card: {
     backgroundColor: '#111827',
     borderRadius: 16,
@@ -203,7 +186,6 @@ const styles = StyleSheet.create({
   balance: { fontSize: 18, fontWeight: '800' },
   lastTx: { color: '#9CA3AF', fontSize: 13, marginTop: 6 },
   lastTxEmpty: { color: '#6B7280', fontSize: 13, marginTop: 6 },
-
   addBox: {
     backgroundColor: '#1E293B',
     borderRadius: 12,

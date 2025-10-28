@@ -4,11 +4,14 @@ import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native
 import * as FileSystem from 'expo-file-system';   // ✅ non-legacy
 import * as Sharing from 'expo-sharing';
 import { resetDatabase } from '../dev/resetDb';   // no await at top!
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from 'navigations/AppNavigator';
 
 const CSV_TEMPLATE = `date,amount,type,account,category,note
 2025-10-01,12.50,expense,Main,Groceries,Milk & bread
 2025-10-03,2500,income,Main,Salary,October
 `;
+type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }) {
   const exportTemplate = async () => {

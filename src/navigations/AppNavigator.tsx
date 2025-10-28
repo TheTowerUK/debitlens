@@ -8,8 +8,8 @@ export type RootStackParamList = {
   Login: undefined;
   Settings: undefined;
   Dashboard: undefined;
+  Account: { accountId: string }; // ✅ required for navigation.replace('Account', { accountId })
 };
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {

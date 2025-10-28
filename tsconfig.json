@@ -5,8 +5,11 @@
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "./src",
     "paths": {
+      "screens/*": ["screens/*"],
+      "navigation/*": ["navigation/*"],
       "*": ["*"]
     }
   },
+  "include": ["src"],
   "extends": "expo/tsconfig.base"
 }
