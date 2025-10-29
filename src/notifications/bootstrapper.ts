@@ -1,18 +1,23 @@
 // src/notifications/bootstrapper.js
 import React, { useEffect, useState } from 'react';
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { useApp } from '../state/AppState';
 
-// Local notifications show as alerts by default.
+import * as Notifications from 'expo-notifications';
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (): Promise<Notifications.NotificationBehavior> => {
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
+
 
 // Schedules a daily local notification at HH:MM (24h) local time
 async function scheduleDailyLocal(timeHHMM) {

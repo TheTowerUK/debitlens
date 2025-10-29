@@ -12,10 +12,9 @@ import {
 import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
 import { upsertAccount } from '../services/accounts';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/AppNavigator';
 import type { JSX } from 'react';
-
+import type { RootStackParamList } from '../navigations/types';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 

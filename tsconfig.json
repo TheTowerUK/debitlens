@@ -3,13 +3,17 @@
     "allowJs": true,
     "checkJs": false,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": "./src",
+    "baseUrl": "src",
+    "jsx": "react-jsx",
     "paths": {
       "screens/*": ["screens/*"],
       "navigation/*": ["navigation/*"],
-      "*": ["*"]
+      "components/*": ["components/*"],
+      "moduleResolution": "node",
+      "esModuleInterop": true,
+    "*": ["*"]
     }
   },
-  "include": ["src"],
+  "include": ["src/**/*"],
   "extends": "expo/tsconfig.base"
 }
