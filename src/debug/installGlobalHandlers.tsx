@@ -8,17 +8,26 @@ import React from 'react';
  * which should expose `ErrorUtils` and `__GLOBAL_HANDLER_SET__` on the global object.
  */
 
-export function installGlobalHandlers(): void {
-  const g = global as any;
+type ErrorUtilsShape = {
+  getGlobalHandler?: () => ((error: any, isFatal?: boolean) => void) | undefined;
+  setGlobalHandler?: (handler: (error: any, isFatal?: boolean) => void) => void;
+};
 
-  // Catch *all* JS errors before RN turns them into a native fatal
+type GlobalWithErrorUtils = {
+  ErrorUtils?: ErrorUtilsShape;
+  __GLOBAL_HANDLER_SET__?: boolean;
+  onunhandledrejection?: ((event: any) => void) | undefined;
+} & typeof globalThis;
+
+export function installGlobalHandlers(): void {
+  const g = global as unknown as GlobalWithErrorUtils;
+
   try {
     if (g.ErrorUtils && !g.__GLOBAL_HANDLER_SET__) {
       const prev = g.ErrorUtils.getGlobalHandler?.();
 
       g.ErrorUtils.setGlobalHandler?.((error: any, isFatal?: boolean) => {
         const msg = (error && (error.stack || error.message)) || String(error);
-        // Log to Metro so we see the *real* cause
         console.log('[GlobalError]', isFatal ? '(FATAL)' : '', msg);
         if (prev) {
           try {
@@ -31,7 +40,6 @@ export function installGlobalHandlers(): void {
     }
   } catch {}
 
-  // Best-effort unhandled promise rejection logging (RN environment varies)
   try {
     if (typeof g.onunhandledrejection === 'undefined') {
       g.onunhandledrejection = (event: any) => {
@@ -42,3 +50,4 @@ export function installGlobalHandlers(): void {
     }
   } catch {}
 }
+
