@@ -316,6 +316,14 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 12,
   },
+    // inside the StyleSheet.create({...}) where your other styles live
+  rowTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#222',
+    // add whatever spacing/margins you need
+  },
+
 
   // Rows / layout
   rowBetween: {
