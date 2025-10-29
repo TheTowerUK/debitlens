@@ -11,47 +11,81 @@ import { todayISO } from '../utils/dateUtils';
 export default function ImportCsvScreen({ navigation }) {
   const { actions, state } = useApp();
   const [rawText, setRawText] = useState('');
-  const [parsed, setParsed] = useState({ headers: [], rows: [] });
-  const [imported, setImported] = useState([]);
-  const [skipped, setSkipped] = useState([]);
+  const [parsed, setParsed] = useState<any>({ headers: [], rows: [] });
+  const [imported, setImported] = useState<any[]>([]);
+  const [skipped, setSkipped] = useState<any[]>([]);
 
-  const onPickFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: 'text/csv' });
-    if (result?.type === 'success') {
-      const text = await fetch(result.uri).then((r) => r.text());
+  // helper alias for the success shape we expect
+type DocSuccess = { type: 'success'; uri: string; name?: string; size?: number; mimeType?: string };
+type DocCancelled = { type: 'cancel' };
+type DocResultAny = any; // intentionally loose; we guard at runtime
+
+const onPickFile = async () => {
+  try {
+    const result = (await DocumentPicker.getDocumentAsync({ type: 'text/*' })) as DocResultAny;
+    if (result && 'type' in result && result.type === 'success' && 'uri' in result && typeof result.uri === 'string') {
+      const text = await fetch((result as DocSuccess).uri).then((r) => r.text());
       setRawText(text);
-      const parsed = parseCSV(text);
-      setParsed(parsed);
+      const p = parseCSV(text);
+      setParsed(p as any);
+    } else {
+      // user cancelled or unexpected result
+      return;
     }
-  };
+  } catch (e) {
+    console.warn('Pick file failed', e);
+    Alert.alert('Error', 'Could not read file.');
+  }
+};
+
 
   const onImport = async () => {
-    const { headers, rows } = parsed;
+    // assume parsed may be unknown shape; narrow at runtime
+    const headers = (parsed as any)?.headers || [];
+    const rows = (parsed as any)?.rows || [];
+
     if (!headers.length || !rows.length) {
       Alert.alert('Invalid CSV', 'No rows found.');
       return;
     }
 
-    const headerMap = headers.map((h) => h.toLowerCase().trim());
-    const imported = [];
-    const skipped = [];
+    const headerMap = headers.map((h: any) => String(h || '').toLowerCase().trim());
+    const importedTxns: any[] = [];
+    const skippedRows: any[] = [];
 
-    for (const row of rows) {
-      const obj = {};
-      for (let i = 0; i < headerMap.length; i++) {
-        obj[headerMap[i]] = row[i];
+    for (const rawRow of rows as any[]) {
+      // normalize to an object with lowercase keys
+      let obj: Record<string, any> = {};
+
+      if (Array.isArray(rawRow)) {
+        for (let i = 0; i < headerMap.length; i++) {
+          obj[headerMap[i]] = rawRow[i];
+        }
+      } else if (rawRow && typeof rawRow === 'object') {
+        for (const k of Object.keys(rawRow)) {
+          obj[String(k).toLowerCase().trim()] = rawRow[k];
+        }
+      } else {
+        skippedRows.push({ raw: rawRow, reason: 'Unexpected row format' });
+        continue;
       }
 
-      const date = toISODate(obj.date);
-      const amount = Number(obj.amount);
-      const type = obj.type === 'income' ? 'income' : 'expense';
-      const accountName = obj.account || '';
-      const accountId = state.accounts.find((a) => a.name === accountName)?.id || 'unassigned';
-      const category = obj.category || (type === 'income' ? 'Income' : 'General');
-      const note = obj.note || '';
+      // runtime guard for required fields
+      if (!('date' in obj) || !('amount' in obj)) {
+        skippedRows.push({ ...obj, reason: 'Missing date or amount' });
+        continue;
+      }
+
+      const date = toISODate(String(obj.date || ''));
+      const amount = Number(String(obj.amount).replace(/[^\d.-]/g, ''));
+      const type = String((obj.type || '').toLowerCase()) === 'income' ? 'income' : 'expense';
+      const accountName = String(obj.account || '').trim();
+      const accountId = state.accounts.find((a: any) => a.name === accountName)?.id || 'unassigned';
+      const category = String(obj.category || (type === 'income' ? 'Income' : 'General'));
+      const note = String(obj.note || '');
 
       if (!date || !isFinite(amount) || !accountId) {
-        skipped.push({ ...obj, reason: 'Invalid row' });
+        skippedRows.push({ ...obj, reason: 'Invalid row' });
         continue;
       }
 
@@ -67,11 +101,12 @@ export default function ImportCsvScreen({ navigation }) {
 
       try {
         await actions.addTransaction(txn);
-        imported.push(txn);
-      } catch (e) {
-        skipped.push({ ...obj, reason: 'Save failed' });
+        importedTxns.push(txn);
+      } catch {
+        skippedRows.push({ ...obj, reason: 'Save failed' });
       }
     }
+
 
     setImported(imported);
     setSkipped(skipped);
