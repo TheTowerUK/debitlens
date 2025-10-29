@@ -9,12 +9,14 @@ import React from 'react';
  */
 
 export function installGlobalHandlers(): void {
+  const g = global as any;
+
   // Catch *all* JS errors before RN turns them into a native fatal
   try {
-    if (global.ErrorUtils && !global.__GLOBAL_HANDLER_SET__) {
-      const prev = global.ErrorUtils.getGlobalHandler?.();
+    if (g.ErrorUtils && !g.__GLOBAL_HANDLER_SET__) {
+      const prev = g.ErrorUtils.getGlobalHandler?.();
 
-      global.ErrorUtils.setGlobalHandler?.((error: any, isFatal?: boolean) => {
+      g.ErrorUtils.setGlobalHandler?.((error: any, isFatal?: boolean) => {
         const msg = (error && (error.stack || error.message)) || String(error);
         // Log to Metro so we see the *real* cause
         console.log('[GlobalError]', isFatal ? '(FATAL)' : '', msg);
@@ -25,14 +27,14 @@ export function installGlobalHandlers(): void {
         }
       });
 
-      global.__GLOBAL_HANDLER_SET__ = true;
+      g.__GLOBAL_HANDLER_SET__ = true;
     }
   } catch {}
 
   // Best-effort unhandled promise rejection logging (RN environment varies)
   try {
-    if (typeof global.onunhandledrejection === 'undefined') {
-      global.onunhandledrejection = (event: any) => {
+    if (typeof g.onunhandledrejection === 'undefined') {
+      g.onunhandledrejection = (event: any) => {
         const err = event?.reason || event;
         const msg = (err && (err.stack || err.message)) || String(err);
         console.log('[UnhandledPromiseRejection]', msg);
