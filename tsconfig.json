@@ -1,19 +1,20 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
     "forceConsistentCasingInFileNames": true,
     "baseUrl": "src",
     "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
     "paths": {
       "screens/*": ["screens/*"],
       "navigation/*": ["navigation/*"],
       "components/*": ["components/*"],
-      "moduleResolution": "node",
-      "esModuleInterop": true,
-    "*": ["*"]
+      "*": ["*"]
     }
   },
-  "include": ["src/**/*"],
-  "extends": "expo/tsconfig.base"
+  "include": ["src/**/*"]
 }
+
