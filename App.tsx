@@ -17,23 +17,26 @@ export default function App() {
 
   // dynamic import inside effect prevents module top-level evaluation from affecting hooks
   useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        // change path if your navigator file uses a different folder/name
-        const mod = await import('./src/navigations/AppNavigator');
-        // module default or named export
-        const Comp = (mod && (mod.default || mod.AppNavigator || mod)) as any;
-        if (mounted && Comp) setNavigator(() => Comp);
-      } catch (err) {
-        // keep Navigator null to render placeholder; log for debugging
-        console.warn('Navigator load failed', err);
+  let mounted = true;
+  (async () => {
+    try {
+      const mod = await import('./src/navigations/AppNavigator');
+      // Resolve component from possible shapes: default, named AppNavigator, or module itself
+      const Comp =
+        (mod as any).default ?? (mod as any).AppNavigator ?? (mod as any);
+
+      if (mounted && Comp) {
+        // setNavigator expects a React component type
+        setNavigator(() => Comp as React.ComponentType<any>);
       }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    } catch (err) {
+      console.warn('Navigator load failed', err);
+    }
+  })();
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   const Placeholder = useMemo(
     () => () => (
