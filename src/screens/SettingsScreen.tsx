@@ -5,7 +5,7 @@ import * as FileSystem from 'expo-file-system';   // ✅ non-legacy
 import * as Sharing from 'expo-sharing';
 import { resetDatabase } from '../dev/resetDb';   // no await at top!
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from 'navigations/AppNavigator';
+import type { RootStackParamList } from '../navigations/types';
 
 const CSV_TEMPLATE = `date,amount,type,account,category,note
 2025-10-01,12.50,expense,Main,Groceries,Milk & bread

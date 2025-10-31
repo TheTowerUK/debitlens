@@ -71,35 +71,34 @@ export default function ReportDetailScreen({ route, navigation }: any) {
 
   const csvText = useMemo(() => toCSV(headers, rows), [headers, rows]);
 
-  const onSaveAndShare = async () => {
-    setSaving(true);
-    try {
-  const base = (FileSystem as any).cacheDirectory ?? '';
-  const filename = `${base}report-${Date.now()}.csv`;
-  const encoding = (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
+const onSaveAndShare = async () => {
+  setSaving(true);
+  try {
+    const base = (FileSystem as any).cacheDirectory ?? '';
+    const filename = `${base}report-${Date.now()}.csv`;
+    const encoding = (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
 
-  if (typeof (FileSystem as any).writeAsStringAsync === 'function') {
-    await (FileSystem as any).writeAsStringAsync(filename, csvText, { encoding });
-  } else {
-    throw new Error('FileSystem.writeAsStringAsync not available');
-  }
-
-
-      // Share the file using RN Share API
-      await Share.share({
-        message: 'Exported report CSV',
-        url: filename,
-        title: 'Report CSV',
-      });
-
-      Alert.alert('Saved', 'Report saved and ready to share.');
-    } catch (e: any) {
-      console.warn('Save/Share error', e);
-      Alert.alert('Error', e?.message || 'Could not save or share report.');
-    } finally {
-      setSaving(false);
+    if (typeof (FileSystem as any).writeAsStringAsync === 'function') {
+      await (FileSystem as any).writeAsStringAsync(filename, csvText, { encoding });
+    } else {
+      throw new Error('FileSystem.writeAsStringAsync not available');
     }
-  };
+
+    await Share.share({
+      message: 'Exported report CSV',
+      url: filename,
+      title: 'Report CSV',
+    });
+
+    Alert.alert('Saved', 'Report saved and ready to share.');
+  } catch (e: any) {
+    console.warn('Save/Share error', e);
+    Alert.alert('Error', e?.message || 'Could not save or share report.');
+  } finally {
+    setSaving(false);
+  }
+};
+
 
   return (
     <View style={styles.wrap}>
