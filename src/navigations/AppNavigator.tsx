@@ -10,11 +10,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   return (
-    <Stack.Navigator initialRouteName="Login">
+    <Stack.Navigator
+      id={undefined}                      // ✅ add this line
+      initialRouteName="Login"
+      screenOptions={{ headerBackTitle: '' }}
+    >
       <Stack.Screen name="Login" component={LoginScreen} options={{ title: 'Login' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
-      {/* add Account screen here when implemented */}
+      {/* Add Account etc when ready */}
     </Stack.Navigator>
   );
 }

@@ -8,6 +8,8 @@
     "jsx": "react-jsx",
     "moduleResolution": "bundler",
     "esModuleInterop": true,
+    "skipLibCheck": true,
+    "exactOptionalPropertyTypes": false,
     "paths": {
       "screens/*": ["screens/*"],
       "navigation/*": ["navigation/*"],
