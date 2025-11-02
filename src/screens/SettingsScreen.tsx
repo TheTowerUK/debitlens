@@ -16,10 +16,14 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 export default function SettingsScreen({ navigation }) {
   const exportTemplate = async () => {
     try {
-      const path = FileSystem.cacheDirectory + 'debitlens_template.csv';
-      await FileSystem.writeAsStringAsync(path, CSV_TEMPLATE, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+  const base = (FileSystem as any).cacheDirectory ?? '';
+  const path = `${base}debitlens_template.csv`;
+  const encoding = (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
+  if (typeof (FileSystem as any).writeAsStringAsync === 'function') {
+    await (FileSystem as any).writeAsStringAsync(path, CSV_TEMPLATE, { encoding });
+  } else {
+    await (FileSystem as any).writeAsStringAsync(path, CSV_TEMPLATE);
+  }
       await Sharing.shareAsync(path, {
         mimeType: 'text/csv',
         dialogTitle: 'CSV template',
