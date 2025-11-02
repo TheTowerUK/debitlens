@@ -5,6 +5,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { View, Text } from 'react-native';
 import AppProvider from './src/state/AppProvider';
 
+import AppNavigator from './src/navigations/AppNavigator';
+console.log('AppNavigator typeof:', typeof AppNavigator); // must be "function"
+
 export default function App() {
   const [Navigator, setNavigator] = useState<React.ComponentType<any> | null>(null);
   const [count, setCount] = useState(0);
@@ -49,11 +52,14 @@ export default function App() {
 
   const ActiveNavigator = Navigator ?? Placeholder;
 
-  return (
-    <AppProvider>
-      <NavigationContainer>
-        <ActiveNavigator />
-      </NavigationContainer>
-    </AppProvider>
-  );
+return (
+  <AppProvider>
+    <NavigationContainer>
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+        <Text>Root OK</Text>
+      </View>
+    </NavigationContainer>
+  </AppProvider>
+);
+
 }

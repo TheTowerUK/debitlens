@@ -9,6 +9,7 @@ import type { RootStackParamList } from './types';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
+  
   return (
     <Stack.Navigator
       id={undefined}                      // ✅ add this line
