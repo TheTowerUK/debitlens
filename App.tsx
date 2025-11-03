@@ -7,20 +7,12 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppProvider';
 
-// Import the real screens we want to test
-import LoginScreen from './src/screens/LoginScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
-
-// 🔍 Debug: make sure these are actually components
+// Debug: React should be a non-null object, and version should be defined
+console.log('React is null?', React == null);
 console.log('React version:', (React as any)?.version);
-console.log('typeof LoginScreen:', typeof LoginScreen);
-console.log('typeof SettingsScreen:', typeof SettingsScreen);
-console.log('typeof DashboardScreen:', typeof DashboardScreen);
 
 const Stack = createNativeStackNavigator();
 
-// A super simple screen we know is valid
 function DummyScreen() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -34,16 +26,7 @@ export default function App() {
     <AppProvider>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="Dummy">
-          {/* Start with ONLY DummyScreen to confirm root is fine */}
           <Stack.Screen name="Dummy" component={DummyScreen} />
-
-          {/* Then, one by one, you can swap or add these: */}
-
-          {/*
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          */}
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

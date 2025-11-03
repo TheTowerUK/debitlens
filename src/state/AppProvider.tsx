@@ -1,16 +1,21 @@
 // src/state/AppProvider.tsx
 import React from 'react';
-import { useAppReady } from '../hooks/useAppReady';
 
 type Props = { children: React.ReactNode };
 
-export function AppProvider({ children }: Props) {
-  const ready = useAppReady();
+export const AppContext = React.createContext<any>({});
 
-  if (!ready) return null; // Or replace with a loading spinner
-
-  return <>{children}</>;
+export function useApp() {
+  return React.useContext(AppContext);
 }
 
-export default AppProvider;
+export default function AppProvider({ children }: Props) {
+  // no useEffect/useState here – just a plain provider
+  return (
+    <AppContext.Provider value={{}}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+
 
