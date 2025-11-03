@@ -1,21 +1,50 @@
 // App.tsx
 import 'react-native-gesture-handler';
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
 import { View, Text } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppProvider';
-import AppNavigator from './src/navigations/AppNavigator';
 
-// Debug logs – these are what we care about right now
+// Import the real screens we want to test
+import LoginScreen from './src/screens/LoginScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+
+// 🔍 Debug: make sure these are actually components
 console.log('React version:', (React as any)?.version);
-console.log('AppNavigator typeof:', typeof AppNavigator); // should be "function"
+console.log('typeof LoginScreen:', typeof LoginScreen);
+console.log('typeof SettingsScreen:', typeof SettingsScreen);
+console.log('typeof DashboardScreen:', typeof DashboardScreen);
+
+const Stack = createNativeStackNavigator();
+
+// A super simple screen we know is valid
+function DummyScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>Dummy screen OK</Text>
+    </View>
+  );
+}
 
 export default function App() {
   return (
     <AppProvider>
       <NavigationContainer>
-        <AppNavigator />
+        <Stack.Navigator initialRouteName="Dummy">
+          {/* Start with ONLY DummyScreen to confirm root is fine */}
+          <Stack.Screen name="Dummy" component={DummyScreen} />
+
+          {/* Then, one by one, you can swap or add these: */}
+
+          {/*
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="Dashboard" component={DashboardScreen} />
+          */}
+        </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
   );
