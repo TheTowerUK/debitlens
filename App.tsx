@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Text, View } from 'react-native';
+import HookSmokeTest from './src/HookSmokeTest';
 
 export default function App() {
   useEffect(() => {
