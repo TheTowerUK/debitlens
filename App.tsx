@@ -16,14 +16,16 @@ function DummyScreen() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <AppProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="Dummy">
-          <Stack.Screen name="Dummy" component={DummyScreen} />
-        </Stack.Navigator>
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+          <Text>Root OK</Text>
+        </View>
       </NavigationContainer>
     </AppProvider>
   );
 }
+
+export default App;
