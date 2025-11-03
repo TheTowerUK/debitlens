@@ -7,13 +7,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppProvider';
 
-//import LoginScreen from './src/screens/LoginScreen';
+import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 //import DashboardScreen from './src/screens/DashboardScreen';
 
 const Stack = createNativeStackNavigator();
 
-//console.log('typeof LoginScreen:', typeof LoginScreen);
+console.log('typeof LoginScreen:', typeof LoginScreen);
 console.log('typeof SettingsScreen:', typeof SettingsScreen);
 //console.log('typeof DashboardScreen:', typeof DashboardScreen);
 
