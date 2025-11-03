@@ -7,6 +7,10 @@ import DashboardScreen from '../screens/DashboardScreen';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+// In AppNavigator.tsx
+console.log('typeof LoginScreen:', typeof LoginScreen);
+console.log('typeof SettingsScreen:', typeof SettingsScreen);
+console.log('typeof DashboardScreen:', typeof DashboardScreen);
 
 export default function AppNavigator() {
   
