@@ -1,31 +1,22 @@
 // App.tsx
 import 'react-native-gesture-handler';
 import React from 'react';
-import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { View, Text } from 'react-native';
+
 import AppProvider from './src/state/AppProvider';
+import AppNavigator from './src/navigations/AppNavigator';
 
-const Stack = createNativeStackNavigator();
+// Debug logs – these are what we care about right now
+console.log('React version:', (React as any)?.version);
+console.log('AppNavigator typeof:', typeof AppNavigator); // should be "function"
 
-function DummyScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Dummy screen OK</Text>
-    </View>
-  );
-}
-
-function App() {
+export default function App() {
   return (
     <AppProvider>
       <NavigationContainer>
-        <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
-          <Text>Root OK</Text>
-        </View>
+        <AppNavigator />
       </NavigationContainer>
     </AppProvider>
   );
 }
-
-export default App;
