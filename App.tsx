@@ -7,15 +7,11 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppProvider';
 
-import LoginScreen from './src/screens/LoginScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-//import DashboardScreen from './src/screens/DashboardScreen';
+// 👇 add this
+import type { RootStackParamList } from './src/navigations/types';
 
-const Stack = createNativeStackNavigator();
-
-console.log('typeof LoginScreen:', typeof LoginScreen);
-console.log('typeof SettingsScreen:', typeof SettingsScreen);
-//console.log('typeof DashboardScreen:', typeof DashboardScreen);
+// ⬅️ give the stack your param list
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function DummyScreen() {
   return (
@@ -25,25 +21,18 @@ function DummyScreen() {
   );
 }
 
+// and import LoginScreen
+import LoginScreen from './src/screens/LoginScreen';
+
 export default function App() {
   return (
     <AppProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="Dummy">
-          {/* Keep only Dummy for now so the app still runs */}
-          <Stack.Screen name="Dummy" component={DummyScreen} />
-          
-          {/*
-          Later, once we see the console logs, we can enable these one by one:
-
+        <Stack.Navigator initialRouteName="Login">
           <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="Dashboard" component={DashboardScreen} />
-          */}
+          <Stack.Screen name="Dashboard" component={DummyScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
   );
 }
-
-
