@@ -1,6 +1,6 @@
 // App.tsx
 //import 'react-native-gesture-handler';
-import React from 'react';
+//import React from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -13,7 +13,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 
 // 🔍 debug: these MUST be "function"
-console.log('React version:', (React as any)?.version);
+//console.log('React version:', (React as any)?.version);
 console.log('typeof LoginScreen:', typeof LoginScreen);
 console.log('typeof SettingsScreen:', typeof SettingsScreen);
 console.log('typeof DashboardScreen:', typeof DashboardScreen);

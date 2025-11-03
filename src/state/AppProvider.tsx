@@ -1,5 +1,5 @@
 // src/state/AppProvider.tsx
-import React from 'react';
+//import React from 'react';
 
 type AppContextValue = {
   // add anything you need later; for now it's just a placeholder
