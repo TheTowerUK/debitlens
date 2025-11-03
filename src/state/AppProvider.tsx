@@ -1,21 +1,29 @@
 // src/state/AppProvider.tsx
 import React from 'react';
 
-type Props = { children: React.ReactNode };
+type AppContextValue = {
+  // add anything you need later; for now it's just a placeholder
+};
 
-export const AppContext = React.createContext<any>({});
+export const AppContext = React.createContext<AppContextValue | undefined>(undefined);
 
-export function useApp() {
-  return React.useContext(AppContext);
+export function useApp(): AppContextValue {
+  const ctx = React.useContext(AppContext);
+  // For debugging we just return an empty object instead of throwing
+  return (ctx ?? {}) as AppContextValue;
 }
 
+type Props = {
+  children: React.ReactNode;
+};
+
 export default function AppProvider({ children }: Props) {
-  // no useEffect/useState here – just a plain provider
+  // 👇 NO useState, NO useEffect, NOTHING fancy here
+  const value = React.useMemo<AppContextValue>(() => ({}), []);
+
   return (
-    <AppContext.Provider value={{}}>
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
 }
-
-
