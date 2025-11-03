@@ -9,13 +9,13 @@ import AppProvider from './src/state/AppProvider';
 
 //import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-//import DashboardScreen from './src/screens/DashboardScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
 
 const Stack = createNativeStackNavigator();
 
 //console.log('typeof LoginScreen:', typeof LoginScreen);
 console.log('typeof SettingsScreen:', typeof SettingsScreen);
-//console.log('typeof DashboardScreen:', typeof DashboardScreen);
+console.log('typeof DashboardScreen:', typeof DashboardScreen);
 
 function DummyScreen() {
   return (
@@ -32,7 +32,8 @@ export default function App() {
         <Stack.Navigator initialRouteName="Dummy">
           {/* Keep only Dummy for now so the app still runs */}
           <Stack.Screen name="Dummy" component={DummyScreen} />
-
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          
           {/*
           Later, once we see the console logs, we can enable these one by one:
 
