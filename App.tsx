@@ -32,7 +32,6 @@ export default function App() {
         <Stack.Navigator initialRouteName="Dummy">
           {/* Keep only Dummy for now so the app still runs */}
           <Stack.Screen name="Dummy" component={DummyScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
           
           {/*
           Later, once we see the console logs, we can enable these one by one:
