@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 const KEY_AUTH = 'auth:loggedIn';
 const KEY_PIN = 'auth:pin';
 const KEY_ACCOUNTS = 'data:accounts';
+const KEY_TRANSACTIONS = 'data:transactions';
 
 export type Account = {
   id: string;
@@ -13,13 +14,35 @@ export type Account = {
   createdAt: string;
 };
 
+export type Transaction = {
+  id: string;
+  accountId: string;
+  amount: number;           // positive number
+  type: 'income' | 'expense';
+  note?: string;
+  date: string;             // ISO timestamp
+};
+
 type AppState = {
   accounts: Account[];
+  transactions: Transaction[];
+};
+
+type AppSelectors = {
+  accountBalance: (accountId: string) => number;
+  transactionsForAccount: (accountId: string) => Transaction[];
 };
 
 type AppActions = {
   addAccount: (name: string) => Promise<Account>;
   deleteAccount: (id: string) => Promise<void>;
+  addTransaction: (input: {
+    accountId: string;
+    amount: number;
+    type: 'income' | 'expense';
+    note?: string;
+  }) => Promise<Transaction>;
+  deleteTransaction: (id: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -36,14 +59,16 @@ type AppContextValue = {
   // App data
   state: AppState;
   actions: AppActions;
+  selectors: AppSelectors;
 
-  // Legacy / optional fields for older screens
-  selectors?: any;
+  // Legacy fields (kept just so old code doesn’t explode)
   payments?: any[];
   addPayment?: (...args: any[]) => any;
 };
 
-export const AppContext = React.createContext<AppContextValue | undefined>(undefined);
+export const AppContext = React.createContext<AppContextValue | undefined>(
+  undefined
+);
 
 export function useApp(): AppContextValue {
   const ctx = React.useContext(AppContext);
@@ -94,17 +119,21 @@ export default function AppProvider({ children }: Props) {
   const [isHydrated, setIsHydrated] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
-  const [appState, setAppState] = React.useState<AppState>({ accounts: [] });
+  const [appState, setAppState] = React.useState<AppState>({
+    accounts: [],
+    transactions: [],
+  });
 
-  // Hydrate auth + accounts on startup
+  // Hydrate auth + accounts + transactions
   React.useEffect(() => {
     let mounted = true;
 
     (async () => {
       try {
-        const [authFlag, accountsJson] = await Promise.all([
+        const [authFlag, accountsJson, txJson] = await Promise.all([
           AsyncStorage.getItem(KEY_AUTH),
           AsyncStorage.getItem(KEY_ACCOUNTS),
+          AsyncStorage.getItem(KEY_TRANSACTIONS),
         ]);
 
         if (!mounted) return;
@@ -114,13 +143,27 @@ export default function AppProvider({ children }: Props) {
         if (accountsJson) {
           try {
             const parsed = JSON.parse(accountsJson);
-            if (parsed && Array.isArray(parsed)) {
-              setAppState({ accounts: parsed });
+            if (Array.isArray(parsed)) {
+              appState.accounts = parsed;
             }
           } catch {
             // ignore bad JSON
           }
         }
+
+        if (txJson) {
+          try {
+            const parsed = JSON.parse(txJson);
+            if (Array.isArray(parsed)) {
+              appState.transactions = parsed;
+            }
+          } catch {
+            // ignore
+          }
+        }
+
+        // force state update after mutation
+        setAppState({ ...appState });
       } finally {
         if (mounted) {
           setIsHydrated(true);
@@ -131,18 +174,36 @@ export default function AppProvider({ children }: Props) {
     return () => {
       mounted = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Persist accounts whenever they change
   React.useEffect(() => {
     (async () => {
       try {
-        await AsyncStorage.setItem(KEY_ACCOUNTS, JSON.stringify(appState.accounts));
+        await AsyncStorage.setItem(
+          KEY_ACCOUNTS,
+          JSON.stringify(appState.accounts)
+        );
       } catch (e) {
         console.warn('[AppProvider] failed to persist accounts', e);
       }
     })();
   }, [appState.accounts]);
+
+  // Persist transactions whenever they change
+  React.useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem(
+          KEY_TRANSACTIONS,
+          JSON.stringify(appState.transactions)
+        );
+      } catch (e) {
+        console.warn('[AppProvider] failed to persist transactions', e);
+      }
+    })();
+  }, [appState.transactions]);
 
   const getPin = React.useCallback(() => {
     return secureGetItem(KEY_PIN);
@@ -186,19 +247,77 @@ export default function AppProvider({ children }: Props) {
     setAppState(prev => ({
       ...prev,
       accounts: prev.accounts.filter(a => a.id !== id),
+      transactions: prev.transactions.filter(t => t.accountId !== id),
     }));
   }, []);
+
+  // Actions for transactions
+  const addTransaction = React.useCallback(
+    async (input: {
+      accountId: string;
+      amount: number;
+      type: 'income' | 'expense';
+      note?: string;
+    }): Promise<Transaction> => {
+      const { accountId, amount, type, note } = input;
+      if (!accountId) throw new Error('accountId is required');
+      if (!amount || !Number.isFinite(amount)) {
+        throw new Error('Amount must be a number');
+      }
+      const tx: Transaction = {
+        id: `tx_${Date.now()}`,
+        accountId,
+        amount: Math.abs(amount),
+        type,
+        note,
+        date: new Date().toISOString(),
+      };
+      setAppState(prev => ({
+        ...prev,
+        transactions: [...prev.transactions, tx],
+      }));
+      return tx;
+    },
+    []
+  );
+
+  const deleteTransaction = React.useCallback(async (id: string): Promise<void> => {
+    setAppState(prev => ({
+      ...prev,
+      transactions: prev.transactions.filter(t => t.id !== id),
+    }));
+  }, []);
+
+  // Selectors
+  const selectors: AppSelectors = React.useMemo(
+    () => ({
+      accountBalance: (accountId: string): number => {
+        const txs = appState.transactions.filter(t => t.accountId === accountId);
+        return txs.reduce((sum, t) => {
+          const signed = t.type === 'income' ? t.amount : -t.amount;
+          return sum + signed;
+        }, 0);
+      },
+      transactionsForAccount: (accountId: string): Transaction[] =>
+        appState.transactions
+          .filter(t => t.accountId === accountId)
+          .sort((a, b) => b.date.localeCompare(a.date)),
+    }),
+    [appState.transactions]
+  );
 
   const actions = React.useMemo<AppActions>(
     () => ({
       addAccount,
       deleteAccount,
+      addTransaction,
+      deleteTransaction,
       signOut: async () => {
         await AsyncStorage.removeItem(KEY_AUTH);
         setIsAuthenticated(false);
       },
     }),
-    [addAccount, deleteAccount]
+    [addAccount, deleteAccount, addTransaction, deleteTransaction]
   );
 
   const value = React.useMemo<AppContextValue>(
@@ -212,7 +331,7 @@ export default function AppProvider({ children }: Props) {
       logout,
       state: appState,
       actions,
-      selectors: {},   // stub for now
+      selectors,
       payments: [],
       addPayment: () => {},
     }),
@@ -226,8 +345,11 @@ export default function AppProvider({ children }: Props) {
       logout,
       appState,
       actions,
+      selectors,
     ]
   );
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>{children}</AppContext.Provider>
+  );
 }

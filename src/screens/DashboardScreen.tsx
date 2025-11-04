@@ -17,7 +17,7 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { state, actions } = useApp();
+  const { state, actions, selectors } = useApp();
   const accounts = state.accounts || [];
 
   const [adding, setAdding] = useState(false);
@@ -30,11 +30,9 @@ export default function DashboardScreen({ navigation }: Props) {
       return;
     }
     try {
-      const account = await actions.addAccount(name);
+      await actions.addAccount(name);
       setNewName('');
       setAdding(false);
-      // In future, we can navigate to an Account screen with account.id
-      // navigation.navigate('Account', { accountId: account.id });
     } catch (e: any) {
       console.warn('addAccount failed', e);
       Alert.alert('Error', e?.message || 'Could not create account');
@@ -59,10 +57,26 @@ export default function DashboardScreen({ navigation }: Props) {
     ]);
   };
 
+  const handleAddSampleTx = async (accountId: string) => {
+    try {
+      await actions.addTransaction({
+        accountId,
+        amount: 10,
+        type: 'income',
+        note: 'Sample income',
+      });
+    } catch (e: any) {
+      console.warn('addTransaction failed', e);
+      Alert.alert('Error', e?.message || 'Could not add transaction');
+    }
+  };
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Dashboard</Text>
-      <Text style={styles.subtle}>Accounts are stored locally on this device.</Text>
+      <Text style={styles.subtle}>
+        Accounts & transactions are stored locally on this device.
+      </Text>
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Accounts</Text>
@@ -92,25 +106,52 @@ export default function DashboardScreen({ navigation }: Props) {
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 32 }}>
         {accounts.length === 0 && !adding && (
-          <Text style={styles.empty}>No accounts yet. Tap “Add” to create one.</Text>
+          <Text style={styles.empty}>
+            No accounts yet. Tap “Add” to create one.
+          </Text>
         )}
 
-        {accounts.map(a => (
-          <View key={a.id} style={styles.card}>
-            <View style={styles.cardTop}>
-              <Text style={styles.cardName}>{a.name}</Text>
-              <Pressable
-                style={styles.deletePill}
-                onPress={() => handleDeleteAccount(a.id)}
-              >
-                <Text style={styles.deletePillText}>Delete</Text>
-              </Pressable>
+        {accounts.map(a => {
+          const balance = selectors.accountBalance(a.id);
+          const txs = selectors.transactionsForAccount(a.id);
+          return (
+            <View key={a.id} style={styles.card}>
+              <View style={styles.cardTop}>
+                <View>
+                  <Text style={styles.cardName}>{a.name}</Text>
+                  <Text style={styles.cardSub}>
+                    {txs.length} transaction{txs.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text
+                    style={[
+                      styles.balance,
+                      { color: balance >= 0 ? '#34D399' : '#F87171' },
+                    ]}
+                  >
+                    £{Math.abs(balance).toFixed(2)}
+                  </Text>
+                  <Pressable
+                    style={styles.samplePill}
+                    onPress={() => handleAddSampleTx(a.id)}
+                  >
+                    <Text style={styles.samplePillText}>+ £10 sample</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.cardBottom}>
+                <Pressable
+                  style={styles.deletePill}
+                  onPress={() => handleDeleteAccount(a.id)}
+                >
+                  <Text style={styles.deletePillText}>Delete account</Text>
+                </Pressable>
+              </View>
             </View>
-            <Text style={styles.cardSub}>
-              Created {new Date(a.createdAt).toLocaleString()}
-            </Text>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -182,7 +223,6 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: '#fff', fontWeight: '700' },
 
   scroll: { flex: 1, marginTop: 12 },
-
   empty: { color: '#6B7280', marginTop: 8 },
 
   card: {
@@ -197,6 +237,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardName: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  cardSub: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
+  balance: { fontSize: 18, fontWeight: '800' },
+
+  samplePill: {
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#16A34A',
+  },
+  samplePillText: { color: '#BBF7D0', fontSize: 12, fontWeight: '600' },
+
+  cardBottom: {
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
   deletePill: {
     paddingVertical: 4,
     paddingHorizontal: 10,
@@ -205,7 +263,6 @@ const styles = StyleSheet.create({
     borderColor: '#7F1D1D',
   },
   deletePillText: { color: '#FCA5A5', fontSize: 12, fontWeight: '600' },
-  cardSub: { color: '#9CA3AF', fontSize: 12, marginTop: 4 },
 
   footer: {
     flexDirection: 'row',
