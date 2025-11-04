@@ -6,31 +6,42 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import AppProvider from './src/state/AppProvider';
-
-// 👇 add this
 import type { RootStackParamList } from './src/navigations/types';
 
-// ⬅️ give the stack your param list
+// Screens
+import LoginScreen from './src/screens/LoginScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-function DummyScreen() {
+function DummyDashboardScreen() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Dummy screen OK</Text>
+      <Text>Dashboard placeholder</Text>
     </View>
   );
 }
-
-// and import LoginScreen
-import LoginScreen from './src/screens/LoginScreen';
 
 export default function App() {
   return (
     <AppProvider>
       <NavigationContainer>
         <Stack.Navigator initialRouteName="Login">
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Dashboard" component={DummyScreen} />
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{ title: 'Login' }}
+          />
+          <Stack.Screen
+            name="Dashboard"
+            component={DummyDashboardScreen}
+            options={{ title: 'Dashboard' }}
+          />
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ title: 'Settings' }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

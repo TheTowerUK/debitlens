@@ -1,9 +1,16 @@
-// src/screens/SettingsScreen.js (minimal, safe)
+// src/screens/SettingsScreen.tsx
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Alert, Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';   // ✅ non-legacy
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Platform,
+} from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { resetDatabase } from '../dev/resetDb';   // no await at top!
+import { resetDatabase } from '../dev/resetDb';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 
@@ -11,19 +18,26 @@ const CSV_TEMPLATE = `date,amount,type,account,category,note
 2025-10-01,12.50,expense,Main,Groceries,Milk & bread
 2025-10-03,2500,income,Main,Salary,October
 `;
+
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
-export default function SettingsScreen({ navigation }) {
+// Cast to any so we can use cacheDirectory / EncodingType without fighting TS
+const FS = FileSystem as any;
+
+export default function SettingsScreen({ navigation }: Props) {
   const exportTemplate = async () => {
     try {
-  const base = (FileSystem as any).cacheDirectory ?? '';
-  const path = `${base}debitlens_template.csv`;
-  const encoding = (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
-  if (typeof (FileSystem as any).writeAsStringAsync === 'function') {
-    await (FileSystem as any).writeAsStringAsync(path, CSV_TEMPLATE, { encoding });
-  } else {
-    await (FileSystem as any).writeAsStringAsync(path, CSV_TEMPLATE);
-  }
+      const base = FS.cacheDirectory ?? '';
+      const path = `${base}debitlens_template.csv`;
+      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
+
+      if (typeof FS.writeAsStringAsync === 'function') {
+        await FS.writeAsStringAsync(path, CSV_TEMPLATE, { encoding });
+      } else {
+        // fallback if options signature isn’t available
+        await FS.writeAsStringAsync(path, CSV_TEMPLATE);
+      }
+
       await Sharing.shareAsync(path, {
         mimeType: 'text/csv',
         dialogTitle: 'CSV template',
@@ -36,9 +50,9 @@ export default function SettingsScreen({ navigation }) {
 
   const onResetDb = async () => {
     try {
-      await resetDatabase(); // ✅ run on button press, not at top level
+      await resetDatabase();
       Alert.alert('Database reset', 'The local database file was deleted.');
-      // After a reset, either restart the app or re-run migrations on next launch.
+      // After a reset, you typically restart the app or re-run migrations on next launch.
     } catch (e) {
       console.warn('[settings] reset DB failed', e);
       Alert.alert('Error', 'Could not reset the database.');
@@ -57,7 +71,10 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.btnText}>Export CSV template</Text>
         </Pressable>
 
-        <Pressable style={[styles.btn, styles.btnDanger, { marginTop: 8 }]} onPress={onResetDb}>
+        <Pressable
+          style={[styles.btn, styles.btnDanger, { marginTop: 8 }]}
+          onPress={onResetDb}
+        >
           <Text style={styles.btnText}>Reset local database</Text>
         </Pressable>
 

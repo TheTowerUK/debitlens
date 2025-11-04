@@ -9,4 +9,5 @@ export type RootStackParamList = {
   Budgets?: undefined;
   Notifications?: undefined;
   Recurring?: undefined;
+  ImportCSV?: undefined;
 };
