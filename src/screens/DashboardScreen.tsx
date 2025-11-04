@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { useApp } from '../state/AppState';
 import ActionFab from '../components/ActionFab';
 import { upsertAccount } from '../services/accounts';
 import type { JSX } from 'react';

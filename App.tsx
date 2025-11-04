@@ -4,6 +4,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
 import AppProvider from './src/state/AppProvider';
 import type { RootStackParamList } from './src/navigations/types';
@@ -41,6 +42,11 @@ export default function App() {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="ImportCSV"
+            component={ImportCsvScreen}
+            options={{ title: 'Import CSV' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
