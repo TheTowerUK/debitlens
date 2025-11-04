@@ -11,6 +11,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
+import AccountScreen from './src/screens/AccountScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -39,6 +40,12 @@ export default function App() {
             component={ImportCsvScreen}
             options={{ title: 'Import CSV' }}
           />
+          <Stack.Screen
+            name="Account"
+            component={AccountScreen}
+            options={{ title: 'Account' }}
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
