@@ -1,27 +1,18 @@
 // App.tsx
 import 'react-native-gesture-handler';
 import React from 'react';
-import { View, Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
 import AppProvider from './src/state/AppProvider';
 import type { RootStackParamList } from './src/navigations/types';
 
-// Screens
 import LoginScreen from './src/screens/LoginScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import ImportCsvScreen from './src/screens/ImportCsvScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-function DummyDashboardScreen() {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Dashboard placeholder</Text>
-    </View>
-  );
-}
 
 export default function App() {
   return (
@@ -35,7 +26,7 @@ export default function App() {
           />
           <Stack.Screen
             name="Dashboard"
-            component={DummyDashboardScreen}
+            component={DashboardScreen}
             options={{ title: 'Dashboard' }}
           />
           <Stack.Screen
