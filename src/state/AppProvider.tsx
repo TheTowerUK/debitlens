@@ -5,6 +5,23 @@ import * as SecureStore from 'expo-secure-store';
 
 const KEY_AUTH = 'auth:loggedIn';
 const KEY_PIN = 'auth:pin';
+const KEY_ACCOUNTS = 'data:accounts';
+
+export type Account = {
+  id: string;
+  name: string;
+  createdAt: string;
+};
+
+type AppState = {
+  accounts: Account[];
+};
+
+type AppActions = {
+  addAccount: (name: string) => Promise<Account>;
+  deleteAccount: (id: string) => Promise<void>;
+  signOut: () => Promise<void>;
+};
 
 type AppContextValue = {
   // Auth / PIN
@@ -16,10 +33,12 @@ type AppContextValue = {
   login: () => Promise<void>;
   logout: () => Promise<void>;
 
-  // Legacy / upcoming fields so existing screens compile
-  state?: any;
+  // App data
+  state: AppState;
+  actions: AppActions;
+
+  // Legacy / optional fields for older screens
   selectors?: any;
-  actions?: any;
   payments?: any[];
   addPayment?: (...args: any[]) => any;
 };
@@ -75,28 +94,32 @@ export default function AppProvider({ children }: Props) {
   const [isHydrated, setIsHydrated] = React.useState(false);
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
-  // Placeholder "state/selectors/actions" for older screens
-  const legacyState = React.useMemo(() => ({}), []);
-  const legacySelectors = React.useMemo(() => ({}), []);
-  const legacyActions = React.useMemo(
-    () => ({
-      // you can flesh these out later as needed
-      signOut: async () => {
-        await AsyncStorage.removeItem(KEY_AUTH);
-        setIsAuthenticated(false);
-      },
-    }),
-    []
-  );
+  const [appState, setAppState] = React.useState<AppState>({ accounts: [] });
 
+  // Hydrate auth + accounts on startup
   React.useEffect(() => {
     let mounted = true;
 
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(KEY_AUTH);
-        if (mounted) {
-          setIsAuthenticated(stored === '1');
+        const [authFlag, accountsJson] = await Promise.all([
+          AsyncStorage.getItem(KEY_AUTH),
+          AsyncStorage.getItem(KEY_ACCOUNTS),
+        ]);
+
+        if (!mounted) return;
+
+        setIsAuthenticated(authFlag === '1');
+
+        if (accountsJson) {
+          try {
+            const parsed = JSON.parse(accountsJson);
+            if (parsed && Array.isArray(parsed)) {
+              setAppState({ accounts: parsed });
+            }
+          } catch {
+            // ignore bad JSON
+          }
         }
       } finally {
         if (mounted) {
@@ -109,6 +132,17 @@ export default function AppProvider({ children }: Props) {
       mounted = false;
     };
   }, []);
+
+  // Persist accounts whenever they change
+  React.useEffect(() => {
+    (async () => {
+      try {
+        await AsyncStorage.setItem(KEY_ACCOUNTS, JSON.stringify(appState.accounts));
+      } catch (e) {
+        console.warn('[AppProvider] failed to persist accounts', e);
+      }
+    })();
+  }, [appState.accounts]);
 
   const getPin = React.useCallback(() => {
     return secureGetItem(KEY_PIN);
@@ -132,6 +166,41 @@ export default function AppProvider({ children }: Props) {
     setIsAuthenticated(false);
   }, []);
 
+  // Actions for accounts
+  const addAccount = React.useCallback(async (name: string): Promise<Account> => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error('Account name is required');
+    }
+    const now = new Date().toISOString();
+    const account: Account = {
+      id: `acc_${Date.now()}`,
+      name: trimmed,
+      createdAt: now,
+    };
+    setAppState(prev => ({ ...prev, accounts: [...prev.accounts, account] }));
+    return account;
+  }, []);
+
+  const deleteAccount = React.useCallback(async (id: string): Promise<void> => {
+    setAppState(prev => ({
+      ...prev,
+      accounts: prev.accounts.filter(a => a.id !== id),
+    }));
+  }, []);
+
+  const actions = React.useMemo<AppActions>(
+    () => ({
+      addAccount,
+      deleteAccount,
+      signOut: async () => {
+        await AsyncStorage.removeItem(KEY_AUTH);
+        setIsAuthenticated(false);
+      },
+    }),
+    [addAccount, deleteAccount]
+  );
+
   const value = React.useMemo<AppContextValue>(
     () => ({
       isHydrated,
@@ -141,11 +210,9 @@ export default function AppProvider({ children }: Props) {
       clearPin,
       login,
       logout,
-
-      // legacy-compatible fields
-      state: legacyState,
-      selectors: legacySelectors,
-      actions: legacyActions,
+      state: appState,
+      actions,
+      selectors: {},   // stub for now
       payments: [],
       addPayment: () => {},
     }),
@@ -157,9 +224,8 @@ export default function AppProvider({ children }: Props) {
       clearPin,
       login,
       logout,
-      legacyState,
-      legacySelectors,
-      legacyActions,
+      appState,
+      actions,
     ]
   );
 
