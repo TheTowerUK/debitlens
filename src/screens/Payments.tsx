@@ -1,7 +1,7 @@
 import { View, Text, ScrollView } from 'react-native';
 import PaymentForm from '../components/PaymentForm';
 import PaymentCard from '../components/PaymentCard';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 
 export default function Payments() {
   const { payments, addPayment } = useApp();

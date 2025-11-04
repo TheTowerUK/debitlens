@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import Constants from 'expo-constants';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const isValidTime = (s) => /^\d{2}:\d{2}$/.test(s) && +s.slice(0, 2) < 24 && +s.slice(3, 5) < 60;

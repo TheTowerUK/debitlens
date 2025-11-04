@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 
 export default function SplashAuthScreen({ navigation }) {
   const { isHydrated, getPin, setPin } = useApp();

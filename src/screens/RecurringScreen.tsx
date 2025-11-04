@@ -11,7 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 
 const pad2 = (n) => String(n).padStart(2, '0');
 const todayISO = () => {

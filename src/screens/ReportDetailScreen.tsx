@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, Share } from 'react-native';
 import * as FileSystem from 'expo-file-system';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 import { rowHash } from '../utils/csvUtils';
 import { CSV_TEMPLATE } from '../utils/csvTemplate';
 // use todayISO from your utils if you need a fallback date, otherwise provide a small toISODate helper

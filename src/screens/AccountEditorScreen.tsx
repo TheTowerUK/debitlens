@@ -1,7 +1,7 @@
 // src/screens/AccountEditorScreen.js
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, Alert } from 'react-native';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 import AccountForm from '../components/AccountForm';
 
 export default function AccountEditorScreen({ navigation, route }) {

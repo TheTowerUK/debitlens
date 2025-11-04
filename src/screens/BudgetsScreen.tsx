@@ -10,7 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 import { money } from '../utils/moneyUtils';
 
 // --- date helpers ---

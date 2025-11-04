@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 import { money } from '../utils/moneyUtils';
 
 export default function HistoryScreen({ navigation }) {

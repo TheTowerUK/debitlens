@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import { useApp } from '../state/AppState';
+import { useApp } from '../state/AppProvider';
 
 import * as Notifications from 'expo-notifications';
 

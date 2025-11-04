@@ -1,5 +1,5 @@
 // src/screens/LoginScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,37 +11,79 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { useApp } from '../state/AppProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [pin, setPin] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [mode, setMode] = useState<'signin' | 'setpin'>('signin');
+  const { getPin, setPin, login } = useApp();
 
-  const onSignIn = () => {
-    // For now, just accept any PIN and go to Dashboard
-    if (!pin.trim()) {
-      Alert.alert('Enter a PIN', 'For now this can be anything.');
-      return;
+  const [mode, setMode] = useState<'loading' | 'signin' | 'setpin'>('loading');
+  const [pin, setPinInput] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  // Decide whether to show "sign in" or "set PIN" based on stored PIN
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const stored = await getPin();
+        if (!mounted) return;
+        setMode(stored ? 'signin' : 'setpin');
+      } catch {
+        if (!mounted) return;
+        setMode('signin');
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [getPin]);
+
+  const onSignIn = async () => {
+    try {
+      const stored = await getPin();
+      if ((stored || '') === pin.trim()) {
+        await login();
+        navigation.replace('Dashboard');
+      } else {
+        Alert.alert('Incorrect PIN', 'Please try again.');
+        setPinInput('');
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to verify PIN right now.');
     }
-    navigation.replace('Dashboard');
   };
 
-  const onSavePin = () => {
-    // Stubbed: just check they match and go to Dashboard
+  const onSavePin = async () => {
     const p1 = pin.trim();
     const p2 = confirm.trim();
-    if (!p1 || !p2) {
-      Alert.alert('Enter and confirm PIN');
+    if (!/^\d{4,6}$/.test(p1)) {
+      Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
       return;
     }
     if (p1 !== p2) {
       Alert.alert('Mismatch', 'PINs do not match.');
       return;
     }
-    navigation.replace('Dashboard');
+    try {
+      await setPin(p1);
+      await login();
+      navigation.replace('Dashboard');
+    } catch {
+      Alert.alert('Error', 'Unable to save PIN right now.');
+    }
   };
+
+  if (mode === 'loading') {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.subtle}>Preparing…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -56,8 +98,8 @@ export default function LoginScreen({ navigation }: Props) {
         <>
           <TextInput
             value={pin}
-            onChangeText={setPin}
-            placeholder="PIN (any value)"
+            onChangeText={setPinInput}
+            placeholder="PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
             secureTextEntry
             keyboardType="number-pad"
@@ -71,7 +113,7 @@ export default function LoginScreen({ navigation }: Props) {
           <Pressable
             style={[styles.ghost, { marginTop: 8 }]}
             onPress={() => {
-              setPin('');
+              setPinInput('');
               setMode('setpin');
             }}
           >
@@ -89,8 +131,8 @@ export default function LoginScreen({ navigation }: Props) {
         <>
           <TextInput
             value={pin}
-            onChangeText={setPin}
-            placeholder="New PIN"
+            onChangeText={setPinInput}
+            placeholder="New PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
             secureTextEntry
             keyboardType="number-pad"
@@ -113,7 +155,7 @@ export default function LoginScreen({ navigation }: Props) {
           <Pressable
             style={[styles.ghost, { marginTop: 8 }]}
             onPress={() => {
-              setPin('');
+              setPinInput('');
               setConfirm('');
               setMode('signin');
             }}
@@ -139,6 +181,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#0B0D13',
     padding: 24,
     paddingTop: Platform.OS === 'ios' ? 64 : 32,
+  },
+  center: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   h1: { color: '#fff', fontSize: 28, fontWeight: '800', marginBottom: 8 },
   subtle: { color: '#9CA3AF', marginBottom: 16 },
