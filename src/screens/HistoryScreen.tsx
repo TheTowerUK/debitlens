@@ -1,5 +1,5 @@
 // src/screens/HistoryScreen.tsx
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,117 +7,184 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
+import { generateReportCSV, type ReportRow } from '../services/reporting';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
 export default function HistoryScreen({ navigation }: Props) {
-  const { state, selectors, actions } = useApp();
+  const { state } = useApp();
+  const [exporting, setExporting] = useState(false);
+
   const accounts = state.accounts || [];
-  const txsAll = state.transactions || [];
+  const txs = state.transactions || [];
 
-  // helper: lookup account name by id
-  const accountNameFor = (id: string): string => {
-    const acc = accounts.find(a => a.id === id);
-    return acc?.name || 'Unknown';
-  };
+  // Build a quick lookup for account names
+  const accountNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of accounts) {
+      map[a.id] = a.name;
+    }
+    return map;
+  }, [accounts]);
 
-  const sorted = [...txsAll].sort((a, b) => b.date.localeCompare(a.date));
+  // Sort transactions newest -> oldest and group by date (YYYY-MM-DD)
+  const grouped = useMemo(() => {
+    const copy = [...txs].sort((a, b) =>
+      (b.date || '').localeCompare(a.date || '')
+    );
+    const byDay: Record<string, typeof copy> = {};
+    for (const t of copy) {
+      const day = (t.date || '').slice(0, 10) || 'Unknown date';
+      if (!byDay[day]) byDay[day] = [];
+      byDay[day].push(t);
+    }
+    return byDay;
+  }, [txs]);
 
-  const totals = sorted.reduce(
-    (acc, t) => {
-      if (t.type === 'income') acc.income += t.amount;
-      else acc.expense += t.amount;
-      return acc;
-    },
-    { income: 0, expense: 0 }
+  const dayKeys = useMemo(
+    () => Object.keys(grouped).sort((a, b) => b.localeCompare(a)),
+    [grouped]
   );
 
-  const onDeleteTx = (id: string) => {
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await actions.deleteTransaction(id);
-          } catch (e) {
-            console.warn('deleteTransaction failed', e);
-            Alert.alert('Error', 'Could not delete transaction');
-          }
-        },
-      },
-    ]);
+  const exportAllCsv = async () => {
+    if (!txs.length) {
+      Alert.alert('No data', 'There are no transactions to export yet.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+
+      const rows: ReportRow[] = txs.map(t => ({
+        id: String(t.id),
+        date: String(t.date),
+        amount: Number(t.amount),
+        type: String(t.type || ''),
+        account_id: String(t.accountId || ''),
+        category_id: null,
+        note: t.note ?? null,
+      }));
+
+      const csv = generateReportCSV(rows);
+
+      const FS: any = FileSystem;
+      const base = FS.cacheDirectory ?? '';
+      const path = `${base}debitlens_history_all.csv`;
+      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
+
+      if (typeof FS.writeAsStringAsync === 'function') {
+        await FS.writeAsStringAsync(path, csv, { encoding });
+      } else {
+        await FS.writeAsStringAsync(path, csv);
+      }
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Share all transactions (CSV)',
+        });
+      } else {
+        Alert.alert('CSV saved', path);
+      }
+    } catch (e: any) {
+      console.warn('[history] exportAllCsv failed', e);
+      Alert.alert('Export failed', e?.message || 'Could not export CSV');
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>History</Text>
-      <Text style={styles.subtle}>
-        All transactions across your accounts.
-      </Text>
-
-      <View style={styles.summaryRow}>
+      {/* HEADER */}
+      <View style={styles.headerRow}>
         <View>
-          <Text style={styles.summaryLabel}>Income</Text>
-          <Text style={[styles.summaryValue, { color: '#34D399' }]}>
-            £{totals.income.toFixed(2)}
+          <Text style={styles.h1}>History</Text>
+          <Text style={styles.subtle}>
+            All transactions, newest first
           </Text>
         </View>
-        <View>
-          <Text style={styles.summaryLabel}>Expense</Text>
-          <Text style={[styles.summaryValue, { color: '#F87171' }]}>
-            £{totals.expense.toFixed(2)}
-          </Text>
-        </View>
-        <View>
-          <Text style={styles.summaryLabel}>Net</Text>
-          <Text
-            style={[
-              styles.summaryValue,
-              { color: totals.income - totals.expense >= 0 ? '#34D399' : '#F87171' },
-            ]}
-          >
-            £{(totals.income - totals.expense).toFixed(2)}
-          </Text>
-        </View>
+        <Pressable
+          style={styles.closePill}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.closeText}>Close</Text>
+        </Pressable>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }}>
-        {sorted.length === 0 && (
-          <Text style={styles.empty}>No transactions yet.</Text>
+      {/* EXPORT BAR */}
+      <View style={styles.exportCard}>
+        <Text style={styles.exportLabel}>Export</Text>
+        <Pressable
+          style={[
+            styles.exportBtn,
+            exporting && { opacity: 0.7 },
+          ]}
+          onPress={exportAllCsv}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.exportBtnText}>Export all as CSV</Text>
+          )}
+        </Pressable>
+      </View>
+
+      {/* HISTORY LIST */}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        {txs.length === 0 && (
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyTitle}>No transactions yet</Text>
+            <Text style={styles.emptySubtle}>
+              Add some transactions on your accounts and they&apos;ll show here.
+            </Text>
+          </View>
         )}
 
-        {sorted.map(t => {
-          const isIncome = t.type === 'income';
-          const sign = isIncome ? '+' : '-';
-          const colour = isIncome ? '#34D399' : '#F87171';
-          const dt = new Date(t.date);
-          return (
-            <Pressable
-              key={t.id}
-              style={styles.row}
-              onLongPress={() => onDeleteTx(t.id)}
-            >
-              <View style={styles.rowLeft}>
-                <Text style={styles.rowNote}>
-                  {t.note || '(no note)'}
-                </Text>
-                <Text style={styles.rowSub}>
-                  {accountNameFor(t.accountId)} · {dt.toLocaleString()}
-                </Text>
-              </View>
-              <Text style={[styles.rowAmount, { color: colour }]}>
-                {sign}£{t.amount.toFixed(2)}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {dayKeys.map(day => (
+          <View key={day} style={styles.dayBlock}>
+            <Text style={styles.dayLabel}>
+              {day === 'Unknown date'
+                ? 'Unknown date'
+                : new Date(day + 'T00:00:00').toLocaleDateString()}
+            </Text>
+
+            {grouped[day].map(t => {
+              const isIncome = t.type === 'income';
+              const sign = isIncome ? '+' : '-';
+              const colour = isIncome ? '#34D399' : '#F87171';
+              const accName = accountNameById[t.accountId] || 'Account';
+
+              return (
+                <View key={t.id} style={styles.txRow}>
+                  <View style={styles.txLeft}>
+                    <Text style={styles.txNote}>
+                      {t.note || '(no note)'}
+                    </Text>
+                    <Text style={styles.txMeta}>
+                      {accName} · {t.type === 'income' ? 'Income' : 'Expense'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.txAmount, { color: colour }]}>
+                    {sign}£{Number(t.amount).toFixed(2)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ))}
       </ScrollView>
     </View>
   );
@@ -126,35 +193,85 @@ export default function HistoryScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
-    padding: 16,
-    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+    backgroundColor: '#020617',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
-  h1: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 4 },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
-
-  summaryRow: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  summaryLabel: { color: '#9CA3AF', fontSize: 12 },
-  summaryValue: { color: '#E5E7EB', fontSize: 16, fontWeight: '800' },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginTop: 2 },
+  closePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#020817',
+  },
+  closeText: { color: '#E5E7EB', fontWeight: '600', fontSize: 13 },
 
-  scroll: { flex: 1, marginTop: 4 },
-  empty: { color: '#6B7280', marginTop: 8 },
-
-  row: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
+  exportCard: {
+    backgroundColor: '#0B1120',
+    borderRadius: 16,
     padding: 10,
-    marginTop: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#1E293B',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  rowLeft: { flexShrink: 1, paddingRight: 8 },
-  rowNote: { color: '#E5E7EB', fontWeight: '600' },
-  rowSub: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
-  rowAmount: { fontSize: 16, fontWeight: '800' },
+  exportLabel: { color: '#9CA3AF', fontSize: 13 },
+  exportBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
+  scroll: { flex: 1 },
+
+  emptyBox: {
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginTop: 8,
+  },
+  emptyTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '700' },
+  emptySubtle: { color: '#9CA3AF', marginTop: 4 },
+
+  dayBlock: {
+    marginTop: 12,
+  },
+  dayLabel: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+
+  txRow: {
+    backgroundColor: '#020617',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  txLeft: { flexShrink: 1, paddingRight: 8 },
+  txNote: { color: '#E5E7EB', fontWeight: '600' },
+  txMeta: { color: '#9CA3AF', fontSize: 11, marginTop: 2 },
+  txAmount: { fontSize: 15, fontWeight: '800' },
 });
