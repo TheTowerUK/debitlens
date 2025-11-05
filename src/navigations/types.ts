@@ -5,8 +5,6 @@ export type RootStackParamList = {
   Account: { accountId: string };
   Settings: undefined;
   ImportCSV: undefined;
-
-  // You can keep these for later if you want:
   History: undefined;
   Reports?: undefined;
   Budgets?: undefined;

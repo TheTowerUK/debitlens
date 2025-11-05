@@ -9,10 +9,14 @@ import {
   TextInput,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
+import { generateReportCSV, type ReportRow } from '../services/reporting';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
@@ -26,6 +30,7 @@ export default function AccountScreen({ route, navigation }: Props) {
 
   const [amountText, setAmountText] = useState('');
   const [note, setNote] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   if (!account) {
     return (
@@ -100,6 +105,55 @@ export default function AccountScreen({ route, navigation }: Props) {
     );
   };
 
+  // 👉 Export only this account's transactions as CSV
+  const exportCsvForAccount = async () => {
+    if (!txs.length) {
+      Alert.alert('No transactions', 'There are no transactions to export for this account yet.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+
+      const rows: ReportRow[] = txs.map(t => ({
+        id: String(t.id),
+        date: String(t.date),
+        amount: Number(t.amount),
+        type: String(t.type || ''),
+        account_id: String(t.accountId || ''),
+        category_id: null,
+        note: t.note ?? null,
+      }));
+
+      const csv = generateReportCSV(rows);
+
+      const FS: any = FileSystem;
+      const base = FS.cacheDirectory ?? '';
+      const path = `${base}debitlens_account_${accountId}.csv`;
+      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
+
+      if (typeof FS.writeAsStringAsync === 'function') {
+        await FS.writeAsStringAsync(path, csv, { encoding });
+      } else {
+        await FS.writeAsStringAsync(path, csv);
+      }
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: `Share CSV for ${account.name}`,
+        });
+      } else {
+        Alert.alert('CSV saved', path);
+      }
+    } catch (e: any) {
+      console.warn('[account] exportCsvForAccount failed', e);
+      Alert.alert('Export failed', e?.message || 'Could not export CSV');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <View style={styles.wrap}>
       {/* HEADER */}
@@ -107,7 +161,9 @@ export default function AccountScreen({ route, navigation }: Props) {
         <View>
           <Text style={styles.title}>{account.name}</Text>
           <Text style={styles.subtle}>
-            Created {new Date(account.createdAt).toLocaleString()}
+            {account.createdAt
+              ? `Created ${new Date(account.createdAt).toLocaleString()}`
+              : 'Account'}
           </Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
@@ -157,6 +213,19 @@ export default function AccountScreen({ route, navigation }: Props) {
             <Text style={styles.btnPrimaryText}>Add expense</Text>
           </Pressable>
         </View>
+
+        {/* Export account CSV */}
+        <Pressable
+          style={[styles.btnGhost, { marginTop: 10 }]}
+          onPress={exportCsvForAccount}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.btnPrimaryText}>Export this account as CSV</Text>
+          )}
+        </Pressable>
       </View>
 
       {/* TRANSACTIONS LIST */}
@@ -242,6 +311,12 @@ const styles = StyleSheet.create({
   },
   btnDanger: {
     backgroundColor: '#7F1D1D',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  btnGhost: {
+    backgroundColor: '#1F2937',
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',

@@ -14,6 +14,7 @@ import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
+import BudgetsScreen from './src/screens/BudgetsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -56,6 +57,11 @@ export default function App() {
             name="Reports"
             component={ReportsScreen}
             options={{ title: 'Reports' }}
+          />
+          <Stack.Screen
+            name="Budgets"
+            component={BudgetsScreen}
+            options={{ title: 'Budgets' }}
           />
 
         </Stack.Navigator>

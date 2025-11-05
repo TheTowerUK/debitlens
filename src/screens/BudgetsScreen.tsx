@@ -1,4 +1,4 @@
-// src/screens/BudgetsScreen.js
+// src/screens/BudgetsScreen.tsx
 import React, { useMemo, useState } from 'react';
 import {
   View,
@@ -6,294 +6,133 @@ import {
   StyleSheet,
   TextInput,
   Pressable,
-  FlatList,
-  Alert,
   Platform,
+  Alert,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import { money } from '../utils/moneyUtils';
 
-// --- date helpers ---
-const pad2 = (n) => String(n).padStart(2, '0');
-const thisYM = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; // YYYY-MM
-};
-const shiftYM = (ym, delta) => {
-  const [y, m] = ym.split('-').map((x) => parseInt(x, 10));
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
-};
+type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
-// spent for a month & category
-function spentForMonth(txns, category, ym) {
-  const cat = (category || 'Uncategorized').trim();
-  let sum = 0;
-  for (const t of txns || []) {
-    if (t.type !== 'expense') continue;
-    if (!t.date || !t.date.startsWith(ym)) continue; // YYYY-MM
-    const c = (t.category || 'Uncategorized').trim();
-    if (c === cat) sum += Number(t.amount || 0);
-  }
-  return sum;
-}
+export default function BudgetsScreen({ navigation }: Props) {
+  const { state } = useApp();
+  const [input, setInput] = useState('');          // what user typed
+  const [budget, setBudget] = useState<number | null>(null); // saved budget in memory
 
-export default function BudgetsScreen() {
-  const { state, actions } = useApp();
-  const prefs = state?.prefs || {};
-  const allBudgets = state?.budgets ?? [];
-  const txns = state?.transactions ?? [];
+  // derive this month's spend from global transactions
+  const { monthLabel, spendThisMonth } = useMemo(() => {
+    const now = new Date();
+    const month = now.getMonth();
+    const year = now.getFullYear();
 
-  const [ym, setYm] = useState(thisYM());
-  const [editingId, setEditingId] = useState(null); // budget.id | 'NEW' | null
-  const [form, setForm] = useState({ category: '', limit: '', month: thisYM() });
-
-  const budgets = useMemo(() => {
-    return allBudgets
-      .filter((b) => (b.month || thisYM()) === ym)
-      .sort((a, b) => (a.category || '').localeCompare(b.category || ''));
-  }, [allBudgets, ym]);
-
-  const totals = useMemo(() => {
-    let limitSum = 0;
-    let spentSum = 0;
-    for (const b of budgets) {
-      const lim = Number(b.limit || 0);
-      limitSum += lim;
-      spentSum += spentForMonth(txns, b.category, ym);
-    }
-    return { limitSum, spentSum, remaining: limitSum - spentSum };
-  }, [budgets, txns, ym]);
-
-  const startEdit = (item) => {
-    setEditingId(item.id);
-    setForm({
-      category: item.category || '',
-      limit: String(item.limit ?? ''),
-      month: item.month || ym,
-    });
-  };
-
-  const startNew = () => {
-    setEditingId('NEW');
-    setForm({ category: '', limit: '', month: ym });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setForm({ category: '', limit: '', month: ym });
-  };
-
-  const saveBudget = async () => {
-    const category = form.category.trim();
-    const limit = Number(form.limit);
-    const month = (form.month || ym).trim();
-
-    if (!category) return Alert.alert('Category', 'Please enter a category.');
-    if (!isFinite(limit) || limit < 0) return Alert.alert('Limit', 'Enter a non-negative number.');
-    if (!/^\d{4}-\d{2}$/.test(month)) return Alert.alert('Month', 'Use YYYY-MM (e.g., 2025-10).');
-
-    try {
-      if (editingId && editingId !== 'NEW') {
-        await actions.upsertBudget({ id: editingId, category, limit, month });
-      } else {
-        await actions.upsertBudget({ category, limit, month });
+    const txs = state.transactions || [];
+    let spend = 0;
+    for (const t of txs) {
+      if (t.type === 'income') continue;
+      const d = new Date(t.date);
+      if (d.getFullYear() === year && d.getMonth() === month) {
+        spend += t.amount;
       }
-      setEditingId(null);
-      setForm({ category: '', limit: '', month });
-    } catch (e) {
-      console.warn('[budgets] save failed', e);
-      Alert.alert('Save failed', 'Please try again.');
-    }
-  };
-
-  const deleteBudget = (id) => {
-    Alert.alert('Delete this budget?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-          await actions.deleteBudget(id);
-          if (editingId === id) cancelEdit();
-        } },
-    ]);
-  };
-
-  const renderRow = ({ item }) => {
-    const isEditing = editingId === item.id;
-    const spent = spentForMonth(txns, item.category, ym);
-    const remaining = Number(item.limit || 0) - spent;
-    const over = remaining < 0;
-
-    if (isEditing) {
-      return (
-        <View style={styles.card}>
-          <Text style={styles.rowTitle}>Edit Budget</Text>
-          <TextInput
-            value={form.category}
-            onChangeText={(v) => setForm((f) => ({ ...f, category: v }))}
-            placeholder="Category"
-            placeholderTextColor="#6B7280"
-            style={styles.input}
-          />
-          <TextInput
-            value={form.limit}
-            onChangeText={(v) => setForm((f) => ({ ...f, limit: v }))}
-            placeholder="Limit (e.g., 250)"
-            placeholderTextColor="#6B7280"
-            keyboardType="decimal-pad"
-            style={styles.input}
-          />
-          <TextInput
-            value={form.month}
-            onChangeText={(v) => setForm((f) => ({ ...f, month: v }))}
-            placeholder="Month YYYY-MM"
-            placeholderTextColor="#6B7280"
-            style={styles.input}
-          />
-          <View style={styles.rowWrap}>
-            <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={cancelEdit}>
-              <Text style={styles.btnTinyText}>Cancel</Text>
-            </Pressable>
-            <Pressable style={[styles.btnTinySave]} onPress={saveBudget}>
-              <Text style={styles.btnTinyText}>Save</Text>
-            </Pressable>
-          </View>
-        </View>
-      );
     }
 
-    return (
-      <View style={styles.card}>
-        <View style={styles.rowBetween}>
-          <Text style={styles.itemTitle} numberOfLines={1} ellipsizeMode="tail">
-            {item.category}
-          </Text>
-          <Text style={styles.itemRight}>
-            {money(Number(item.limit || 0), prefs)}
-          </Text>
-        </View>
+    const label = now.toLocaleString(undefined, {
+      month: 'long',
+      year: 'numeric',
+    });
 
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle} numberOfLines={1} ellipsizeMode="tail">
-            {ym} • Spent
-          </Text>
-          <Text style={[styles.bold, over ? styles.red : styles.green]}>
-            {money(spent, prefs)}
-          </Text>
-        </View>
+    return { monthLabel: label, spendThisMonth: spend };
+  }, [state.transactions]);
 
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle}>Remaining</Text>
-          <Text style={[styles.bold, over ? styles.red : styles.green]}>
-            {money(Math.abs(remaining), prefs)} {over ? 'over' : 'left'}
-          </Text>
-        </View>
+  const monthlyBudget = budget ?? 0;
+  const remaining = monthlyBudget - spendThisMonth;
 
-        <View style={styles.rowWrap}>
-          <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={() => startEdit(item)}>
-            <Text style={styles.btnTinyText}>Edit</Text>
-          </Pressable>
-          <Pressable style={styles.btnTinyDanger} onPress={() => deleteBudget(item.id)}>
-            <Text style={styles.btnTinyText}>Delete</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
+  const onSave = () => {
+    const value = parseFloat(input.replace(',', '.'));
+    if (!Number.isFinite(value) || value <= 0) {
+      Alert.alert('Invalid amount', 'Enter a positive number.');
+      return;
+    }
+    setBudget(value);
+    Alert.alert('Saved', 'Monthly budget updated (not yet persisted).');
+  };
+
+  const onClear = () => {
+    setBudget(null);
+    setInput('');
+    Alert.alert('Budget cleared', 'Monthly budget has been removed.');
   };
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Budgets</Text>
-      <Text style={styles.subtle}>Track limits and spending per category</Text>
+      <Text style={styles.subtle}>
+        Simple monthly budget for all expenses (temporary, not saved yet).
+      </Text>
 
-      {/* Month selector + totals */}
-      <View style={[styles.card, { paddingBottom: 12 }]}>
-        <View style={styles.rowBetween}>
-          <Pressable
-            style={[styles.pill, { paddingHorizontal: 12 }]}
-            onPress={() => setYm((cur) => shiftYM(cur, -1))}
-          >
-            <Text style={styles.pillText}>{'←'} Prev</Text>
-          </Pressable>
-        <Text style={styles.monthText}>{ym}</Text>
-          <Pressable
-            style={[styles.pill, { paddingHorizontal: 12 }]}
-            onPress={() => setYm((cur) => shiftYM(cur, +1))}
-          >
-            <Text style={styles.pillText}>Next {'→'}</Text>
-          </Pressable>
-        </View>
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Monthly budget</Text>
+        <Text style={styles.label}>Budget amount (£)</Text>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          placeholder="e.g. 1500"
+          placeholderTextColor="#6B7280"
+          keyboardType="decimal-pad"
+          style={styles.input}
+        />
 
-        <View style={[styles.rowBetween, { marginTop: 12 }]}>
-          <Text style={styles.subtle}>Total Limit</Text>
-          <Text style={styles.bold}>{money(totals.limitSum, prefs)}</Text>
-        </View>
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle}>Total Spent</Text>
-          <Text style={[styles.bold, totals.remaining < 0 ? styles.red : styles.green]}>
-            {money(totals.spentSum, prefs)}
-          </Text>
-        </View>
-        <View style={styles.rowBetween}>
-          <Text style={styles.subtle}>Remaining</Text>
-          <Text style={[styles.bold, totals.remaining < 0 ? styles.red : styles.green]}>
-            {money(Math.abs(totals.remaining), prefs)} {totals.remaining < 0 ? 'over' : 'left'}
-          </Text>
+        <View style={styles.row}>
+          <Pressable style={[styles.btn, styles.btnPrimary]} onPress={onSave}>
+            <Text style={styles.btnText}>Save</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.btn, styles.btnGhost]}
+            onPress={onClear}
+            disabled={budget === null}
+          >
+            <Text style={styles.btnText}>Clear</Text>
+          </Pressable>
         </View>
       </View>
 
-      {/* Add new or inline editor */}
-      {editingId === 'NEW' ? (
-        <View style={styles.card}>
-          <Text style={styles.rowTitle}>New Budget</Text>
-          <TextInput
-            value={form.category}
-            onChangeText={(v) => setForm((f) => ({ ...f, category: v }))}
-            placeholder="Category"
-            placeholderTextColor="#6B7280"
-            style={styles.input}
-          />
-          <TextInput
-            value={form.limit}
-            onChangeText={(v) => setForm((f) => ({ ...f, limit: v }))}
-            placeholder="Limit (e.g., 250)"
-            placeholderTextColor="#6B7280"
-            keyboardType="decimal-pad"
-            style={styles.input}
-          />
-          <TextInput
-            value={form.month}
-            onChangeText={(v) => setForm((f) => ({ ...f, month: v }))}
-            placeholder="Month YYYY-MM"
-            placeholderTextColor="#6B7280"
-            style={styles.input}
-          />
-          <View style={styles.rowWrap}>
-            <Pressable style={[styles.btnTiny, { marginRight: 8 }]} onPress={cancelEdit}>
-              <Text style={styles.btnTinyText}>Cancel</Text>
-            </Pressable>
-            <Pressable style={styles.btnTinySave} onPress={saveBudget}>
-              <Text style={styles.btnTinyText}>Add</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <Pressable style={[styles.btn, styles.btnSave]} onPress={() => setEditingId('NEW')}>
-          <Text style={styles.btnText}>Add Budget</Text>
-        </Pressable>
-      )}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>This month</Text>
+        <Text style={styles.label}>{monthLabel}</Text>
 
-      <FlatList
-        data={budgets}
-        keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        ListEmptyComponent={
-          <Text style={[styles.subtle, { padding: 16 }]}>
-            No budgets for {ym}. Add one above.
+        <Text style={styles.kv}>
+          Budget:{' '}
+          <Text style={styles.kvValue}>
+            {budget !== null ? `£${monthlyBudget.toFixed(2)}` : 'not set'}
           </Text>
-        }
-        renderItem={renderRow}
-      />
+        </Text>
+
+        <Text style={styles.kv}>
+          Expense:{' '}
+          <Text style={[styles.kvValue, styles.red]}>
+            £{spendThisMonth.toFixed(2)}
+          </Text>
+        </Text>
+
+        <Text style={styles.kv}>
+          Remaining:{' '}
+          <Text
+            style={[
+              styles.kvValue,
+              remaining >= 0 ? styles.green : styles.red,
+            ]}
+          >
+            £{remaining.toFixed(2)}
+          </Text>
+        </Text>
+      </View>
+
+      <Pressable
+        style={styles.backBtn}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backBtnText}>Back to Dashboard</Text>
+      </Pressable>
     </View>
   );
 }
@@ -305,105 +144,66 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: Platform.OS === 'ios' ? 44 : 16,
   },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  monthText: { color: '#fff', fontSize: 16, fontWeight: '800' },
-  subtle: { color: '#9CA3AF' },
-  bold: { color: '#E5E7EB', fontWeight: '800' },
+  h1: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 4 },
+  subtle: { color: '#9CA3AF', marginBottom: 12 },
 
   card: {
     backgroundColor: '#111827',
     borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
+    padding: 12,
+    marginBottom: 12,
   },
-    // inside the StyleSheet.create({...}) where your other styles live
-  rowTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#222',
-    // add whatever spacing/margins you need
-  },
+  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
 
+  label: { color: '#9CA3AF', marginBottom: 4 },
 
-  // Rows / layout
-  rowBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rowWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    marginTop: 10,
-    marginRight: -8,
-    marginBottom: -8,
-  },
-
-  // Inputs / pills
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
     borderColor: '#1F2937',
     borderWidth: 1,
     borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
+    padding: 10,
+    marginBottom: 8,
   },
-  pill: {
-    backgroundColor: '#1F2937',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-  },
-  pillText: { color: '#fff', fontWeight: '700' },
 
-  // Titles & values with constraints
-  itemTitle: {
-    color: '#E5E7EB',
-    fontWeight: '800',
-    fontSize: 16,
-    flex: 1,
-    minWidth: 0,      // allow ellipsis
-    paddingRight: 8,
+  row: {
+    flexDirection: 'row',
+    marginTop: 4,
+    justifyContent: 'space-between',
   },
-  itemRight: { color: '#E5E7EB', fontWeight: '800', flexShrink: 0 },
-
-  // Buttons
   btn: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    flex: 1,
+    paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnSave: { backgroundColor: '#2563EB' },
-  btnText: { color: '#fff', fontWeight: '700' },
-
-  btnTiny: {
-    backgroundColor: '#374151',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  btnTinySave: {
+  btnPrimary: {
     backgroundColor: '#2563EB',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    marginRight: 6,
   },
-  btnTinyDanger: {
-    backgroundColor: '#7F1D1D',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+  btnGhost: {
+    backgroundColor: '#1F2937',
+    marginLeft: 6,
   },
-  btnTinyText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  btnText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
 
-  red: { color: '#F87171' },
+  kv: { color: '#9CA3AF', marginTop: 4 },
+  kvValue: { color: '#E5E7EB', fontWeight: '700' },
   green: { color: '#34D399' },
+  red: { color: '#F87171' },
+
+  backBtn: {
+    marginTop: 4,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1F2937',
+  },
+  backBtnText: { color: '#E5E7EB', fontWeight: '700' },
 });
