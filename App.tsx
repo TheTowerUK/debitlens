@@ -45,7 +45,6 @@ export default function App() {
             component={AccountScreen}
             options={{ title: 'Account' }}
           />
-
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

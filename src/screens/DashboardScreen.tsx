@@ -75,7 +75,7 @@ export default function DashboardScreen({ navigation }: Props) {
     <View style={styles.wrap}>
       <Text style={styles.h1}>Dashboard</Text>
       <Text style={styles.subtle}>
-        Accounts & transactions are stored locally on this device.
+        Accounts &amp; transactions are stored locally on this device.
       </Text>
 
       <View style={styles.sectionHeader}>
@@ -104,66 +104,67 @@ export default function DashboardScreen({ navigation }: Props) {
         </View>
       )}
 
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 32 }}
+      >
         {accounts.length === 0 && !adding && (
           <Text style={styles.empty}>
             No accounts yet. Tap “Add” to create one.
           </Text>
         )}
 
-// inside DashboardScreen.tsx, in accounts.map
-{accounts.map(a => {
-  const balance = selectors.accountBalance(a.id);
-  const txs = selectors.transactionsForAccount(a.id);
-  return (
-    <Pressable
-      key={a.id}
-      style={styles.card}
-      onPress={() => navigation.navigate('Account', { accountId: a.id })}
-    >
-      <View style={styles.cardTop}>
-        <View>
-          <Text style={styles.cardName}>{a.name}</Text>
-          <Text style={styles.cardSub}>
-            {txs.length} transaction{txs.length === 1 ? '' : 's'}
-          </Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text
-            style={[
-              styles.balance,
-              { color: balance >= 0 ? '#34D399' : '#F87171' },
-            ]}
-          >
-            £{Math.abs(balance).toFixed(2)}
-          </Text>
-          <Pressable
-            style={styles.samplePill}
-            onPress={(e) => {
-              e.stopPropagation(); // don’t trigger navigation
-              handleAddSampleTx(a.id);
-            }}
-          >
-            <Text style={styles.samplePillText}>+ £10 sample</Text>
-          </Pressable>
-        </View>
-      </View>
+        {accounts.map(a => {
+          const balance = selectors.accountBalance(a.id);
+          const txs = selectors.transactionsForAccount(a.id);
+          return (
+            <Pressable
+              key={a.id}
+              style={styles.card}
+              onPress={() => navigation.navigate('Account', { accountId: a.id })}
+            >
+              <View style={styles.cardTop}>
+                <View>
+                  <Text style={styles.cardName}>{a.name}</Text>
+                  <Text style={styles.cardSub}>
+                    {txs.length} transaction{txs.length === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text
+                    style={[
+                      styles.balance,
+                      { color: balance >= 0 ? '#34D399' : '#F87171' },
+                    ]}
+                  >
+                    £{Math.abs(balance).toFixed(2)}
+                  </Text>
+                  <Pressable
+                    style={styles.samplePill}
+                    onPress={e => {
+                      e.stopPropagation();
+                      handleAddSampleTx(a.id);
+                    }}
+                  >
+                    <Text style={styles.samplePillText}>+ £10 sample</Text>
+                  </Pressable>
+                </View>
+              </View>
 
-      <View style={styles.cardBottom}>
-        <Pressable
-          style={styles.deletePill}
-          onPress={(e) => {
-            e.stopPropagation();
-            handleDeleteAccount(a.id);
-          }}
-        >
-          <Text style={styles.deletePillText}>Delete account</Text>
-        </Pressable>
-      </View>
-    </Pressable>
-  );
-})}
-
+              <View style={styles.cardBottom}>
+                <Pressable
+                  style={styles.deletePill}
+                  onPress={e => {
+                    e.stopPropagation();
+                    handleDeleteAccount(a.id);
+                  }}
+                >
+                  <Text style={styles.deletePillText}>Delete account</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       <View style={styles.footer}>
