@@ -13,6 +13,7 @@ import DashboardScreen from './src/screens/DashboardScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import AccountScreen from './src/screens/AccountScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
+import ReportsScreen from './src/screens/ReportsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -50,6 +51,11 @@ export default function App() {
             name="History"
             component={HistoryScreen}
             options={{ title: 'History' }}
+          />
+          <Stack.Screen
+            name="Reports"
+            component={ReportsScreen}
+            options={{ title: 'Reports' }}
           />
 
         </Stack.Navigator>
