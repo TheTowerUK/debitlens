@@ -17,8 +17,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
 export default function BudgetsScreen({ navigation }: Props) {
   const { state } = useApp();
-  const [input, setInput] = useState('');          // what user typed
-  const [budget, setBudget] = useState<number | null>(null); // saved budget in memory
+  const [input, setInput] = useState('');
+  const [budget, setBudget] = useState<number | null>(null);
 
   // derive this month's spend from global transactions
   const { monthLabel, spendThisMonth } = useMemo(() => {
@@ -47,6 +47,17 @@ export default function BudgetsScreen({ navigation }: Props) {
   const monthlyBudget = budget ?? 0;
   const remaining = monthlyBudget - spendThisMonth;
 
+  // percentage used (0–1+)
+  const usedRatio =
+    budget && budget > 0 ? spendThisMonth / budget : 0;
+
+  // clamp 0–1 for the bar
+  const clampedRatio = Math.max(0, Math.min(1, usedRatio));
+
+  let barColor = '#22C55E'; // green
+  if (usedRatio >= 0.8 && usedRatio < 1) barColor = '#F97316'; // orange
+  if (usedRatio >= 1) barColor = '#EF4444'; // red
+
   const onSave = () => {
     const value = parseFloat(input.replace(',', '.'));
     if (!Number.isFinite(value) || value <= 0) {
@@ -63,16 +74,34 @@ export default function BudgetsScreen({ navigation }: Props) {
     Alert.alert('Budget cleared', 'Monthly budget has been removed.');
   };
 
+  const statusText = (() => {
+    if (budget === null) {
+      return 'No budget set. Set a monthly limit to track your spending.';
+    }
+    if (remaining >= 0) {
+      const pct = usedRatio * 100;
+      return `You have £${remaining.toFixed(
+        2
+      )} left. (${pct.toFixed(0)}% of your budget used)`;
+    }
+    const over = -remaining;
+    const pctOver = (usedRatio - 1) * 100;
+    return `You are over budget by £${over.toFixed(
+      2
+    )} (${pctOver.toFixed(0)}% over).`;
+  })();
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Budgets</Text>
       <Text style={styles.subtle}>
-        Simple monthly budget for all expenses (temporary, not saved yet).
+        Track your monthly spending vs a simple budget.
       </Text>
 
+      {/* BUDGET SETUP */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Monthly budget</Text>
-        <Text style={styles.label}>Budget amount (£)</Text>
+        <Text style={styles.label}>Amount (£)</Text>
         <TextInput
           value={input}
           onChangeText={setInput}
@@ -96,6 +125,7 @@ export default function BudgetsScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {/* OVERVIEW + PROGRESS BAR */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>This month</Text>
         <Text style={styles.label}>{monthLabel}</Text>
@@ -125,6 +155,21 @@ export default function BudgetsScreen({ navigation }: Props) {
             £{remaining.toFixed(2)}
           </Text>
         </Text>
+
+        {/* Progress bar */}
+        <View style={styles.barOuter}>
+          <View
+            style={[
+              styles.barInner,
+              {
+                width: `${clampedRatio * 100}%`,
+                backgroundColor: barColor,
+              },
+            ]}
+          />
+        </View>
+
+        <Text style={styles.statusText}>{statusText}</Text>
       </View>
 
       <Pressable
@@ -196,6 +241,23 @@ const styles = StyleSheet.create({
   kvValue: { color: '#E5E7EB', fontWeight: '700' },
   green: { color: '#34D399' },
   red: { color: '#F87171' },
+
+  barOuter: {
+    marginTop: 10,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#020617',
+    overflow: 'hidden',
+  },
+  barInner: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  statusText: {
+    color: '#E5E7EB',
+    marginTop: 8,
+    fontSize: 13,
+  },
 
   backBtn: {
     marginTop: 4,
