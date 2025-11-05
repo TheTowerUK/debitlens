@@ -1,10 +1,27 @@
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
 // src/services/reporting.ts
 // Reporting helpers: build SQL and arguments for report queries and run them
-// Keep types explicit so callers and TypeScript know the expected shape.
+// This version is safe for Expo / React Native (no Node fs/path/os).
+
+import * as FileSystem from 'expo-file-system';
+
+// -------------------- Types --------------------
+
+export type ReportFilter = {
+  dateFrom?: string;        // ISO date 'YYYY-MM-DD'
+  dateTo?: string;          // ISO date 'YYYY-MM-DD'
+  accountIds?: string[];    // account id strings
+  categoryIds?: string[];   // category id strings
+};
+
+export type ReportRow = {
+  id: string;
+  date: string;             // ISO date or ISO datetime
+  amount: number;
+  type: string;
+  account_id: string;
+  category_id: string | null;
+  note?: string | null;
+};
 
 export type ReportDefinition = {
   id: string;
@@ -15,23 +32,16 @@ export type ReportDefinition = {
   updatedAt?: string;
 };
 
-export type ReportFilter = {
-  dateFrom?: string; // ISO date 'YYYY-MM-DD'
-  dateTo?: string; // ISO date 'YYYY-MM-DD'
-  accountIds?: string[]; // account id strings
-  categoryIds?: string[]; // category id strings
-  // add other filter fields as needed
+export type SavedReport = {
+  id: string;
+  name?: string;
+  type?: string;
+  params?: ReportFilter;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
-export type ReportRow = {
-  id: string;
-  date: string; // ISO date
-  amount: number;
-  type: string;
-  account_id: string;
-  category_id: string | null;
-  note?: string | null;
-};
+// -------------------- Helpers --------------------
 
 /**
  * Return a SQL placeholder list for an array length:
@@ -155,42 +165,65 @@ export function generateReportCSV(rows: ReportRow[]): string {
 }
 
 type SaveReportOptions = {
-  // if true, will attempt to write the CSV to the provided filePath (or a fallback filePath)
   writeToFile?: boolean;
-  // optional path to write to; if omitted and writeToFile true, uses FileSystem cacheDirectory + 'report-<ts>.csv'
   filePath?: string;
 };
 
-// Convenience helper: run a saved report (by its params) and save the CSV
+/**
+ * Save a report: generate CSV and optionally write to disk using expo-file-system.
+ * Returns the CSV string and, if written, the path in { csv, writtenPath }.
+ */
+export async function saveReport(
+  rows: ReportRow[],
+  options: SaveReportOptions = {}
+): Promise<{ csv: string; writtenPath?: string | null }> {
+  const csv = generateReportCSV(rows || []);
+
+  if (!options.writeToFile) {
+    return { csv, writtenPath: null };
+  }
+
+  try {
+    const FS: any = FileSystem;
+    const base = options.filePath ? '' : (FS.cacheDirectory ?? '');
+    const path = options.filePath ?? `${base}report-${Date.now()}.csv`;
+    const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
+
+    if (typeof FS.writeAsStringAsync === 'function') {
+      await FS.writeAsStringAsync(path, csv, { encoding });
+    } else {
+      // Fallback if options object not supported
+      await FS.writeAsStringAsync(path, csv);
+    }
+
+    return { csv, writtenPath: path };
+  } catch (err) {
+    console.warn('[reporting] saveReport write failed', err);
+    return { csv, writtenPath: null };
+  }
+}
+
+/**
+ * Convenience helper: run a saved report (by its params) and save the CSV.
+ */
 export async function saveReportFromDefinition(
   executor: (sql: string, args?: any[]) => Promise<any[]>,
   def: ReportDefinition,
-  options: { writeToFile?: boolean; filePath?: string } = {}
+  options: SaveReportOptions = {}
 ): Promise<{ csv: string; writtenPath?: string | null }> {
-  // Run using the same query builder used elsewhere
   const rows = await getReport(executor, def?.params ?? {});
-  // Reuse the CSV writer (and optional file write)
   return saveReport(rows, options);
 }
 
-// -------------------- Saved-report storage helpers --------------------
+// -------------------- Saved-report storage helpers (DB-based, optional) --------------------
 
-// Minimal shape for a saved report/template stored in the DB
-export type SavedReport = {
-  id: string;
-  name?: string;
-  type?: string;
-  params?: ReportFilter;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-// List saved reports from storage.
-// executor: (sql, args?) => Promise<any[]>
+/**
+ * List saved reports from a DB table `saved_reports`.
+ * This is unused in your current in-memory setup, but kept for future SQLite use.
+ */
 export async function listReports(
   executor: (sql: string, args?: any[]) => Promise<any[]>
 ): Promise<SavedReport[]> {
-  // Example SQL - adjust table/column names to match your schema
   const sql = `
     SELECT id, name, type, params, created_at AS createdAt, updated_at AS updatedAt
     FROM saved_reports
@@ -216,57 +249,13 @@ export async function listReports(
   });
 }
 
-// Delete a saved report by id.
-// executor: (sql, args?) => Promise<any>  — should run a delete command
+/**
+ * Delete a saved report by id.
+ */
 export async function deleteReport(
   executor: (sql: string, args?: any[]) => Promise<any>,
   id: string
 ): Promise<void> {
-  // Example SQL - adjust table name to match your schema
   const sql = 'DELETE FROM saved_reports WHERE id = ?';
   await executor(sql, [id]);
 }
-export async function saveReport(
-  rows: ReportRow[],
-  options: { writeToFile?: boolean; filePath?: string }
-): Promise<{ csv: string; writtenPath?: string | null }> {
-  const csv = generateReportCSV(rows || []);
-
-  if (!options?.writeToFile) {
-    return { csv, writtenPath: null };
-  }
-
-  // Determine target path (try to pick a sensible temp/cache location in Node)
-  let targetPath = options.filePath || null;
-
-  try {
-    // Try Node.js fs/path/os first (works in typical server environments)
-    // Use require to avoid top-level import issues in mixed environments.
-    // If require isn't available, dynamic import will throw and we'll fall back.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-
-    if (!targetPath) {
-      const dir = (os && typeof os.tmpdir === 'function') ? os.tmpdir() : process.cwd();
-      targetPath = path.join(dir, `report-${Date.now()}.csv`);
-    }
-
-    // Prefer fs.promises when available
-    if (fs.promises && typeof fs.promises.writeFile === 'function') {
-      await fs.promises.writeFile(targetPath, csv, 'utf8');
-    } else if (typeof fs.writeFileSync === 'function') {
-      fs.writeFileSync(targetPath, csv, 'utf8');
-    } else {
-      // fs present but no write APIs we can use
-      return { csv, writtenPath: null };
-    }
-
-    return { csv, writtenPath: targetPath };
-  } catch {
-    // Not running in Node or file write failed; fail gracefully and return CSV only.
-    return { csv, writtenPath: null };
-  }
-}
-
-
