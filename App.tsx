@@ -12,6 +12,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import ImportCsvScreen from './src/screens/ImportCsvScreen';
 import AccountScreen from './src/screens/AccountScreen';
+import HistoryScreen from './src/screens/HistoryScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -45,6 +46,12 @@ export default function App() {
             component={AccountScreen}
             options={{ title: 'Account' }}
           />
+          <Stack.Screen
+            name="History"
+            component={HistoryScreen}
+            options={{ title: 'History' }}
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

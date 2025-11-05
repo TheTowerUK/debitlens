@@ -169,6 +169,12 @@ export default function DashboardScreen({ navigation }: Props) {
 
       <View style={styles.footer}>
         <Pressable
+          style={[styles.footerBtn, styles.footerBtnGhost]}
+          onPress={() => navigation.navigate('History')}
+        >
+          <Text style={styles.footerBtnText}>History</Text>
+        </Pressable>
+        <Pressable
           style={[styles.footerBtn, styles.footerBtnPrimary]}
           onPress={() => navigation.navigate('Settings')}
         >

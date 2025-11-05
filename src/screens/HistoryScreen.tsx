@@ -1,103 +1,124 @@
-// src/screens/HistoryScreen.js
-import React, { useMemo, useState } from 'react';
+// src/screens/HistoryScreen.tsx
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
+  ScrollView,
   Pressable,
-  FlatList,
   Platform,
   Alert,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import { money } from '../utils/moneyUtils';
 
-export default function HistoryScreen({ navigation }) {
-  const { state, actions } = useApp();
-  const prefs = state?.prefs || {};
-  const accounts = state?.accounts ?? [];
-  const txns = state?.transactions ?? [];
+type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
-  const [query, setQuery] = useState('');
+export default function HistoryScreen({ navigation }: Props) {
+  const { state, selectors, actions } = useApp();
+  const accounts = state.accounts || [];
+  const txsAll = state.transactions || [];
 
-  const byAccount = useMemo(() => {
-    const m = {};
-    for (const a of accounts) m[String(a.id)] = a;
-    return m;
-  }, [accounts]);
+  // helper: lookup account name by id
+  const accountNameFor = (id: string): string => {
+    const acc = accounts.find(a => a.id === id);
+    return acc?.name || 'Unknown';
+  };
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (txns || [])
-      .filter((t) => {
-        if (!q) return true;
-        const hay = `${t.category || ''} ${t.note || ''} ${byAccount[t.accountId]?.name || ''}`.toLowerCase();
-        return hay.includes(q);
-      })
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  }, [txns, query, byAccount]);
+  const sorted = [...txsAll].sort((a, b) => b.date.localeCompare(a.date));
 
-  const onDelete = (id) => {
-    Alert.alert('Delete this transaction?', 'This cannot be undone.', [
+  const totals = sorted.reduce(
+    (acc, t) => {
+      if (t.type === 'income') acc.income += t.amount;
+      else acc.expense += t.amount;
+      return acc;
+    },
+    { income: 0, expense: 0 }
+  );
+
+  const onDeleteTx = (id: string) => {
+    Alert.alert('Delete transaction?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => actions.deleteTransaction(id) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await actions.deleteTransaction(id);
+          } catch (e) {
+            console.warn('deleteTransaction failed', e);
+            Alert.alert('Error', 'Could not delete transaction');
+          }
+        },
+      },
     ]);
   };
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>History</Text>
-      <Text style={styles.subtle}>Recent transactions</Text>
+      <Text style={styles.subtle}>
+        All transactions across your accounts.
+      </Text>
 
-      {/* Search */}
-      <View style={[styles.card, { marginTop: 12 }]}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search category, note or account"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+      <View style={styles.summaryRow}>
+        <View>
+          <Text style={styles.summaryLabel}>Income</Text>
+          <Text style={[styles.summaryValue, { color: '#34D399' }]}>
+            £{totals.income.toFixed(2)}
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.summaryLabel}>Expense</Text>
+          <Text style={[styles.summaryValue, { color: '#F87171' }]}>
+            £{totals.expense.toFixed(2)}
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.summaryLabel}>Net</Text>
+          <Text
+            style={[
+              styles.summaryValue,
+              { color: totals.income - totals.expense >= 0 ? '#34D399' : '#F87171' },
+            ]}
+          >
+            £{(totals.income - totals.expense).toFixed(2)}
+          </Text>
+        </View>
       </View>
 
-      <FlatList
-        data={filtered}
-        keyExtractor={(item, index) => String(item.id ?? `${item.accountId}-${item.date}-${index}`)}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
-        renderItem={({ item }) => {
-          const isExpense = item.type === 'expense';
-          const sign = isExpense ? '-' : '+';
+      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }}>
+        {sorted.length === 0 && (
+          <Text style={styles.empty}>No transactions yet.</Text>
+        )}
+
+        {sorted.map(t => {
+          const isIncome = t.type === 'income';
+          const sign = isIncome ? '+' : '-';
+          const colour = isIncome ? '#34D399' : '#F87171';
+          const dt = new Date(t.date);
           return (
             <Pressable
-              style={styles.rowItem}
-              onPress={() => navigation.navigate('TxnEditor', { mode: 'edit', txnId: item.id })}
-              onLongPress={() => onDelete(item.id)}
+              key={t.id}
+              style={styles.row}
+              onLongPress={() => onDeleteTx(t.id)}
             >
-              {/* LEFT (constrained) */}
-              <View style={styles.itemLeftWrap}>
-                <Text style={styles.itemTop} numberOfLines={1} ellipsizeMode="tail">
-                  {(item.category || '—') + (item.note ? ` • ${item.note}` : '')}
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowNote}>
+                  {t.note || '(no note)'}
                 </Text>
-                <Text style={styles.itemSub} numberOfLines={1} ellipsizeMode="tail">
-                  {(byAccount[item.accountId]?.name || item.accountName || 'Account') + ' • ' + (item.date || '')}
+                <Text style={styles.rowSub}>
+                  {accountNameFor(t.accountId)} · {dt.toLocaleString()}
                 </Text>
               </View>
-
-              {/* RIGHT (does not shrink) */}
-              <Text style={[styles.amount, isExpense ? styles.red : styles.green]}>
-                {sign}{money(item.amount, prefs)}
+              <Text style={[styles.rowAmount, { color: colour }]}>
+                {sign}£{t.amount.toFixed(2)}
               </Text>
             </Pressable>
           );
-        }}
-        ListEmptyComponent={
-          <Text style={[styles.subtle, { padding: 16 }]}>
-            No transactions match the current filters.
-          </Text>
-        }
-      />
+        })}
+      </ScrollView>
     </View>
   );
 }
@@ -109,41 +130,31 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingTop: Platform.OS === 'ios' ? 44 : 16,
   },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF' },
+  h1: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 4 },
+  subtle: { color: '#9CA3AF', marginBottom: 12 },
 
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 16,
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
+  summaryLabel: { color: '#9CA3AF', fontSize: 12 },
+  summaryValue: { color: '#E5E7EB', fontSize: 16, fontWeight: '800' },
 
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 12,
-  },
+  scroll: { flex: 1, marginTop: 4 },
+  empty: { color: '#6B7280', marginTop: 8 },
 
-  rowItem: {
+  row: {
     backgroundColor: '#111827',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    padding: 10,
+    marginTop: 8,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  itemLeftWrap: {
-    flex: 1,
-    minWidth: 0,       // allows ellipsis instead of overflow
-    paddingRight: 8,
-  },
-  itemTop: { color: '#E5E7EB', fontWeight: '700' },
-  itemSub: { color: '#9CA3AF', marginTop: 2, fontSize: 12 },
-
-  amount: { color: '#E5E7EB', fontWeight: '800', flexShrink: 0 }, // don't shrink
-  red: { color: '#F87171' },
-  green: { color: '#34D399' },
+  rowLeft: { flexShrink: 1, paddingRight: 8 },
+  rowNote: { color: '#E5E7EB', fontWeight: '600' },
+  rowSub: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  rowAmount: { fontSize: 16, fontWeight: '800' },
 });
