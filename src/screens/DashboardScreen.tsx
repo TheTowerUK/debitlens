@@ -163,6 +163,23 @@ export default function DashboardScreen({ navigation }: Props) {
     setAdding(false);
   };
 
+ {/* Debug: add a test expense to first account */}
+  const handleDebugAddExpense = () => {
+    if (!accounts.length) {
+      alert('No accounts yet');
+      return;
+    }
+
+  const firstId = accounts[0].id;
+
+  actions.addTransaction({
+    accountId: firstId,
+    amount: 25, // £25 test expense
+    type: 'expense',
+    note: 'Debug expense',
+    date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
+  });
+};
   return (
     <View style={styles.wrap}>
       {/* HEADER */}
@@ -338,6 +355,16 @@ export default function DashboardScreen({ navigation }: Props) {
         >
           <Text style={styles.quickLabel}>Settings</Text>
         </Pressable>
+
+        {/* Debug: add a test expense to first account */}
+
+        <Pressable
+          style={styles.quickBtn}
+          onPress={handleDebugAddExpense}
+        >
+          <Text style={styles.quickLabel}>+ Test expense</Text>
+        </Pressable>
+
       </View>
     </View>
   );
