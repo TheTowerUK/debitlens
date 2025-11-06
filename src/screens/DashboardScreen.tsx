@@ -25,7 +25,6 @@ type BudgetMap = Record<string, number>;
 export default function DashboardScreen({ navigation }: Props) {
   const { state, actions, selectors } = useApp();
   const accounts = state.accounts || [];
-  const txs = state.transactions || [];
 
   const [budgets, setBudgets] = useState<BudgetMap>({});
   const [loadingBudget, setLoadingBudget] = useState(true);
@@ -81,31 +80,46 @@ export default function DashboardScreen({ navigation }: Props) {
     }, [accounts.length])
   );
 
+  // 💰 Total balance from selector
   const totalBalance = useMemo(() => {
-    return accounts.reduce((sum, a) => {
-      return sum + selectors.accountBalance(a.id);
-    }, 0);
+    return accounts.reduce((sum, a) => sum + selectors.accountBalance(a.id), 0);
   }, [accounts, state.transactions]);
 
-  // 👉 Derive which account to show the budget for from current budgets + accounts
+  // 👉 Which account should the pill show? (first one that has a budget)
   const budgetAccountId = useMemo(() => {
     if (!accounts.length) return null;
     const withBudget = accounts.find(a => budgets[a.id] != null);
     return withBudget?.id ?? null;
   }, [accounts, budgets]);
 
-  // Compute monthly spend for that budgetAccountId only
+  const currentBudget =
+    budgetAccountId && budgets[budgetAccountId] != null
+      ? budgets[budgetAccountId]
+      : null;
+
+  const currentBudgetAccount =
+    budgetAccountId && accounts.find(a => a.id === budgetAccountId)
+      ? (accounts.find(a => a.id === budgetAccountId) as (typeof accounts)[number])
+      : null;
+
+  // 🔁 Get all transactions for the budget account via selectors
+  const budgetAccountTxs = useMemo(
+    () => (budgetAccountId ? selectors.accountTransactions(budgetAccountId) : []),
+    [budgetAccountId, selectors, state.transactions]
+  );
+
+  // 📆 Compute this month's spend for that one account
   const { monthLabel, spendThisMonth } = useMemo(() => {
     if (!budgetAccountId) {
       return { monthLabel: '', spendThisMonth: 0 };
     }
+
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
 
     let spend = 0;
-    for (const t of txs) {
-      if (t.accountId !== budgetAccountId) continue;
+    for (const t of budgetAccountTxs) {
       if (t.type === 'income') continue;
       const d = new Date(t.date || '');
       if (
@@ -123,19 +137,9 @@ export default function DashboardScreen({ navigation }: Props) {
     });
 
     return { monthLabel: label, spendThisMonth: spend };
-  }, [txs, budgetAccountId]);
+  }, [budgetAccountId, budgetAccountTxs]);
 
-  const currentBudget =
-    budgetAccountId && budgets[budgetAccountId] != null
-      ? budgets[budgetAccountId]
-      : null;
-
-  const currentBudgetAccount =
-    budgetAccountId && accounts.find(a => a.id === budgetAccountId)
-      ? accounts.find(a => a.id === budgetAccountId)!
-      : null;
-
-  // Budget badge logic
+  // 🎯 Build pill text + colours
   const budgetBadge = useMemo(() => {
     if (loadingBudget || !currentBudget || !currentBudgetAccount) {
       return { show: false, text: '', bg: '', fg: '' };
@@ -169,6 +173,7 @@ export default function DashboardScreen({ navigation }: Props) {
     return { show: true, text, bg, fg };
   }, [loadingBudget, currentBudget, currentBudgetAccount, spendThisMonth]);
 
+  // ➕ Add account handler
   const handleAddAccount = () => {
     const name = newName.trim();
     if (!name) return;
@@ -185,7 +190,7 @@ export default function DashboardScreen({ navigation }: Props) {
           <Text style={styles.label}>Total balance</Text>
           <Text style={styles.total}>£{totalBalance.toFixed(2)}</Text>
 
-          {/* Budget badge */}
+          {/* Budget pill */}
           {budgetBadge.show && (
             <View
               style={[
@@ -206,14 +211,13 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           )}
 
+          {/* No budget yet → nudge */}
           {!loadingBudget && !currentBudget && (
             <Pressable
               onPress={() => navigation.navigate('Budgets')}
               style={styles.linkRow}
             >
-              <Text style={styles.linkText}>
-                Set a monthly budget →
-              </Text>
+              <Text style={styles.linkText}>Set a monthly budget →</Text>
             </Pressable>
           )}
         </View>
@@ -238,23 +242,14 @@ export default function DashboardScreen({ navigation }: Props) {
           const accTxs = selectors.accountTransactions(a.id);
           const lastTx = accTxs
             .slice()
-            .sort((x, y) =>
-              (y.date || '').localeCompare(x.date || '')
-            )[0];
-          const lastDate = lastTx?.date
-            ? new Date(lastTx.date + 'T00:00:00')
-            : null;
+            .sort((x, y) => (y.date || '').localeCompare(x.date || ''))[0];
+          const lastDate = lastTx?.date ? new Date(lastTx.date + 'T00:00:00') : null;
 
           return (
             <Pressable
               key={String(a.id)}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={() =>
-                navigation.navigate('Account', { accountId: a.id })
-              }
+              style={({ pressed }) => [styles.card, pressed && { opacity: 0.8 }]}
+              onPress={() => navigation.navigate('Account', { accountId: a.id })}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.cardName}>{a.name}</Text>
@@ -271,14 +266,10 @@ export default function DashboardScreen({ navigation }: Props) {
               {lastTx ? (
                 <Text style={styles.cardSubtle}>
                   {lastTx.note || lastTx.type || 'Transaction'}
-                  {lastDate
-                    ? ` · ${lastDate.toLocaleDateString()}`
-                    : ''}
+                  {lastDate ? ` · ${lastDate.toLocaleDateString()}` : ''}
                 </Text>
               ) : (
-                <Text style={styles.cardSubtle}>
-                  No transactions yet
-                </Text>
+                <Text style={styles.cardSubtle}>No transactions yet</Text>
               )}
             </Pressable>
           );
