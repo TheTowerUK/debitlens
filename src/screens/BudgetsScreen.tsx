@@ -3,311 +3,353 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
   Pressable,
+  StyleSheet,
   Platform,
   Alert,
+  ScrollView,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import * as SecureStore from 'expo-secure-store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
-// Key for persisting the monthly budget
-const BUDGET_KEY = 'debitlens_budget_v1';
+const BUDGETS_KEY = 'debitlens_budgets_v1';
+const LEGACY_BUDGET_KEY = 'debitlens_budget_v1';
+
+type BudgetMap = Record<string, number>;
 
 export default function BudgetsScreen({ navigation }: Props) {
   const { state } = useApp();
-  const [input, setInput] = useState('');
-  const [budget, setBudget] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
+  const accounts = state.accounts || [];
+  const txs = state.transactions || [];
 
-  // ---- load budget from SecureStore on mount ----
+  const [budgets, setBudgets] = useState<BudgetMap>({});
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [amountText, setAmountText] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Load budgets (per account) from SecureStore
   useEffect(() => {
     (async () => {
       try {
-        const stored = await SecureStore.getItemAsync(BUDGET_KEY);
-        if (stored != null) {
-          const num = parseFloat(stored);
-          if (Number.isFinite(num) && num > 0) {
-            setBudget(num);
-            setInput(String(num));
+        let map: BudgetMap = {};
+
+        const json = await SecureStore.getItemAsync(BUDGETS_KEY);
+        if (json) {
+          try {
+            const parsed = JSON.parse(json);
+            if (parsed && typeof parsed === 'object') {
+              map = parsed;
+            }
+          } catch (e) {
+            console.warn('[budgets] parse budgets failed', e);
+          }
+        } else {
+          // Legacy: if we have the old single budget, map it to first account
+          const legacy = await SecureStore.getItemAsync(LEGACY_BUDGET_KEY);
+          if (legacy && accounts.length > 0) {
+            const n = parseFloat(legacy);
+            if (Number.isFinite(n) && n > 0) {
+              map[accounts[0].id] = n;
+            }
           }
         }
-      } catch (e) {
-        console.warn('[budgets] load budget failed', e);
+
+        setBudgets(map);
+
+        // Default selection: first account, or one with a budget
+        let initialId: string | null = null;
+        if (accounts.length > 0) {
+          // Try to pick the first account that has a budget
+          const withBudget = accounts.find(a => map[a.id] != null);
+          initialId = withBudget?.id ?? accounts[0].id;
+        }
+        setSelectedAccountId(initialId);
+
+        if (initialId && map[initialId] != null) {
+          setAmountText(String(map[initialId]));
+        } else {
+          setAmountText('');
+        }
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [accounts.length]);
 
-  // derive this month's spend from global transactions
+  // Whenever selectedAccountId or budgets change, sync amountText
+  useEffect(() => {
+    if (!selectedAccountId) return;
+    const current = budgets[selectedAccountId];
+    setAmountText(current != null ? String(current) : '');
+  }, [selectedAccountId, budgets]);
+
+  const currentAccount = useMemo(
+    () => accounts.find(a => a.id === selectedAccountId) || null,
+    [accounts, selectedAccountId]
+  );
+
+  // Compute this month’s spend for the selected account
   const { monthLabel, spendThisMonth } = useMemo(() => {
+    if (!selectedAccountId) {
+      return { monthLabel: '', spendThisMonth: 0 };
+    }
+
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
 
-    const txs = state.transactions || [];
     let spend = 0;
     for (const t of txs) {
+      if (t.accountId !== selectedAccountId) continue;
       if (t.type === 'income') continue;
-      const d = new Date(t.date);
-      if (d.getFullYear() === year && d.getMonth() === month) {
+      const d = new Date(t.date || '');
+      if (
+        !isNaN(d.getTime()) &&
+        d.getFullYear() === year &&
+        d.getMonth() === month
+      ) {
         spend += t.amount;
       }
     }
 
     const label = now.toLocaleString(undefined, {
-      month: 'long',
+      month: 'short',
       year: 'numeric',
     });
 
     return { monthLabel: label, spendThisMonth: spend };
-  }, [state.transactions]);
+  }, [txs, selectedAccountId]);
 
-  const monthlyBudget = budget ?? 0;
-  const remaining = monthlyBudget - spendThisMonth;
-
-  // percentage used (0–1+)
-  const usedRatio =
-    budget && budget > 0 ? spendThisMonth / budget : 0;
-
-  // clamp 0–1 for the visual bar
-  const clampedRatio = Math.max(0, Math.min(1, usedRatio));
-
-  let barColor = '#22C55E'; // green
-  if (usedRatio >= 0.8 && usedRatio < 1) barColor = '#F97316'; // orange
-  if (usedRatio >= 1) barColor = '#EF4444'; // red
+  const currentBudget = selectedAccountId ? budgets[selectedAccountId] ?? null : null;
 
   const onSave = async () => {
-    const value = parseFloat(input.replace(',', '.'));
-    if (!Number.isFinite(value) || value <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
+    if (!selectedAccountId) {
+      Alert.alert('No account', 'Please pick an account first.');
+      return;
+    }
+    const n = parseFloat(amountText.trim());
+    if (!Number.isFinite(n) || n <= 0) {
+      Alert.alert('Invalid amount', 'Enter a positive number for the budget.');
       return;
     }
     try {
-      setBudget(value);
-      await SecureStore.setItemAsync(BUDGET_KEY, String(value));
-      Alert.alert('Saved', 'Monthly budget updated.');
+      setSaving(true);
+      const next: BudgetMap = { ...budgets, [selectedAccountId]: n };
+      await SecureStore.setItemAsync(BUDGETS_KEY, JSON.stringify(next));
+      setBudgets(next);
+      Alert.alert('Saved', 'Budget updated for this account.');
     } catch (e) {
-      console.warn('[budgets] save budget failed', e);
+      console.warn('[budgets] save failed', e);
       Alert.alert('Error', 'Could not save the budget.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const onClear = async () => {
-    try {
-      setBudget(null);
-      setInput('');
-      await SecureStore.deleteItemAsync(BUDGET_KEY);
-      Alert.alert('Budget cleared', 'Monthly budget has been removed.');
-    } catch (e) {
-      console.warn('[budgets] clear budget failed', e);
-      Alert.alert('Error', 'Could not clear the budget.');
-    }
-  };
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.subtle}>Loading budgets…</Text>
+      </View>
+    );
+  }
 
-  const statusText = (() => {
-    if (budget === null) {
-      return 'No budget set. Set a monthly limit to track your spending.';
-    }
-    if (remaining >= 0) {
-      const pct = usedRatio * 100;
-      return `You have £${remaining.toFixed(
-        2
-      )} left. (${pct.toFixed(0)}% of your budget used)`;
-    }
-    const over = -remaining;
-    const pctOver = (usedRatio - 1) * 100;
-    return `You are over budget by £${over.toFixed(
-      2
-    )} (${pctOver.toFixed(0)}% over).`;
-  })();
+  if (accounts.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.subtle}>You have no accounts yet.</Text>
+        <Pressable
+          style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
+          onPress={() => navigation.navigate('Dashboard')}
+        >
+          <Text style={styles.btnText}>Go to Dashboard</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
-    <View style={styles.wrap}>
+    <ScrollView
+      style={styles.wrap}
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
       <Text style={styles.h1}>Budgets</Text>
       <Text style={styles.subtle}>
-        Track your monthly spending vs a simple budget.
+        Set a monthly budget per account. We’ll track how much you’ve spent
+        this month from that account.
       </Text>
 
-      {/* BUDGET SETUP */}
+      {/* Account selector */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Monthly budget</Text>
-        <Text style={styles.label}>Amount (£)</Text>
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.pillRow}>
+          {accounts.map(a => (
+            <Pressable
+              key={a.id}
+              onPress={() => setSelectedAccountId(a.id)}
+              style={[
+                styles.pill,
+                selectedAccountId === a.id && styles.pillActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillText,
+                  selectedAccountId === a.id && styles.pillTextActive,
+                ]}
+              >
+                {a.name}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {/* Budget editor */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>
+          Monthly budget{currentAccount ? ` for ${currentAccount.name}` : ''}
+        </Text>
         <TextInput
-          value={input}
-          onChangeText={setInput}
-          placeholder={loading ? 'Loading…' : 'e.g. 1500'}
-          placeholderTextColor="#6B7280"
+          value={amountText}
+          onChangeText={setAmountText}
           keyboardType="decimal-pad"
+          placeholder="e.g. 500"
+          placeholderTextColor="#6B7280"
           style={styles.input}
-          editable={!loading}
         />
 
-        <View style={styles.row}>
-          <Pressable
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={onSave}
-            disabled={loading}
-          >
-            <Text style={styles.btnText}>Save</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btn, styles.btnGhost]}
-            onPress={onClear}
-            disabled={loading || budget === null}
-          >
-            <Text style={styles.btnText}>Clear</Text>
-          </Pressable>
-        </View>
+        <Pressable
+          style={[styles.btn, styles.btnPrimary, { marginTop: 8 }]}
+          onPress={onSave}
+          disabled={saving}
+        >
+          <Text style={styles.btnText}>{saving ? 'Saving…' : 'Save budget'}</Text>
+        </Pressable>
+
+        {currentBudget != null && (
+          <Text style={[styles.subtle, { marginTop: 8 }]}>
+            Current budget: £{currentBudget.toFixed(0)} per month
+          </Text>
+        )}
       </View>
 
-      {/* OVERVIEW + PROGRESS BAR */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>This month</Text>
-        <Text style={styles.label}>{monthLabel}</Text>
-
-        <Text style={styles.kv}>
-          Budget:{' '}
+      {/* This-month progress */}
+      {currentAccount && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>This month’s spend</Text>
+          <Text style={styles.kvLabel}>
+            {monthLabel} · {currentAccount.name}
+          </Text>
           <Text style={styles.kvValue}>
-            {budget !== null ? `£${monthlyBudget.toFixed(2)}` : 'not set'}
+            Spent: £{spendThisMonth.toFixed(2)}
           </Text>
-        </Text>
-
-        <Text style={styles.kv}>
-          Expense:{' '}
-          <Text style={[styles.kvValue, styles.red]}>
-            £{spendThisMonth.toFixed(2)}
-          </Text>
-        </Text>
-
-        <Text style={styles.kv}>
-          Remaining:{' '}
-          <Text
-            style={[
-              styles.kvValue,
-              remaining >= 0 ? styles.green : styles.red,
-            ]}
-          >
-            £{remaining.toFixed(2)}
-          </Text>
-        </Text>
-
-        {/* Progress bar */}
-        <View style={styles.barOuter}>
-          <View
-            style={[
-              styles.barInner,
-              {
-                width: `${clampedRatio * 100}%`,
-                backgroundColor: barColor,
-              },
-            ]}
-          />
+          {currentBudget != null && (
+            <Text style={styles.kvValue}>
+              Remaining: £{Math.max(currentBudget - spendThisMonth, 0).toFixed(2)}
+            </Text>
+          )}
         </View>
-
-        <Text style={styles.statusText}>{statusText}</Text>
-      </View>
-
-      <Pressable
-        style={styles.backBtn}
-        onPress={() => navigation.goBack()}
-      >
-        <Text style={styles.backBtnText}>Back to Dashboard</Text>
-      </Pressable>
-    </View>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
+    backgroundColor: '#020617',
     padding: 16,
-    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+    paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
-  h1: { color: '#fff', fontSize: 24, fontWeight: '800', marginBottom: 4 },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
-
+  center: {
+    flex: 1,
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  h1: {
+    color: '#F9FAFB',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  subtle: {
+    color: '#9CA3AF',
+    fontSize: 13,
+  },
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: '#020617',
     borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
   },
-  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
-
-  label: { color: '#9CA3AF', marginBottom: 4 },
-
+  sectionTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  pillActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  pillText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pillTextActive: {
+    color: '#F9FAFB',
+  },
   input: {
     backgroundColor: '#0F172A',
-    color: '#fff',
+    color: '#F9FAFB',
     borderColor: '#1F2937',
     borderWidth: 1,
     borderRadius: 10,
     padding: 10,
-    marginBottom: 8,
-  },
-
-  row: {
-    flexDirection: 'row',
     marginTop: 4,
-    justifyContent: 'space-between',
   },
   btn: {
-    flex: 1,
     paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   btnPrimary: {
     backgroundColor: '#2563EB',
-    marginRight: 6,
-  },
-  btnGhost: {
-    backgroundColor: '#1F2937',
-    marginLeft: 6,
   },
   btnText: {
-    color: '#fff',
+    color: '#F9FAFB',
     fontWeight: '700',
   },
-
-  kv: { color: '#9CA3AF', marginTop: 4 },
-  kvValue: { color: '#E5E7EB', fontWeight: '700' },
-  green: { color: '#34D399' },
-  red: { color: '#F87171' },
-
-  barOuter: {
-    marginTop: 10,
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#020617',
-    overflow: 'hidden',
+  kvLabel: {
+    color: '#9CA3AF',
+    marginBottom: 4,
   },
-  barInner: {
-    height: '100%',
-    borderRadius: 999,
+  kvValue: {
+    color: '#F9FAFB',
+    fontWeight: '700',
   },
-  statusText: {
-    color: '#E5E7EB',
-    marginTop: 8,
-    fontSize: 13,
-  },
-
-  backBtn: {
-    marginTop: 4,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1F2937',
-  },
-  backBtnText: { color: '#E5E7EB', fontWeight: '700' },
 });

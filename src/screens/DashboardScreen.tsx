@@ -16,54 +16,82 @@ import * as SecureStore from 'expo-secure-store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
-const BUDGET_KEY = 'debitlens_budget_v1';
+const BUDGETS_KEY = 'debitlens_budgets_v1';
+const LEGACY_BUDGET_KEY = 'debitlens_budget_v1';
+
+type BudgetMap = Record<string, number>;
 
 export default function DashboardScreen({ navigation }: Props) {
   const { state, actions, selectors } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const [budget, setBudget] = useState<number | null>(null);
+  const [budgets, setBudgets] = useState<BudgetMap>({});
+  const [budgetAccountId, setBudgetAccountId] = useState<string | null>(null);
   const [loadingBudget, setLoadingBudget] = useState(true);
 
-  // local UI state for the "Add account" panel
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // Load monthly budget from SecureStore (same key as Budgets screen)
+  // Load budgets on mount
   useEffect(() => {
     (async () => {
       try {
-        const stored = await SecureStore.getItemAsync(BUDGET_KEY);
-        if (stored != null) {
-          const num = parseFloat(stored);
-          if (Number.isFinite(num) && num > 0) {
-            setBudget(num);
+        let map: BudgetMap = {};
+        const json = await SecureStore.getItemAsync(BUDGETS_KEY);
+        if (json) {
+          try {
+            const parsed = JSON.parse(json);
+            if (parsed && typeof parsed === 'object') {
+              map = parsed;
+            }
+          } catch (e) {
+            console.warn('[dashboard] parse budgets failed', e);
+          }
+        } else {
+          // Legacy: single budget => map to first account if any
+          const legacy = await SecureStore.getItemAsync(LEGACY_BUDGET_KEY);
+          if (legacy && accounts.length > 0) {
+            const n = parseFloat(legacy);
+            if (Number.isFinite(n) && n > 0) {
+              map[accounts[0].id] = n;
+            }
           }
         }
-      } catch (e) {
-        console.warn('[dashboard] load budget failed', e);
+
+        setBudgets(map);
+
+        // Choose which account's budget to show: first account with a budget
+        let chosenId: string | null = null;
+        if (accounts.length > 0) {
+          const withBudget = accounts.find(a => map[a.id] != null);
+          chosenId = withBudget?.id ?? null;
+        }
+        setBudgetAccountId(chosenId);
       } finally {
         setLoadingBudget(false);
       }
     })();
-  }, []);
+  }, [accounts.length]);
 
-  // Total balance derived from account balances
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => {
       return sum + selectors.accountBalance(a.id);
     }, 0);
   }, [accounts, state.transactions]);
 
-  // This month’s spend for budget comparison
+  // Compute monthly spend for the budgetAccountId only
   const { monthLabel, spendThisMonth } = useMemo(() => {
+    if (!budgetAccountId) {
+      return { monthLabel: '', spendThisMonth: 0 };
+    }
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
 
     let spend = 0;
     for (const t of txs) {
+      if (t.accountId !== budgetAccountId) continue;
       if (t.type === 'income') continue;
       const d = new Date(t.date || '');
       if (
@@ -81,52 +109,51 @@ export default function DashboardScreen({ navigation }: Props) {
     });
 
     return { monthLabel: label, spendThisMonth: spend };
-  }, [txs]);
+  }, [txs, budgetAccountId]);
+
+  const currentBudget =
+    budgetAccountId && budgets[budgetAccountId] != null
+      ? budgets[budgetAccountId]
+      : null;
+
+  const currentBudgetAccount =
+    budgetAccountId && accounts.find(a => a.id === budgetAccountId)
+      ? accounts.find(a => a.id === budgetAccountId)!
+      : null;
 
   // Budget badge logic
   const budgetBadge = useMemo(() => {
-    if (loadingBudget) {
-      return {
-        show: false,
-        text: '',
-        bg: '',
-        fg: '',
-      };
-    }
-    if (budget == null) {
-      return {
-        show: false,
-        text: '',
-        bg: '',
-        fg: '',
-      };
+    if (loadingBudget || !currentBudget || !currentBudgetAccount) {
+      return { show: false, text: '', bg: '', fg: '' };
     }
 
-    const usedRatio = budget > 0 ? spendThisMonth / budget : 0;
+    const usedRatio = currentBudget > 0 ? spendThisMonth / currentBudget : 0;
     const pct = Math.round(usedRatio * 100);
-    const remaining = budget - spendThisMonth;
+    const remaining = currentBudget - spendThisMonth;
 
     let text = '';
-    let bg = '#16A34A'; // green
+    let bg = '#16A34A';
     let fg = '#ECFDF5';
 
     if (usedRatio >= 1) {
       const over = -remaining;
-      text = `Over budget by £${over.toFixed(0)} (${pct}%)`;
-      bg = '#B91C1C'; // red
+      text = `${currentBudgetAccount.name} · over by £${over.toFixed(0)} (${pct}%)`;
+      bg = '#B91C1C';
       fg = '#FEE2E2';
     } else if (usedRatio >= 0.8) {
-      text = `Close to limit (${pct}% used)`;
-      bg = '#D97706'; // amber
+      text = `${currentBudgetAccount.name} · ${pct}% of budget used`;
+      bg = '#D97706';
       fg = '#FFFBEB';
     } else {
-      text = `On track · £${remaining.toFixed(0)} left`;
+      text = `${currentBudgetAccount.name} · £${remaining.toFixed(
+        0
+      )} left (${pct}% used)`;
       bg = '#15803D';
       fg = '#ECFDF5';
     }
 
     return { show: true, text, bg, fg };
-  }, [budget, spendThisMonth, loadingBudget]);
+  }, [loadingBudget, currentBudget, currentBudgetAccount, spendThisMonth]);
 
   const handleAddAccount = () => {
     const name = newName.trim();
@@ -142,9 +169,7 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.header}>
         <View>
           <Text style={styles.label}>Total balance</Text>
-          <Text style={styles.total}>
-            £{totalBalance.toFixed(2)}
-          </Text>
+          <Text style={styles.total}>£{totalBalance.toFixed(2)}</Text>
 
           {/* Budget badge */}
           {budgetBadge.show && (
@@ -167,7 +192,7 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           )}
 
-          {!loadingBudget && budget == null && (
+          {!loadingBudget && !currentBudget && (
             <Pressable
               onPress={() => navigation.navigate('Budgets')}
               style={styles.linkRow}
@@ -194,16 +219,14 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
         )}
 
-        {accounts.map((a) => {
+        {accounts.map(a => {
           const bal = selectors.accountBalance(a.id);
-
           const accTxs = selectors.accountTransactions(a.id);
           const lastTx = accTxs
             .slice()
             .sort((x, y) =>
               (y.date || '').localeCompare(x.date || '')
             )[0];
-
           const lastDate = lastTx?.date
             ? new Date(lastTx.date + 'T00:00:00')
             : null;
@@ -216,9 +239,7 @@ export default function DashboardScreen({ navigation }: Props) {
                 pressed && { opacity: 0.8 },
               ]}
               onPress={() =>
-                navigation.navigate('Account', {
-                  accountId: a.id,
-                })
+                navigation.navigate('Account', { accountId: a.id })
               }
             >
               <View style={styles.cardTop}>
@@ -235,9 +256,9 @@ export default function DashboardScreen({ navigation }: Props) {
 
               {lastTx ? (
                 <Text style={styles.cardSubtle}>
-                  {lastTx.note || lastTx.type || 'Transaction'}{' '}
+                  {lastTx.note || lastTx.type || 'Transaction'}
                   {lastDate
-                    ? `· ${lastDate.toLocaleDateString()}`
+                    ? ` · ${lastDate.toLocaleDateString()}`
                     : ''}
                 </Text>
               ) : (
@@ -281,7 +302,7 @@ export default function DashboardScreen({ navigation }: Props) {
         )}
       </ScrollView>
 
-      {/* BOTTOM QUICK MENU (main menu) */}
+      {/* BOTTOM QUICK MENU */}
       <View style={styles.quickBar}>
         <Pressable
           style={styles.quickBtnPrimary}
