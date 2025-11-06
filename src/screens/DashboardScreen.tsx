@@ -30,6 +30,31 @@ export default function DashboardScreen({ navigation }: Props) {
   const [budgets, setBudgets] = useState<BudgetMap>({});
   const [loadingBudget, setLoadingBudget] = useState(true);
 
+  // 💹 Overall month income/expense across ALL accounts
+  const monthlyTotals = useMemo(() => {
+    const now = new Date();
+    const m = now.getMonth();
+    const y = now.getFullYear();
+
+    let income = 0;
+    let expense = 0;
+
+    for (const t of allTxs) {
+      const d = new Date(t.date || '');
+      if (isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+
+      if (t.type === 'income') {
+        income += t.amount;
+      } else {
+        expense += t.amount;
+      }
+    }
+
+    return { income, expense };
+  }, [allTxs]);
+
+
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -193,6 +218,18 @@ export default function DashboardScreen({ navigation }: Props) {
         <View>
           <Text style={styles.label}>Total balance</Text>
           <Text style={styles.total}>£{totalBalance.toFixed(2)}</Text>
+
+          {/* This month income / expense (all accounts) */}
+          <Text style={styles.monthLine}>
+            This month:{' '}
+            <Text style={styles.monthIncome}>
+              +£{monthlyTotals.income.toFixed(2)}
+            </Text>{' '}
+            ·{' '}
+            <Text style={styles.monthExpense}>
+              -£{monthlyTotals.expense.toFixed(2)}
+            </Text>
+          </Text>
 
           {/* Budget pill */}
           {budgetBadge.show && (
@@ -538,4 +575,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+    monthLine: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  monthIncome: {
+    color: '#4ADE80',
+    fontWeight: '600',
+  },
+  monthExpense: {
+    color: '#F97373',
+    fontWeight: '600',
+  },
+
 });
