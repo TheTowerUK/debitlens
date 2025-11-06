@@ -7,6 +7,7 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  TextInput,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -18,12 +19,15 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 const BUDGET_KEY = 'debitlens_budget_v1';
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
   const [budget, setBudget] = useState<number | null>(null);
   const [loadingBudget, setLoadingBudget] = useState(true);
+
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
 
   // Load monthly budget from SecureStore (same key as Budgets screen)
   useEffect(() => {
@@ -63,8 +67,12 @@ export default function DashboardScreen({ navigation }: Props) {
     let spend = 0;
     for (const t of txs) {
       if (t.type === 'income') continue;
-      const d = new Date(t.date);
-      if (d.getFullYear() === year && d.getMonth() === month) {
+      const d = new Date(t.date || '');
+      if (
+        !isNaN(d.getTime()) &&
+        d.getFullYear() === year &&
+        d.getMonth() === month
+      ) {
         spend += t.amount;
       }
     }
@@ -121,6 +129,14 @@ export default function DashboardScreen({ navigation }: Props) {
 
     return { show: true, text, bg, fg };
   }, [budget, spendThisMonth, loadingBudget]);
+
+  const handleAddAccount = () => {
+    const name = newName.trim();
+    if (!name) return;
+    actions.addAccount(name);
+    setNewName('');
+    setAdding(false);
+  };
 
   return (
     <View style={styles.wrap}>
@@ -238,10 +254,47 @@ export default function DashboardScreen({ navigation }: Props) {
             </Pressable>
           );
         })}
+
+        {/* ADD ACCOUNT PANEL */}
+        {adding && (
+          <View style={styles.addCard}>
+            <Text style={styles.addLabel}>New account name</Text>
+            <TextInput
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="e.g. Holiday Fund"
+              placeholderTextColor="#6B7280"
+              style={styles.addInput}
+            />
+            <View style={styles.addRow}>
+              <Pressable
+                style={[styles.addBtn, styles.addBtnCancel]}
+                onPress={() => {
+                  setAdding(false);
+                  setNewName('');
+                }}
+              >
+                <Text style={styles.addBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.addBtn, styles.addBtnSave]}
+                onPress={handleAddAccount}
+              >
+                <Text style={styles.addBtnText}>Add</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
       </ScrollView>
 
-      {/* QUICK ACTIONS */}
+      {/* QUICK ACTION MENU */}
       <View style={styles.quickBar}>
+        <Pressable
+          style={styles.quickBtn}
+          onPress={() => setAdding(true)}
+        >
+          <Text style={styles.quickLabel}>Add account</Text>
+        </Pressable>
         <Pressable
           style={styles.quickBtn}
           onPress={() => navigation.navigate('History')}
@@ -360,9 +413,53 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
+  addCard: {
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  addLabel: {
+    color: '#9CA3AF',
+    marginBottom: 6,
+  },
+  addInput: {
+    backgroundColor: '#0F172A',
+    color: '#fff',
+    borderColor: '#1F2937',
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
+  addRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  addBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    marginLeft: 8,
+  },
+  addBtnCancel: {
+    backgroundColor: '#1F2937',
+  },
+  addBtnSave: {
+    backgroundColor: '#2563EB',
+  },
+  addBtnText: {
+    color: '#F9FAFB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+
   quickBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingVertical: 10,
     borderTopWidth: 1,
     borderColor: '#111827',
