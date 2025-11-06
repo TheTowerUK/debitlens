@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ type BudgetMap = Record<string, number>;
 export default function DashboardScreen({ navigation }: Props) {
   const { state, actions, selectors } = useApp();
   const accounts = state.accounts || [];
+  const allTxs = state.transactions || [];
 
   const [budgets, setBudgets] = useState<BudgetMap>({});
   const [loadingBudget, setLoadingBudget] = useState(true);
@@ -102,10 +103,13 @@ export default function DashboardScreen({ navigation }: Props) {
       ? (accounts.find(a => a.id === budgetAccountId) as (typeof accounts)[number])
       : null;
 
-  // 🔁 Get all transactions for the budget account via selectors
+  // 🔁 Get all transactions for the budget account DIRECTLY from state.transactions
   const budgetAccountTxs = useMemo(
-    () => (budgetAccountId ? selectors.accountTransactions(budgetAccountId) : []),
-    [budgetAccountId, selectors, state.transactions]
+    () =>
+      budgetAccountId
+        ? allTxs.filter(t => t.accountId === budgetAccountId)
+        : [],
+    [budgetAccountId, allTxs]
   );
 
   // 📆 Compute this month's spend for that one account
@@ -211,20 +215,6 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           )}
 
-          {/* DEBUG: show what the dashboard thinks is happening */}
-          {budgetAccountId && (
-            <View style={{ marginTop: 6 }}>
-              <Text style={{ color: '#6B7280', fontSize: 11 }}>
-                Debug · accountId: {String(budgetAccountId)}
-              </Text>
-              <Text style={{ color: '#6B7280', fontSize: 11 }}>
-                Debug · budget: £{(currentBudget ?? 0).toFixed(2)} · spendThisMonth: £
-                {spendThisMonth.toFixed(2)}
-              </Text>
-            </View>
-          )}
-
-
           {/* No budget yet → nudge */}
           {!loadingBudget && !currentBudget && (
             <Pressable
@@ -235,6 +225,18 @@ export default function DashboardScreen({ navigation }: Props) {
             </Pressable>
           )}
 
+          {/* DEBUG: what Dashboard thinks is happening */}
+          {budgetAccountId && (
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ color: '#6B7280', fontSize: 11 }}>
+                Debug · accountId: {String(budgetAccountId)}
+              </Text>
+              <Text style={{ color: '#6B7280', fontSize: 11 }}>
+                Debug · budget: £{(currentBudget ?? 0).toFixed(2)} · spendThisMonth: £
+                {spendThisMonth.toFixed(2)} · txCount: {budgetAccountTxs.length}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
 
@@ -258,7 +260,9 @@ export default function DashboardScreen({ navigation }: Props) {
           const lastTx = accTxs
             .slice()
             .sort((x, y) => (y.date || '').localeCompare(x.date || ''))[0];
-          const lastDate = lastTx?.date ? new Date(lastTx.date + 'T00:00:00') : null;
+          const lastDate = lastTx?.date
+            ? new Date(lastTx.date + 'T00:00:00')
+            : null;
 
           return (
             <Pressable
