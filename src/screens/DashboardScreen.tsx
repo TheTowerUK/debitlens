@@ -360,9 +360,9 @@ export default function DashboardScreen({ navigation }: Props) {
 
         <Pressable
           style={styles.quickBtn}
-          onPress={handleDebugAddExpense}
+          onPress={() => navigation.navigate('TxnEditor')}
         >
-          <Text style={styles.quickLabel}>+ Test expense</Text>
+          <Text style={styles.quickLabel}>+ Transaction</Text>
         </Pressable>
 
       </View>

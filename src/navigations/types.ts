@@ -10,4 +10,8 @@ export type RootStackParamList = {
   Budgets?: undefined;
   Notifications?: undefined;
   Recurring?: undefined;
+    TxnEditor: {
+    accountId?: string;
+    mode?: 'income' | 'expense';
+  } | undefined;
 };
