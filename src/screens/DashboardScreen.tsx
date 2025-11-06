@@ -19,13 +19,14 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 const BUDGET_KEY = 'debitlens_budget_v1';
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { state, actions } = useApp();
+  const { state, actions, selectors } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
   const [budget, setBudget] = useState<number | null>(null);
   const [loadingBudget, setLoadingBudget] = useState(true);
 
+  // local UI state for the "Add account" panel
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -48,15 +49,12 @@ export default function DashboardScreen({ navigation }: Props) {
     })();
   }, []);
 
-  // Total balance derived from transactions (income - expenses)
+  // Total balance derived from account balances
   const totalBalance = useMemo(() => {
-    let sum = 0;
-    for (const t of txs) {
-      if (t.type === 'income') sum += t.amount;
-      else sum -= t.amount;
-    }
-    return sum;
-  }, [txs]);
+    return accounts.reduce((sum, a) => {
+      return sum + selectors.accountBalance(a.id);
+    }, 0);
+  }, [accounts, state.transactions]);
 
   // This month’s spend for budget comparison
   const { monthLabel, spendThisMonth } = useMemo(() => {
@@ -185,7 +183,7 @@ export default function DashboardScreen({ navigation }: Props) {
       {/* ACCOUNTS LIST */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 100 }}
       >
         {accounts.length === 0 && (
           <View style={styles.emptyCard}>
@@ -197,13 +195,9 @@ export default function DashboardScreen({ navigation }: Props) {
         )}
 
         {accounts.map((a) => {
-          // Simple per-account balance derived from txs
-          const accTxs = txs.filter((t) => t.accountId === a.id);
-          const bal = accTxs.reduce((sum, t) => {
-            if (t.type === 'income') return sum + t.amount;
-            return sum - t.amount;
-          }, 0);
+          const bal = selectors.accountBalance(a.id);
 
+          const accTxs = selectors.accountTransactions(a.id);
           const lastTx = accTxs
             .slice()
             .sort((x, y) =>
@@ -287,32 +281,36 @@ export default function DashboardScreen({ navigation }: Props) {
         )}
       </ScrollView>
 
-      {/* QUICK ACTION MENU */}
+      {/* BOTTOM QUICK MENU (main menu) */}
       <View style={styles.quickBar}>
         <Pressable
-          style={styles.quickBtn}
+          style={styles.quickBtnPrimary}
           onPress={() => setAdding(true)}
         >
-          <Text style={styles.quickLabel}>Add account</Text>
+          <Text style={styles.quickLabelPrimary}>+ Add account</Text>
         </Pressable>
+
         <Pressable
           style={styles.quickBtn}
           onPress={() => navigation.navigate('History')}
         >
           <Text style={styles.quickLabel}>History</Text>
         </Pressable>
+
         <Pressable
           style={styles.quickBtn}
           onPress={() => navigation.navigate('Budgets')}
         >
           <Text style={styles.quickLabel}>Budgets</Text>
         </Pressable>
+
         <Pressable
           style={styles.quickBtn}
           onPress={() => navigation.navigate('Reports')}
         >
           <Text style={styles.quickLabel}>Reports</Text>
         </Pressable>
+
         <Pressable
           style={styles.quickBtn}
           onPress={() => navigation.navigate('Settings')}
@@ -457,13 +455,25 @@ const styles = StyleSheet.create({
   },
 
   quickBar: {
+    borderTopWidth: 1,
+    borderColor: '#111827',
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 16 : 10,
+    marginTop: 4,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#111827',
-    marginTop: 4,
+  },
+  quickBtnPrimary: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: '#2563EB',
+  },
+  quickLabelPrimary: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+    fontSize: 13,
   },
   quickBtn: {
     paddingVertical: 6,
