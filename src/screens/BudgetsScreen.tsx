@@ -1,5 +1,5 @@
 // src/screens/BudgetsScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,46 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
+import * as FileSystem from 'expo-file-system';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
+
+// simple local file for budget persistence
+const BUDGET_FILE_NAME = 'debitlens_budget.json';
 
 export default function BudgetsScreen({ navigation }: Props) {
   const { state } = useApp();
   const [input, setInput] = useState('');
   const [budget, setBudget] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // ---- load budget from file on mount ----
+  useEffect(() => {
+    (async () => {
+      try {
+        const FS: any = FileSystem;
+        const base = FS.documentDirectory ?? FS.cacheDirectory ?? '';
+        const path = `${base}${BUDGET_FILE_NAME}`;
+
+        const info = await FS.getInfoAsync(path);
+        if (!info.exists) {
+          setLoading(false);
+          return;
+        }
+
+        const content = await FS.readAsStringAsync(path);
+        const parsed = JSON.parse(content);
+        if (typeof parsed?.budget === 'number' && parsed.budget > 0) {
+          setBudget(parsed.budget);
+          setInput(String(parsed.budget));
+        }
+      } catch (e) {
+        console.warn('[budgets] load budget failed', e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   // derive this month's spend from global transactions
   const { monthLabel, spendThisMonth } = useMemo(() => {
@@ -58,19 +91,46 @@ export default function BudgetsScreen({ navigation }: Props) {
   if (usedRatio >= 0.8 && usedRatio < 1) barColor = '#F97316'; // orange
   if (usedRatio >= 1) barColor = '#EF4444'; // red
 
-  const onSave = () => {
+  const saveBudgetToFile = async (value: number | null) => {
+    try {
+      const FS: any = FileSystem;
+      const base = FS.documentDirectory ?? FS.cacheDirectory ?? '';
+      const path = `${base}${BUDGET_FILE_NAME}`;
+
+      if (value === null) {
+        // clear file
+        try {
+          await FS.deleteAsync(path, { idempotent: true });
+        } catch {
+          // ignore
+        }
+        return;
+      }
+
+      const payload = JSON.stringify({ budget: value });
+      if (typeof FS.writeAsStringAsync === 'function') {
+        await FS.writeAsStringAsync(path, payload);
+      }
+    } catch (e) {
+      console.warn('[budgets] save budget failed', e);
+    }
+  };
+
+  const onSave = async () => {
     const value = parseFloat(input.replace(',', '.'));
     if (!Number.isFinite(value) || value <= 0) {
       Alert.alert('Invalid amount', 'Enter a positive number.');
       return;
     }
     setBudget(value);
-    Alert.alert('Saved', 'Monthly budget updated (not yet persisted).');
+    await saveBudgetToFile(value);
+    Alert.alert('Saved', 'Monthly budget updated.');
   };
 
-  const onClear = () => {
+  const onClear = async () => {
     setBudget(null);
     setInput('');
+    await saveBudgetToFile(null);
     Alert.alert('Budget cleared', 'Monthly budget has been removed.');
   };
 
@@ -105,20 +165,25 @@ export default function BudgetsScreen({ navigation }: Props) {
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder="e.g. 1500"
+          placeholder={loading ? 'Loading…' : 'e.g. 1500'}
           placeholderTextColor="#6B7280"
           keyboardType="decimal-pad"
           style={styles.input}
+          editable={!loading}
         />
 
         <View style={styles.row}>
-          <Pressable style={[styles.btn, styles.btnPrimary]} onPress={onSave}>
+          <Pressable
+            style={[styles.btn, styles.btnPrimary]}
+            onPress={onSave}
+            disabled={loading}
+          >
             <Text style={styles.btnText}>Save</Text>
           </Pressable>
           <Pressable
             style={[styles.btn, styles.btnGhost]}
             onPress={onClear}
-            disabled={budget === null}
+            disabled={loading || budget === null}
           >
             <Text style={styles.btnText}>Clear</Text>
           </Pressable>
