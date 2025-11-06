@@ -9,6 +9,7 @@ import {
   Platform,
   TextInput,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
@@ -27,52 +28,58 @@ export default function DashboardScreen({ navigation }: Props) {
   const txs = state.transactions || [];
 
   const [budgets, setBudgets] = useState<BudgetMap>({});
-  const [budgetAccountId, setBudgetAccountId] = useState<string | null>(null);
   const [loadingBudget, setLoadingBudget] = useState(true);
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // Load budgets on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        let map: BudgetMap = {};
-        const json = await SecureStore.getItemAsync(BUDGETS_KEY);
-        if (json) {
-          try {
-            const parsed = JSON.parse(json);
-            if (parsed && typeof parsed === 'object') {
-              map = parsed;
+  // 🔁 Reload budgets whenever the Dashboard gains focus
+  useFocusEffect(
+    React.useCallback(() => {
+      let cancelled = false;
+
+      const loadBudgets = async () => {
+        try {
+          setLoadingBudget(true);
+          let map: BudgetMap = {};
+
+          const json = await SecureStore.getItemAsync(BUDGETS_KEY);
+          if (json) {
+            try {
+              const parsed = JSON.parse(json);
+              if (parsed && typeof parsed === 'object') {
+                map = parsed;
+              }
+            } catch (e) {
+              console.warn('[dashboard] parse budgets failed', e);
             }
-          } catch (e) {
-            console.warn('[dashboard] parse budgets failed', e);
+          } else {
+            // Legacy: single budget => map to first account if any
+            const legacy = await SecureStore.getItemAsync(LEGACY_BUDGET_KEY);
+            if (legacy && accounts.length > 0) {
+              const n = parseFloat(legacy);
+              if (Number.isFinite(n) && n > 0) {
+                map[accounts[0].id] = n;
+              }
+            }
           }
-        } else {
-          // Legacy: single budget => map to first account if any
-          const legacy = await SecureStore.getItemAsync(LEGACY_BUDGET_KEY);
-          if (legacy && accounts.length > 0) {
-            const n = parseFloat(legacy);
-            if (Number.isFinite(n) && n > 0) {
-              map[accounts[0].id] = n;
-            }
+
+          if (!cancelled) {
+            setBudgets(map);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoadingBudget(false);
           }
         }
+      };
 
-        setBudgets(map);
-
-        // Choose which account's budget to show: first account with a budget
-        let chosenId: string | null = null;
-        if (accounts.length > 0) {
-          const withBudget = accounts.find(a => map[a.id] != null);
-          chosenId = withBudget?.id ?? null;
-        }
-        setBudgetAccountId(chosenId);
-      } finally {
-        setLoadingBudget(false);
-      }
-    })();
-  }, [accounts.length]);
+      loadBudgets();
+      return () => {
+        cancelled = true;
+      };
+    }, [accounts.length])
+  );
 
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => {
@@ -80,7 +87,14 @@ export default function DashboardScreen({ navigation }: Props) {
     }, 0);
   }, [accounts, state.transactions]);
 
-  // Compute monthly spend for the budgetAccountId only
+  // 👉 Derive which account to show the budget for from current budgets + accounts
+  const budgetAccountId = useMemo(() => {
+    if (!accounts.length) return null;
+    const withBudget = accounts.find(a => budgets[a.id] != null);
+    return withBudget?.id ?? null;
+  }, [accounts, budgets]);
+
+  // Compute monthly spend for that budgetAccountId only
   const { monthLabel, spendThisMonth } = useMemo(() => {
     if (!budgetAccountId) {
       return { monthLabel: '', spendThisMonth: 0 };
@@ -163,23 +177,6 @@ export default function DashboardScreen({ navigation }: Props) {
     setAdding(false);
   };
 
- {/* Debug: add a test expense to first account */}
-  const handleDebugAddExpense = () => {
-    if (!accounts.length) {
-      alert('No accounts yet');
-      return;
-    }
-
-  const firstId = accounts[0].id;
-
-  actions.addTransaction({
-    accountId: firstId,
-    amount: 25, // £25 test expense
-    type: 'expense',
-    note: 'Debug expense',
-    date: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-  });
-};
   return (
     <View style={styles.wrap}>
       {/* HEADER */}
@@ -330,6 +327,13 @@ export default function DashboardScreen({ navigation }: Props) {
 
         <Pressable
           style={styles.quickBtn}
+          onPress={() => navigation.navigate('TxnEditor')}
+        >
+          <Text style={styles.quickLabel}>+ Transaction</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.quickBtn}
           onPress={() => navigation.navigate('History')}
         >
           <Text style={styles.quickLabel}>History</Text>
@@ -355,16 +359,6 @@ export default function DashboardScreen({ navigation }: Props) {
         >
           <Text style={styles.quickLabel}>Settings</Text>
         </Pressable>
-
-        {/* Debug: add a test expense to first account */}
-
-        <Pressable
-          style={styles.quickBtn}
-          onPress={() => navigation.navigate('TxnEditor')}
-        >
-          <Text style={styles.quickLabel}>+ Transaction</Text>
-        </Pressable>
-
       </View>
     </View>
   );
