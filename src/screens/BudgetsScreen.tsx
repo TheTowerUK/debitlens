@@ -12,12 +12,12 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import * as FileSystem from 'expo-file-system';
+import * as SecureStore from 'expo-secure-store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
-// simple local file for budget persistence
-const BUDGET_FILE_NAME = 'debitlens_budget.json';
+// Key for persisting the monthly budget
+const BUDGET_KEY = 'debitlens_budget_v1';
 
 export default function BudgetsScreen({ navigation }: Props) {
   const { state } = useApp();
@@ -25,25 +25,17 @@ export default function BudgetsScreen({ navigation }: Props) {
   const [budget, setBudget] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ---- load budget from file on mount ----
+  // ---- load budget from SecureStore on mount ----
   useEffect(() => {
     (async () => {
       try {
-        const FS: any = FileSystem;
-        const base = FS.documentDirectory ?? FS.cacheDirectory ?? '';
-        const path = `${base}${BUDGET_FILE_NAME}`;
-
-        const info = await FS.getInfoAsync(path);
-        if (!info.exists) {
-          setLoading(false);
-          return;
-        }
-
-        const content = await FS.readAsStringAsync(path);
-        const parsed = JSON.parse(content);
-        if (typeof parsed?.budget === 'number' && parsed.budget > 0) {
-          setBudget(parsed.budget);
-          setInput(String(parsed.budget));
+        const stored = await SecureStore.getItemAsync(BUDGET_KEY);
+        if (stored != null) {
+          const num = parseFloat(stored);
+          if (Number.isFinite(num) && num > 0) {
+            setBudget(num);
+            setInput(String(num));
+          }
         }
       } catch (e) {
         console.warn('[budgets] load budget failed', e);
@@ -84,37 +76,12 @@ export default function BudgetsScreen({ navigation }: Props) {
   const usedRatio =
     budget && budget > 0 ? spendThisMonth / budget : 0;
 
-  // clamp 0–1 for the bar
+  // clamp 0–1 for the visual bar
   const clampedRatio = Math.max(0, Math.min(1, usedRatio));
 
   let barColor = '#22C55E'; // green
   if (usedRatio >= 0.8 && usedRatio < 1) barColor = '#F97316'; // orange
   if (usedRatio >= 1) barColor = '#EF4444'; // red
-
-  const saveBudgetToFile = async (value: number | null) => {
-    try {
-      const FS: any = FileSystem;
-      const base = FS.documentDirectory ?? FS.cacheDirectory ?? '';
-      const path = `${base}${BUDGET_FILE_NAME}`;
-
-      if (value === null) {
-        // clear file
-        try {
-          await FS.deleteAsync(path, { idempotent: true });
-        } catch {
-          // ignore
-        }
-        return;
-      }
-
-      const payload = JSON.stringify({ budget: value });
-      if (typeof FS.writeAsStringAsync === 'function') {
-        await FS.writeAsStringAsync(path, payload);
-      }
-    } catch (e) {
-      console.warn('[budgets] save budget failed', e);
-    }
-  };
 
   const onSave = async () => {
     const value = parseFloat(input.replace(',', '.'));
@@ -122,16 +89,26 @@ export default function BudgetsScreen({ navigation }: Props) {
       Alert.alert('Invalid amount', 'Enter a positive number.');
       return;
     }
-    setBudget(value);
-    await saveBudgetToFile(value);
-    Alert.alert('Saved', 'Monthly budget updated.');
+    try {
+      setBudget(value);
+      await SecureStore.setItemAsync(BUDGET_KEY, String(value));
+      Alert.alert('Saved', 'Monthly budget updated.');
+    } catch (e) {
+      console.warn('[budgets] save budget failed', e);
+      Alert.alert('Error', 'Could not save the budget.');
+    }
   };
 
   const onClear = async () => {
-    setBudget(null);
-    setInput('');
-    await saveBudgetToFile(null);
-    Alert.alert('Budget cleared', 'Monthly budget has been removed.');
+    try {
+      setBudget(null);
+      setInput('');
+      await SecureStore.deleteItemAsync(BUDGET_KEY);
+      Alert.alert('Budget cleared', 'Monthly budget has been removed.');
+    } catch (e) {
+      console.warn('[budgets] clear budget failed', e);
+      Alert.alert('Error', 'Could not clear the budget.');
+    }
   };
 
   const statusText = (() => {
