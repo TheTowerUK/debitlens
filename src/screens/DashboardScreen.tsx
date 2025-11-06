@@ -211,6 +211,20 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           )}
 
+          {/* DEBUG: show what the dashboard thinks is happening */}
+          {budgetAccountId && (
+            <View style={{ marginTop: 6 }}>
+              <Text style={{ color: '#6B7280', fontSize: 11 }}>
+                Debug · accountId: {String(budgetAccountId)}
+              </Text>
+              <Text style={{ color: '#6B7280', fontSize: 11 }}>
+                Debug · budget: £{(currentBudget ?? 0).toFixed(2)} · spendThisMonth: £
+                {spendThisMonth.toFixed(2)}
+              </Text>
+            </View>
+          )}
+
+
           {/* No budget yet → nudge */}
           {!loadingBudget && !currentBudget && (
             <Pressable
@@ -220,6 +234,7 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.linkText}>Set a monthly budget →</Text>
             </Pressable>
           )}
+
         </View>
       </View>
 
