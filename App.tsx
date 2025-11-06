@@ -15,6 +15,7 @@ import AccountScreen from './src/screens/AccountScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import BudgetsScreen from './src/screens/BudgetsScreen';
+import TxnEditorScreen from './src/screens/TxnEditorScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -62,6 +63,11 @@ export default function App() {
             name="Budgets"
             component={BudgetsScreen}
             options={{ title: 'Budgets' }}
+          />
+          <Stack.Screen
+            name="TxnEditor"
+            component={TxnEditorScreen}
+            options={{ title: 'New transaction' }}
           />
 
         </Stack.Navigator>
