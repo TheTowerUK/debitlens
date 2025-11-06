@@ -7,12 +7,12 @@ import React, {
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 
-// --- Types ---
+// ---------- Types ----------
 
 export type Account = {
   id: string;
   name: string;
-  createdAt?: string; // optional, some screens sort on this
+  createdAt?: string;
 };
 
 export type Transaction = {
@@ -20,7 +20,7 @@ export type Transaction = {
   accountId: string;
   type: 'income' | 'expense';
   amount: number;
-  date?: string;       // make optional so older calls without date still compile
+  date?: string;
   note?: string;
 };
 
@@ -32,11 +32,10 @@ export type AppState = {
 export type AppSelectors = {
   accountBalance: (accountId: string) => number;
   accountTransactions: (accountId: string) => Transaction[];
-  // alias for older code
-  transactionsForAccount: (accountId: string) => Transaction[];
+  transactionsForAccount: (accountId: string) => Transaction[]; // alias
 };
 
-type AppActions = {
+export type AppActions = {
   addAccount: (name: string) => void;
   deleteAccount: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, 'id'>) => void;
@@ -52,10 +51,9 @@ export type AppContextValue = {
   setPin: (pin: string) => Promise<void>;
 };
 
-// --- Context setup ---
+// ---------- Context ----------
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
-
 const PIN_KEY = 'debitlens_pin_v1';
 
 type Props = { children: React.ReactNode };
@@ -66,9 +64,9 @@ export const AppProvider: React.FC<Props> = ({ children }) => {
     transactions: [],
   });
 
-  // Seed with one default account if none
+  // Seed a default account if none exist
   useEffect(() => {
-    setState((prev) => {
+    setState(prev => {
       if (prev.accounts.length > 0) return prev;
       const nowIso = new Date().toISOString();
       return {
@@ -84,56 +82,55 @@ export const AppProvider: React.FC<Props> = ({ children }) => {
     });
   }, []);
 
-  // --- selectors depend on current state ---
-const selectors: AppSelectors = {
-  accountBalance: (accountId: string) => {
-    const txs = state.transactions.filter(
-      (t) => t.accountId === accountId
-    );
-    return txs.reduce((sum, t) => {
-      if (t.type === 'income') return sum + t.amount;
-      return sum - t.amount;
-    }, 0);
-  },
-  accountTransactions: (accountId: string) => {
-    return state.transactions.filter(
-      (t) => t.accountId === accountId
-    );
-  },
-  // simple alias so existing code still works
-  transactionsForAccount: (accountId: string) => {
-    return state.transactions.filter(
-      (t) => t.accountId === accountId
-    );
-  },
-};
+  // ---------- selectors ----------
 
-  // --- actions that mutate state ---
+  const selectors: AppSelectors = {
+    accountBalance: (accountId: string) => {
+      const txs = state.transactions.filter(t => t.accountId === accountId);
+      return txs.reduce((sum, t) => {
+        if (t.type === 'income') return sum + t.amount;
+        return sum - t.amount;
+      }, 0);
+    },
+    accountTransactions: (accountId: string) => {
+      return state.transactions.filter(t => t.accountId === accountId);
+    },
+    transactionsForAccount: (accountId: string) => {
+      // alias for older code
+      return state.transactions.filter(t => t.accountId === accountId);
+    },
+  };
+
+  // ---------- actions ----------
+
   const actions: AppActions = {
     addAccount: (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       const nowIso = new Date().toISOString();
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         accounts: [
           ...prev.accounts,
-          { id: 'acc_' + Date.now(), name: trimmed, createdAt: nowIso },
+          {
+            id: 'acc_' + Date.now(),
+            name: trimmed,
+            createdAt: nowIso,
+          },
         ],
       }));
     },
+
     deleteAccount: (id: string) => {
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
-        accounts: prev.accounts.filter((a) => a.id !== id),
-        // also drop its transactions
-        transactions: prev.transactions.filter(
-          (t) => t.accountId !== id
-        ),
+        accounts: prev.accounts.filter(a => a.id !== id),
+        transactions: prev.transactions.filter(t => t.accountId !== id),
       }));
     },
+
     addTransaction: (tx: Omit<Transaction, 'id'>) => {
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
         transactions: [
           ...prev.transactions,
@@ -141,14 +138,14 @@ const selectors: AppSelectors = {
         ],
       }));
     },
+
     deleteTransaction: (id: string) => {
-      setState((prev) => ({
+      setState(prev => ({
         ...prev,
-        transactions: prev.transactions.filter(
-          (t) => t.id !== id
-        ),
+        transactions: prev.transactions.filter(t => t.id !== id),
       }));
     },
+
     resetAll: () => {
       setState({
         accounts: [],
@@ -157,20 +154,25 @@ const selectors: AppSelectors = {
     },
   };
 
+  // ---------- PIN helpers (SecureStore) ----------
+
   const getPin = async (): Promise<string | null> => {
     try {
       const v = await SecureStore.getItemAsync(PIN_KEY);
+      console.log('[PIN] getPin ->', v);
       return v ?? null;
-    } catch {
+    } catch (e) {
+      console.warn('[PIN] getPin failed', e);
       return null;
     }
   };
 
   const setPin = async (pin: string): Promise<void> => {
     try {
+      console.log('[PIN] setPin ->', pin);
       await SecureStore.setItemAsync(PIN_KEY, pin);
     } catch (e) {
-      console.warn('[AppProvider] setPin failed', e);
+      console.warn('[PIN] setPin failed', e);
       throw e;
     }
   };
@@ -184,10 +186,13 @@ const selectors: AppSelectors = {
   };
 
   return (
-    <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
   );
 };
 
+// Hook
 export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) {

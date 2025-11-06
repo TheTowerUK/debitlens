@@ -16,16 +16,14 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const { getPin, setPin, login } = useApp();
-
+  const { getPin, setPin } = useApp();
   const [mode, setMode] = useState<'loading' | 'signin' | 'setpin'>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
 
-  // Decide whether to show "sign in" or "set PIN" based on stored PIN
+  // Decide whether to show "Sign in" or "Create PIN"
   useEffect(() => {
     let mounted = true;
-
     (async () => {
       try {
         const stored = await getPin();
@@ -36,7 +34,6 @@ export default function LoginScreen({ navigation }: Props) {
         setMode('signin');
       }
     })();
-
     return () => {
       mounted = false;
     };
@@ -46,7 +43,6 @@ export default function LoginScreen({ navigation }: Props) {
     try {
       const stored = await getPin();
       if ((stored || '') === pin.trim()) {
-        await login();
         navigation.replace('Dashboard');
       } else {
         Alert.alert('Incorrect PIN', 'Please try again.');
@@ -61,16 +57,13 @@ export default function LoginScreen({ navigation }: Props) {
     const p1 = pin.trim();
     const p2 = confirm.trim();
     if (!/^\d{4,6}$/.test(p1)) {
-      Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
-      return;
+      return Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
     }
     if (p1 !== p2) {
-      Alert.alert('Mismatch', 'PINs do not match.');
-      return;
+      return Alert.alert('Mismatch', 'PINs do not match.');
     }
     try {
       await setPin(p1);
-      await login();
       navigation.replace('Dashboard');
     } catch {
       Alert.alert('Error', 'Unable to save PIN right now.');
