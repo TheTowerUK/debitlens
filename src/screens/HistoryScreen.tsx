@@ -4,188 +4,182 @@ import {
   View,
   Text,
   StyleSheet,
+  Platform,
   ScrollView,
   Pressable,
-  Platform,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import { generateReportCSV, type ReportRow } from '../services/reporting';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
 export default function HistoryScreen({ navigation }: Props) {
   const { state } = useApp();
-  const [exporting, setExporting] = useState(false);
-
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  // Build a quick lookup for account names
-  const accountNameById = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const a of accounts) {
-      map[a.id] = a.name;
+  const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
+
+  // Small helper: map accountId → name
+  const accountNameFor = (id: string | undefined | null): string => {
+    if (!id) return 'Unknown account';
+    const acc = accounts.find(a => a.id === id);
+    return acc?.name || 'Unknown account';
+  };
+
+  const filtered = useMemo(() => {
+    let list = txs;
+    if (selectedAccountId !== 'all') {
+      list = list.filter(t => t.accountId === selectedAccountId);
     }
-    return map;
-  }, [accounts]);
+    // newest first by date, then id
+    return [...list].sort((a, b) => {
+      const da = a.date || '';
+      const db = b.date || '';
+      const cmp = db.localeCompare(da);
+      if (cmp !== 0) return cmp;
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }, [txs, selectedAccountId]);
 
-  // Sort transactions newest -> oldest and group by date (YYYY-MM-DD)
-  const grouped = useMemo(() => {
-    const copy = [...txs].sort((a, b) =>
-      (b.date || '').localeCompare(a.date || '')
-    );
-    const byDay: Record<string, typeof copy> = {};
-    for (const t of copy) {
-      const day = (t.date || '').slice(0, 10) || 'Unknown date';
-      if (!byDay[day]) byDay[day] = [];
-      byDay[day].push(t);
-    }
-    return byDay;
-  }, [txs]);
+  const monthLabel = useMemo(() => {
+    const now = new Date();
+    return now.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+  }, []);
 
-  const dayKeys = useMemo(
-    () => Object.keys(grouped).sort((a, b) => b.localeCompare(a)),
-    [grouped]
-  );
-
-  const exportAllCsv = async () => {
-    if (!txs.length) {
-      Alert.alert('No data', 'There are no transactions to export yet.');
-      return;
-    }
-
-    try {
-      setExporting(true);
-
-      const rows: ReportRow[] = txs.map(t => ({
-        id: String(t.id),
-        date: String(t.date),
-        amount: Number(t.amount),
-        type: String(t.type || ''),
-        account_id: String(t.accountId || ''),
-        category_id: null,
-        note: t.note ?? null,
-      }));
-
-      const csv = generateReportCSV(rows);
-
-      const FS: any = FileSystem;
-      const base = FS.cacheDirectory ?? '';
-      const path = `${base}debitlens_history_all.csv`;
-      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
-
-      if (typeof FS.writeAsStringAsync === 'function') {
-        await FS.writeAsStringAsync(path, csv, { encoding });
-      } else {
-        await FS.writeAsStringAsync(path, csv);
-      }
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Share all transactions (CSV)',
-        });
-      } else {
-        Alert.alert('CSV saved', path);
-      }
-    } catch (e: any) {
-      console.warn('[history] exportAllCsv failed', e);
-      Alert.alert('Export failed', e?.message || 'Could not export CSV');
-    } finally {
-      setExporting(false);
-    }
+  const formatDate = (raw: string | undefined) => {
+    if (!raw) return 'No date';
+    const s = raw.includes('T') ? raw : `${raw}T00:00:00`;
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString();
   };
 
   return (
     <View style={styles.wrap}>
       {/* HEADER */}
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.h1}>History</Text>
-          <Text style={styles.subtle}>
-            All transactions, newest first
-          </Text>
-        </View>
-        <Pressable
-          style={styles.closePill}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.closeText}>Close</Text>
-        </Pressable>
+      <View style={styles.header}>
+        <Text style={styles.title}>History</Text>
+        <Text style={styles.subtle}>
+          All transactions · {monthLabel}
+        </Text>
       </View>
 
-      {/* EXPORT BAR */}
-      <View style={styles.exportCard}>
-        <Text style={styles.exportLabel}>Export</Text>
+      {/* ACCOUNT FILTER */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterRow}
+        contentContainerStyle={{ paddingRight: 8 }}
+      >
         <Pressable
+          onPress={() => setSelectedAccountId('all')}
           style={[
-            styles.exportBtn,
-            exporting && { opacity: 0.7 },
+            styles.filterPill,
+            selectedAccountId === 'all' && styles.filterPillActive,
           ]}
-          onPress={exportAllCsv}
-          disabled={exporting}
         >
-          {exporting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.exportBtnText}>Export all as CSV</Text>
-          )}
+          <Text
+            style={[
+              styles.filterText,
+              selectedAccountId === 'all' && styles.filterTextActive,
+            ]}
+          >
+            All accounts
+          </Text>
         </Pressable>
-      </View>
 
-      {/* HISTORY LIST */}
+        {accounts.map(acc => (
+          <Pressable
+            key={acc.id}
+            onPress={() => setSelectedAccountId(acc.id)}
+            style={[
+              styles.filterPill,
+              selectedAccountId === acc.id && styles.filterPillActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                selectedAccountId === acc.id && styles.filterTextActive,
+              ]}
+            >
+              {acc.name}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* LIST */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 40 }}
       >
-        {txs.length === 0 && (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyTitle}>No transactions yet</Text>
+        {filtered.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No transactions</Text>
             <Text style={styles.emptySubtle}>
-              Add some transactions on your accounts and they&apos;ll show here.
+              Add a transaction from the Dashboard to see it appear here.
             </Text>
           </View>
         )}
 
-        {dayKeys.map(day => (
-          <View key={day} style={styles.dayBlock}>
-            <Text style={styles.dayLabel}>
-              {day === 'Unknown date'
-                ? 'Unknown date'
-                : new Date(day + 'T00:00:00').toLocaleDateString()}
-            </Text>
+        {filtered.map(tx => {
+          const isIncome = tx.type === 'income';
+          const sign = isIncome ? '+' : '−';
 
-            {grouped[day].map(t => {
-              const isIncome = t.type === 'income';
-              const sign = isIncome ? '+' : '-';
-              const colour = isIncome ? '#34D399' : '#F87171';
-              const accName = accountNameById[t.accountId] || 'Account';
+          return (
+            <View key={tx.id} style={styles.txCard}>
+              <View style={styles.txTopRow}>
+                <Text style={styles.txAccount}>
+                  {accountNameFor(tx.accountId)}
+                </Text>
+                <Text
+                  style={[
+                    styles.txAmount,
+                    isIncome ? styles.txIncome : styles.txExpense,
+                  ]}
+                >
+                  {sign}£{Math.abs(tx.amount).toFixed(2)}
+                </Text>
+              </View>
 
-              return (
-                <View key={t.id} style={styles.txRow}>
-                  <View style={styles.txLeft}>
-                    <Text style={styles.txNote}>
-                      {t.note || '(no note)'}
-                    </Text>
-                    <Text style={styles.txMeta}>
-                      {accName} · {t.type === 'income' ? 'Income' : 'Expense'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.txAmount, { color: colour }]}>
-                    {sign}£{Number(t.amount).toFixed(2)}
+              <View style={styles.txBottomRow}>
+                <Text style={styles.txMeta}>
+                  {formatDate(tx.date)} · {isIncome ? 'Income' : 'Expense'}
+                </Text>
+                {tx.note ? (
+                  <Text
+                    style={styles.txNote}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {tx.note}
                   </Text>
-                </View>
-              );
-            })}
-          </View>
-        ))}
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
       </ScrollView>
+
+      {/* FOOTER / NAVIGATION */}
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnPrimary]}
+          onPress={() => navigation.navigate('Dashboard')}
+        >
+          <Text style={styles.footerText}>Back to Dashboard</Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnGhost]}
+          onPress={() => navigation.navigate('Budgets')}
+        >
+          <Text style={styles.footerText}>View Budgets</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -197,49 +191,49 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  header: {
+    marginBottom: 8,
   },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 2 },
-  closePill: {
+  title: {
+    color: '#F9FAFB',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  subtle: {
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+  filterRow: {
+    marginTop: 12,
+    maxHeight: 40,
+  },
+  filterPill: {
+    backgroundColor: '#020617',
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1F2937',
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: '#020817',
-  },
-  closeText: { color: '#E5E7EB', fontWeight: '600', fontSize: 13 },
-
-  exportCard: {
-    backgroundColor: '#0B1120',
-    borderRadius: 16,
-    padding: 10,
-    marginBottom: 10,
     borderWidth: 1,
     borderColor: '#1E293B',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginRight: 8,
   },
-  exportLabel: { color: '#9CA3AF', fontSize: 13 },
-  exportBtn: {
+  filterPillActive: {
     backgroundColor: '#2563EB',
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: '#2563EB',
   },
-  exportBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-
-  scroll: { flex: 1 },
-
-  emptyBox: {
+  filterText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  filterTextActive: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+  },
+  scroll: {
+    flex: 1,
+    marginTop: 8,
+  },
+  emptyCard: {
     backgroundColor: '#020617',
     borderRadius: 16,
     padding: 16,
@@ -247,31 +241,80 @@ const styles = StyleSheet.create({
     borderColor: '#1E293B',
     marginTop: 8,
   },
-  emptyTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '700' },
-  emptySubtle: { color: '#9CA3AF', marginTop: 4 },
-
-  dayBlock: {
-    marginTop: 12,
+  emptyTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    fontSize: 16,
   },
-  dayLabel: {
+  emptySubtle: {
     color: '#9CA3AF',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-
-  txRow: {
-    backgroundColor: '#020617',
-    borderRadius: 12,
-    padding: 10,
     marginTop: 4,
+  },
+  txCard: {
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#1E293B',
+    marginTop: 8,
+  },
+  txTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  txLeft: { flexShrink: 1, paddingRight: 8 },
-  txNote: { color: '#E5E7EB', fontWeight: '600' },
-  txMeta: { color: '#9CA3AF', fontSize: 11, marginTop: 2 },
-  txAmount: { fontSize: 15, fontWeight: '800' },
+  txAccount: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  txAmount: {
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  txIncome: {
+    color: '#4ADE80',
+  },
+  txExpense: {
+    color: '#F97373',
+  },
+  txBottomRow: {
+    marginTop: 4,
+  },
+  txMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  txNote: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderColor: '#111827',
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 16 : 10,
+    marginTop: 4,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerBtnPrimary: {
+    backgroundColor: '#2563EB',
+  },
+  footerBtnGhost: {
+    backgroundColor: '#0B1120',
+  },
+  footerText: {
+    color: '#F9FAFB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
 });
