@@ -1,268 +1,319 @@
 // src/screens/AccountScreen.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  Platform,
   ScrollView,
   Pressable,
-  TextInput,
-  Platform,
-  Alert,
-  ActivityIndicator,
 } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import { generateReportCSV, type ReportRow } from '../services/reporting';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
+const BUDGETS_KEY = 'debitlens_budgets_v1';
+
+type BudgetMap = Record<string, number>;
+
 export default function AccountScreen({ route, navigation }: Props) {
+  const { state } = useApp();
   const { accountId } = route.params;
-  const { state, selectors, actions } = useApp();
 
-  const account = state.accounts.find(a => a.id === accountId);
-  const txs = selectors.transactionsForAccount(accountId);
-  const balance = selectors.accountBalance(accountId);
+  const accounts = state.accounts || [];
+  const allTxs = state.transactions || [];
 
-  const [amountText, setAmountText] = useState('');
-  const [note, setNote] = useState('');
-  const [exporting, setExporting] = useState(false);
+  const [budgets, setBudgets] = useState<BudgetMap>({});
+  const [loadingBudget, setLoadingBudget] = useState(true);
+
+  const account = accounts.find(a => a.id === accountId);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBudgets = async () => {
+      try {
+        setLoadingBudget(true);
+        const json = await SecureStore.getItemAsync(BUDGETS_KEY);
+        let map: BudgetMap = {};
+        if (json) {
+          try {
+            const parsed = JSON.parse(json);
+            if (parsed && typeof parsed === 'object') {
+              map = parsed;
+            }
+          } catch (e) {
+            console.warn('[account] parse budgets failed', e);
+          }
+        }
+        if (!cancelled) {
+          setBudgets(map);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingBudget(false);
+        }
+      }
+    };
+
+    loadBudgets();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const txs = useMemo(
+    () => allTxs.filter(t => t.accountId === accountId),
+    [allTxs, accountId]
+  );
+
+  const now = new Date();
+  const monthLabel = useMemo(
+    () =>
+      now.toLocaleString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      }),
+    []
+  );
+
+  // Current balance for this account
+  const balance = useMemo(() => {
+    let sum = 0;
+    for (const t of txs) {
+      if (t.type === 'income') {
+        sum += t.amount;
+      } else {
+        sum -= t.amount;
+      }
+    }
+    return sum;
+  }, [txs]);
+
+  // This-month income/expense for this account
+  const monthlyTotals = useMemo(() => {
+    const m = now.getMonth();
+    const y = now.getFullYear();
+    let income = 0;
+    let expense = 0;
+    for (const t of txs) {
+      const d = new Date(t.date || '');
+      if (isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+      if (t.type === 'income') {
+        income += t.amount;
+      } else {
+        expense += t.amount;
+      }
+    }
+    return { income, expense };
+  }, [txs]);
+
+  // Budget & usage for this account
+  const budgetValue = budgets[accountId] ?? 0;
+
+  const spendThisMonth = useMemo(() => {
+    const m = now.getMonth();
+    const y = now.getFullYear();
+    let sum = 0;
+    for (const t of txs) {
+      if (t.type === 'income') continue;
+      const d = new Date(t.date || '');
+      if (isNaN(d.getTime())) continue;
+      if (d.getFullYear() !== y || d.getMonth() !== m) continue;
+      sum += t.amount;
+    }
+    return sum;
+  }, [txs]);
+
+  const budgetBadge = useMemo(() => {
+    if (!budgetValue || budgetValue <= 0) {
+      return {
+        show: false,
+        text: '',
+        bg: '#111827',
+        fg: '#E5E7EB',
+      };
+    }
+
+    const ratio = spendThisMonth / budgetValue;
+    const remaining = budgetValue - spendThisMonth;
+    const pct = Math.round(ratio * 100);
+
+    if (ratio >= 1) {
+      return {
+        show: true,
+        text: `Over by £${Math.abs(remaining).toFixed(0)} · ${pct}% used`,
+        bg: '#7F1D1D',
+        fg: '#FEE2E2',
+      };
+    }
+
+    if (ratio >= 0.8) {
+      return {
+        show: true,
+        text: `£${remaining.toFixed(0)} left · ${pct}% used`,
+        bg: '#78350F',
+        fg: '#FEF3C7',
+      };
+    }
+
+    return {
+      show: true,
+      text: `£${remaining.toFixed(0)} left · ${pct}% used`,
+      bg: '#064E3B',
+      fg: '#D1FAE5',
+    };
+  }, [budgetValue, spendThisMonth]);
+
+  const formattedTxs = useMemo(() => {
+    return [...txs].sort((a, b) => {
+      const da = a.date || '';
+      const db = b.date || '';
+      const cmp = db.localeCompare(da);
+      if (cmp !== 0) return cmp;
+      return String(b.id).localeCompare(String(a.id));
+    });
+  }, [txs]);
+
+  const formatDate = (raw: string | undefined) => {
+    if (!raw) return 'No date';
+    const s = raw.includes('T') ? raw : `${raw}T00:00:00`;
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString();
+  };
 
   if (!account) {
     return (
       <View style={styles.wrap}>
         <Text style={styles.title}>Account not found</Text>
-        <Pressable style={styles.btnPrimary} onPress={() => navigation.goBack()}>
-          <Text style={styles.btnPrimaryText}>Back</Text>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnPrimary, { marginTop: 16 }]}
+          onPress={() => navigation.navigate('Dashboard')}
+        >
+          <Text style={styles.footerText}>Back to Dashboard</Text>
         </Pressable>
       </View>
     );
   }
 
-  const addTx = async (type: 'income' | 'expense') => {
-    const value = parseFloat(amountText.replace(',', '.'));
-    if (!Number.isFinite(value) || value <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
-      return;
-    }
-    try {
-      await actions.addTransaction({
-        accountId,
-        amount: value,
-        type,
-        note: note.trim() || undefined,
-      });
-      setAmountText('');
-      setNote('');
-    } catch (e: any) {
-      console.warn('addTransaction failed', e);
-      Alert.alert('Error', e?.message || 'Could not add transaction');
-    }
-  };
-
-  const deleteTx = (id: string) => {
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await actions.deleteTransaction(id);
-          } catch (e) {
-            console.warn('deleteTransaction failed', e);
-            Alert.alert('Error', 'Could not delete transaction');
-          }
-        },
-      },
-    ]);
-  };
-
-  const deleteAccount = () => {
-    Alert.alert(
-      'Delete account?',
-      'This will also remove all its transactions.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await actions.deleteAccount(accountId);
-              navigation.goBack();
-            } catch (e) {
-              console.warn('deleteAccount failed', e);
-              Alert.alert('Error', 'Could not delete account');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // 👉 Export only this account's transactions as CSV
-  const exportCsvForAccount = async () => {
-    if (!txs.length) {
-      Alert.alert('No transactions', 'There are no transactions to export for this account yet.');
-      return;
-    }
-
-    try {
-      setExporting(true);
-
-      const rows: ReportRow[] = txs.map(t => ({
-        id: String(t.id),
-        date: String(t.date),
-        amount: Number(t.amount),
-        type: String(t.type || ''),
-        account_id: String(t.accountId || ''),
-        category_id: null,
-        note: t.note ?? null,
-      }));
-
-      const csv = generateReportCSV(rows);
-
-      const FS: any = FileSystem;
-      const base = FS.cacheDirectory ?? '';
-      const path = `${base}debitlens_account_${accountId}.csv`;
-      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
-
-      if (typeof FS.writeAsStringAsync === 'function') {
-        await FS.writeAsStringAsync(path, csv, { encoding });
-      } else {
-        await FS.writeAsStringAsync(path, csv);
-      }
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, {
-          mimeType: 'text/csv',
-          dialogTitle: `Share CSV for ${account.name}`,
-        });
-      } else {
-        Alert.alert('CSV saved', path);
-      }
-    } catch (e: any) {
-      console.warn('[account] exportCsvForAccount failed', e);
-      Alert.alert('Export failed', e?.message || 'Could not export CSV');
-    } finally {
-      setExporting(false);
-    }
-  };
-
   return (
     <View style={styles.wrap}>
       {/* HEADER */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>{account.name}</Text>
-          <Text style={styles.subtle}>
-            {account.createdAt
-              ? `Created ${new Date(account.createdAt).toLocaleString()}`
-              : 'Account'}
-          </Text>
-        </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text
-            style={[
-              styles.balance,
-              { color: balance >= 0 ? '#34D399' : '#F87171' },
-            ]}
-          >
-            £{Math.abs(balance).toFixed(2)}
-          </Text>
-          <Text style={styles.balanceLabel}>
-            {balance >= 0 ? 'Net income' : 'Net spend'}
-          </Text>
-        </View>
-      </View>
+        <Text style={styles.title}>{account.name}</Text>
+        <Text style={styles.subtle}>{monthLabel}</Text>
 
-      {/* ADD TRANSACTION */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Add transaction</Text>
-        <TextInput
-          value={amountText}
-          onChangeText={setAmountText}
-          placeholder="Amount (e.g. 20.50)"
-          placeholderTextColor="#6B7280"
-          keyboardType="decimal-pad"
-          style={styles.input}
-        />
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="Note (optional)"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
-        <View style={styles.row}>
-          <Pressable
-            style={[styles.btnPrimary, { flex: 1, marginRight: 6 }]}
-            onPress={() => addTx('income')}
-          >
-            <Text style={styles.btnPrimaryText}>Add income</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.btnDanger, { flex: 1, marginLeft: 6 }]}
-            onPress={() => addTx('expense')}
-          >
-            <Text style={styles.btnPrimaryText}>Add expense</Text>
-          </Pressable>
-        </View>
-
-        {/* Export account CSV */}
-        <Pressable
-          style={[styles.btnGhost, { marginTop: 10 }]}
-          onPress={exportCsvForAccount}
-          disabled={exporting}
+        <Text style={styles.balanceLabel}>Current balance</Text>
+        <Text
+          style={[
+            styles.balanceValue,
+            balance >= 0 ? styles.balancePos : styles.balanceNeg,
+          ]}
         >
-          {exporting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.btnPrimaryText}>Export this account as CSV</Text>
-          )}
-        </Pressable>
+          £{balance.toFixed(2)}
+        </Text>
+
+        {/* This month income / expense */}
+        <Text style={styles.monthLine}>
+          This month:{' '}
+          <Text style={styles.monthIncome}>
+            +£{monthlyTotals.income.toFixed(2)}
+          </Text>{' '}
+          ·{' '}
+          <Text style={styles.monthExpense}>
+            -£{monthlyTotals.expense.toFixed(2)}
+          </Text>
+        </Text>
+
+        {/* Budget badge for this account */}
+        {!loadingBudget && budgetBadge.show && (
+          <View style={[styles.badge, { backgroundColor: budgetBadge.bg }]}>
+            <Text style={[styles.badgeText, { color: budgetBadge.fg }]}>
+              Budget £{budgetValue.toFixed(0)} · {budgetBadge.text}
+            </Text>
+          </View>
+        )}
+        {!loadingBudget && !budgetBadge.show && (
+          <Pressable
+            style={styles.noBudgetBadge}
+            onPress={() => navigation.navigate('Budgets')}
+          >
+            <Text style={styles.noBudgetText}>No budget set · Set in Budgets</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* TRANSACTIONS LIST */}
-      <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 24 }}>
-        <View style={styles.listHeaderRow}>
-          <Text style={styles.sectionTitle}>Transactions</Text>
-          <Pressable style={styles.deleteAccountPill} onPress={deleteAccount}>
-            <Text style={styles.deleteAccountText}>Delete account</Text>
-          </Pressable>
-        </View>
-
-        {txs.length === 0 && (
-          <Text style={styles.empty}>No transactions yet.</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        {formattedTxs.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No transactions yet</Text>
+            <Text style={styles.emptySubtle}>
+              Add a transaction for this account from the Dashboard.
+            </Text>
+          </View>
         )}
 
-        {txs.map(t => {
-          const isIncome = t.type === 'income';
-          const sign = isIncome ? '+' : '-';
-          const colour = isIncome ? '#34D399' : '#F87171';
-          const dt = new Date(t.date);
+        {formattedTxs.map(tx => {
+          const isIncome = tx.type === 'income';
+          const sign = isIncome ? '+' : '−';
+
           return (
-            <Pressable
-              key={t.id}
-              style={styles.txRow}
-              onLongPress={() => deleteTx(t.id)}
-            >
-              <View style={styles.txLeft}>
-                <Text style={styles.txNote}>{t.note || '(no note)'}</Text>
-                <Text style={styles.txDate}>{dt.toLocaleString()}</Text>
+            <View key={tx.id} style={styles.txCard}>
+              <View style={styles.txTopRow}>
+                <Text style={styles.txType}>
+                  {isIncome ? 'Income' : 'Expense'}
+                </Text>
+                <Text
+                  style={[
+                    styles.txAmount,
+                    isIncome ? styles.txIncome : styles.txExpense,
+                  ]}
+                >
+                  {sign}£{Math.abs(tx.amount).toFixed(2)}
+                </Text>
               </View>
-              <Text style={[styles.txAmount, { color: colour }]}>
-                {sign}£{t.amount.toFixed(2)}
-              </Text>
-            </Pressable>
+
+              <View style={styles.txBottomRow}>
+                <Text style={styles.txMeta}>{formatDate(tx.date)}</Text>
+                {tx.note ? (
+                  <Text
+                    style={styles.txNote}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                  >
+                    {tx.note}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
           );
         })}
       </ScrollView>
+
+      {/* FOOTER NAV */}
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnPrimary]}
+          onPress={() => navigation.navigate('Dashboard')}
+        >
+          <Text style={styles.footerText}>Back to Dashboard</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnGhost]}
+          onPress={() => navigation.navigate('Budgets')}
+        >
+          <Text style={styles.footerText}>Adjust Budget</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -270,88 +321,163 @@ export default function AccountScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
-    padding: 16,
-    paddingTop: Platform.OS === 'ios' ? 44 : 16,
+    backgroundColor: '#020617',
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 16,
-  },
-  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4 },
-  balance: { fontSize: 22, fontWeight: '800' },
-  balanceLabel: { color: '#9CA3AF', fontSize: 12 },
-
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
-  },
-  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 10,
     marginBottom: 8,
   },
-  row: { flexDirection: 'row', marginTop: 4 },
-
-  btnPrimary: {
-    backgroundColor: '#2563EB',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
+  title: {
+    color: '#F9FAFB',
+    fontSize: 22,
+    fontWeight: '800',
   },
-  btnDanger: {
-    backgroundColor: '#7F1D1D',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
+  subtle: {
+    color: '#9CA3AF',
+    marginTop: 2,
   },
-  btnGhost: {
-    backgroundColor: '#1F2937',
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
+  balanceLabel: {
+    color: '#9CA3AF',
+    marginTop: 12,
+    fontSize: 13,
   },
-  btnPrimaryText: { color: '#fff', fontWeight: '700' },
-
-  scroll: { flex: 1, marginTop: 8 },
-  empty: { color: '#6B7280', marginTop: 4 },
-
-  listHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+  balanceValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    marginTop: 2,
   },
-  deleteAccountPill: {
+  balancePos: {
+    color: '#4ADE80',
+  },
+  balanceNeg: {
+    color: '#F97373',
+  },
+  monthLine: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 6,
+  },
+  monthIncome: {
+    color: '#4ADE80',
+    fontWeight: '600',
+  },
+  monthExpense: {
+    color: '#F97373',
+    fontWeight: '600',
+  },
+  badge: {
+    marginTop: 8,
+    borderRadius: 999,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#7F1D1D',
+    alignSelf: 'flex-start',
   },
-  deleteAccountText: { color: '#FCA5A5', fontSize: 12, fontWeight: '600' },
-
-  txRow: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    padding: 10,
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  noBudgetBadge: {
     marginTop: 8,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    alignSelf: 'flex-start',
+    backgroundColor: '#0B1120',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  noBudgetText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  scroll: {
+    flex: 1,
+    marginTop: 8,
+  },
+  emptyCard: {
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginTop: 8,
+  },
+  emptyTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    fontSize: 16,
+  },
+  emptySubtle: {
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  txCard: {
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    marginTop: 8,
+  },
+  txTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  txLeft: { flexShrink: 1, paddingRight: 8 },
-  txNote: { color: '#E5E7EB', fontWeight: '600' },
-  txDate: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
-  txAmount: { fontSize: 16, fontWeight: '800' },
+  txType: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  txAmount: {
+    fontWeight: '800',
+    fontSize: 15,
+  },
+  txIncome: {
+    color: '#4ADE80',
+  },
+  txExpense: {
+    color: '#F97373',
+  },
+  txBottomRow: {
+    marginTop: 4,
+  },
+  txMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  txNote: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderColor: '#111827',
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 16 : 10,
+    marginTop: 4,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  footerBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerBtnPrimary: {
+    backgroundColor: '#2563EB',
+  },
+  footerBtnGhost: {
+    backgroundColor: '#0B1120',
+  },
+  footerText: {
+    color: '#F9FAFB',
+    fontWeight: '600',
+    fontSize: 13,
+  },
 });
