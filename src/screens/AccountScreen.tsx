@@ -7,6 +7,7 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  Alert,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,11 +17,10 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
 const BUDGETS_KEY = 'debitlens_budgets_v1';
-
 type BudgetMap = Record<string, number>;
 
 export default function AccountScreen({ route, navigation }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const { accountId } = route.params;
 
   const accounts = state.accounts || [];
@@ -187,6 +187,44 @@ export default function AccountScreen({ route, navigation }: Props) {
     return d.toLocaleDateString();
   };
 
+  const handleDeleteAccount = () => {
+    if (!account) return;
+
+    const hasTx = txs.length > 0;
+
+    const message = hasTx
+      ? 'This will delete this account and all its transactions. This cannot be undone.'
+      : 'Delete this empty account?';
+
+    Alert.alert('Delete account', message, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // Remove budget entry for this account
+            const next = { ...budgets };
+            if (next[account.id]) {
+              delete next[account.id];
+              setBudgets(next);
+              await SecureStore.setItemAsync(BUDGETS_KEY, JSON.stringify(next));
+            }
+
+            // Remove account + its transactions from app state
+            actions.deleteAccount(account.id);
+
+            // Navigate away so we don't stay on a deleted account
+            navigation.navigate('Dashboard');
+          } catch (e) {
+            console.warn('[account] delete failed', e);
+            Alert.alert('Error', 'Could not delete this account.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (!account) {
     return (
       <View style={styles.wrap}>
@@ -243,10 +281,13 @@ export default function AccountScreen({ route, navigation }: Props) {
             style={styles.noBudgetBadge}
             onPress={() => navigation.navigate('Budgets')}
           >
-            <Text style={styles.noBudgetText}>No budget set · Set in Budgets</Text>
+            <Text style={styles.noBudgetText}>
+              No budget set · Set in Budgets
+            </Text>
           </Pressable>
         )}
       </View>
+
 
       {/* TRANSACTIONS LIST */}
       <ScrollView
@@ -299,7 +340,7 @@ export default function AccountScreen({ route, navigation }: Props) {
         })}
       </ScrollView>
 
-      {/* FOOTER NAV */}
+      {/* FOOTER NAV + DELETE */}
       <View style={styles.footer}>
         <Pressable
           style={[styles.footerBtn, styles.footerBtnPrimary]}
@@ -312,6 +353,12 @@ export default function AccountScreen({ route, navigation }: Props) {
           onPress={() => navigation.navigate('Budgets')}
         >
           <Text style={styles.footerText}>Adjust Budget</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnDanger]}
+          onPress={handleDeleteAccount}
+        >
+          <Text style={styles.footerText}>Delete</Text>
         </Pressable>
       </View>
     </View>
@@ -474,6 +521,9 @@ const styles = StyleSheet.create({
   },
   footerBtnGhost: {
     backgroundColor: '#0B1120',
+  },
+  footerBtnDanger: {
+    backgroundColor: '#7F1D1D',
   },
   footerText: {
     color: '#F9FAFB',

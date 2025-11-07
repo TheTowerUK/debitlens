@@ -5,36 +5,49 @@ import { useApp } from '../state/AppProvider';
 import AccountForm from '../components/AccountForm';
 
 export default function AccountEditorScreen({ navigation, route }) {
-  const { selectors, actions } = useApp();
+  const { state, actions } = useApp();
   const { accountId } = route.params ?? {};
   const isEditing = !!accountId;
 
-  const [name, setName] = React.useState('');
-  const [type, setType] = React.useState('');
-  const [busy, setBusy] = React.useState(false);
+  const [name, setName] = useState('');
+  const [type, setType] = useState(''); // kept for AccountForm compatibility
+  const [busy, setBusy] = useState(false);
 
+  // Set header title
   React.useLayoutEffect(() => {
     navigation.setOptions({ title: isEditing ? 'Edit Account' : 'New Account' });
   }, [navigation, isEditing]);
 
-  React.useEffect(() => {
-    if (isEditing) {
-      const acct = selectors.getAccount(accountId);
-      if (acct) {
-        setName(acct.name);
-        setType(acct.type ?? '');
-      }
+  // Load existing account when editing
+  useEffect(() => {
+    if (!isEditing) return;
+
+    const acct = (state.accounts || []).find(a => a.id === accountId);
+    if (acct) {
+      setName(acct.name || '');
+      // We don't store "type" in AppState; leave it blank or derive later if needed
+      setType('');
     }
-  }, [accountId]);
+  }, [isEditing, accountId, state.accounts]);
 
   const onSave = async () => {
     const trimmed = name.trim();
-    if (!trimmed) return Alert.alert('Name required');
+    if (!trimmed) {
+      Alert.alert('Name required', 'Please enter an account name.');
+      return;
+    }
+
     setBusy(true);
     try {
-      const id = accountId || 'acc_' + Date.now();
-      await actions.upsertAccount({ id, name: trimmed, type: type.trim() || null });
-      navigation.replace('Account', { accountId: id });
+      if (isEditing && accountId) {
+        // Rename existing account
+        actions.updateAccount(accountId, { name: trimmed });
+        navigation.replace('Account', { accountId });
+      } else {
+        // Create new account
+        const account = actions.addAccount(trimmed);
+        navigation.replace('Account', { accountId: account.id });
+      }
     } catch (e) {
       console.warn('save account error', e);
       Alert.alert('Error', String(e?.message || e));
@@ -49,7 +62,13 @@ export default function AccountEditorScreen({ navigation, route }) {
         {isEditing ? 'Edit Account' : 'Create Account'}
       </Text>
 
-      {busy && <ActivityIndicator size="small" color="#93C5FD" style={{ marginBottom: 12 }} />}
+      {busy && (
+        <ActivityIndicator
+          size="small"
+          color="#93C5FD"
+          style={{ marginBottom: 12 }}
+        />
+      )}
 
       <AccountForm
         name={name}
