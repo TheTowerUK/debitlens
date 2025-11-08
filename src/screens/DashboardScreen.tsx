@@ -5,108 +5,27 @@ import {
   Text,
   ScrollView,
   Pressable,
+  TextInput,
   StyleSheet,
   Platform,
-  TextInput,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
-import * as SecureStore from 'expo-secure-store';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
-const BUDGETS_KEY = 'debitlens_budgets_v1';
-const LEGACY_BUDGET_KEY = 'debitlens_budget_v1';
-
-type BudgetMap = Record<string, number>;
-
 export default function DashboardScreen({ navigation }: Props) {
   const { state, actions } = useApp();
+
   const accounts = state.accounts || [];
   const allTxs = state.transactions || [];
 
-  const [budgets, setBudgets] = useState<BudgetMap>({});
-  const [loadingBudget, setLoadingBudget] = useState(true);
-
-  // 💹 Overall month income/expense across ALL accounts
-  const monthlyTotals = useMemo(() => {
-    const now = new Date();
-    const m = now.getMonth();
-    const y = now.getFullYear();
-
-    let income = 0;
-    let expense = 0;
-
-    for (const t of allTxs) {
-      const d = new Date(t.date || '');
-      if (isNaN(d.getTime())) continue;
-      if (d.getFullYear() !== y || d.getMonth() !== m) continue;
-
-      if (t.type === 'income') {
-        income += t.amount;
-      } else {
-        expense += t.amount;
-      }
-    }
-
-    return { income, expense };
-  }, [allTxs]);
-
-
+  // Add-account UI
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
-  // 🔁 Reload budgets whenever the Dashboard gains focus
-  useFocusEffect(
-    React.useCallback(() => {
-      let cancelled = false;
-
-      const loadBudgets = async () => {
-        try {
-          setLoadingBudget(true);
-          let map: BudgetMap = {};
-
-          const json = await SecureStore.getItemAsync(BUDGETS_KEY);
-          if (json) {
-            try {
-              const parsed = JSON.parse(json);
-              if (parsed && typeof parsed === 'object') {
-                map = parsed;
-              }
-            } catch (e) {
-              console.warn('[dashboard] parse budgets failed', e);
-            }
-          } else {
-            // Legacy: single budget => map to first account if any
-            const legacy = await SecureStore.getItemAsync(LEGACY_BUDGET_KEY);
-            if (legacy && accounts.length > 0) {
-              const n = parseFloat(legacy);
-              if (Number.isFinite(n) && n > 0) {
-                map[accounts[0].id] = n;
-              }
-            }
-          }
-
-          if (!cancelled) {
-            setBudgets(map);
-          }
-        } finally {
-          if (!cancelled) {
-            setLoadingBudget(false);
-          }
-        }
-      };
-
-      loadBudgets();
-      return () => {
-        cancelled = true;
-      };
-    }, [accounts.length])
-  );
-
-  // 💰 Total balance from selector
+  // Total balance (all accounts)
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, a) => {
       const accTxs = allTxs.filter(t => t.accountId === a.id);
@@ -117,105 +36,16 @@ export default function DashboardScreen({ navigation }: Props) {
     }, 0);
   }, [accounts, allTxs]);
 
+  const positiveTrend = totalBalance >= 0;
 
-  // 👉 Which account should the pill show? (first one that has a budget)
-  const budgetAccountId = useMemo(() => {
-    if (!accounts.length) return null;
-    const withBudget = accounts.find(a => budgets[a.id] != null);
-    return withBudget?.id ?? null;
-  }, [accounts, budgets]);
-
-  const currentBudget =
-    budgetAccountId && budgets[budgetAccountId] != null
-      ? budgets[budgetAccountId]
-      : null;
-
-  const currentBudgetAccount =
-    budgetAccountId && accounts.find(a => a.id === budgetAccountId)
-      ? (accounts.find(a => a.id === budgetAccountId) as (typeof accounts)[number])
-      : null;
-
-  // 🔁 Get all transactions for the budget account DIRECTLY from state.transactions
-  const budgetAccountTxs = useMemo(
-    () =>
-      budgetAccountId
-        ? allTxs.filter(t => t.accountId === budgetAccountId)
-        : [],
-    [budgetAccountId, allTxs]
-  );
-
-  // 📆 Compute this month's spend for that one account
-  const { monthLabel, spendThisMonth } = useMemo(() => {
-    if (!budgetAccountId) {
-      return { monthLabel: '', spendThisMonth: 0 };
-    }
-
-    const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
-
-    let spend = 0;
-    for (const t of budgetAccountTxs) {
-      if (t.type === 'income') continue;
-      const d = new Date(t.date || '');
-      if (
-        !isNaN(d.getTime()) &&
-        d.getFullYear() === year &&
-        d.getMonth() === month
-      ) {
-        spend += t.amount;
-      }
-    }
-
-    const label = now.toLocaleString(undefined, {
-      month: 'short',
-      year: 'numeric',
-    });
-
-    return { monthLabel: label, spendThisMonth: spend };
-  }, [budgetAccountId, budgetAccountTxs]);
-
-  // 🎯 Build pill text + colours
-  const budgetBadge = useMemo(() => {
-    if (loadingBudget || !currentBudget || !currentBudgetAccount) {
-      return { show: false, text: '', bg: '', fg: '' };
-    }
-
-    const usedRatio = currentBudget > 0 ? spendThisMonth / currentBudget : 0;
-    const pct = Math.round(usedRatio * 100);
-    const remaining = currentBudget - spendThisMonth;
-
-    let text = '';
-    let bg = '#16A34A';
-    let fg = '#ECFDF5';
-
-    if (usedRatio >= 1) {
-      const over = -remaining;
-      text = `${currentBudgetAccount.name} · over by £${over.toFixed(0)} (${pct}%)`;
-      bg = '#B91C1C';
-      fg = '#FEE2E2';
-    } else if (usedRatio >= 0.8) {
-      text = `${currentBudgetAccount.name} · ${pct}% of budget used`;
-      bg = '#D97706';
-      fg = '#FFFBEB';
-    } else {
-      text = `${currentBudgetAccount.name} · £${remaining.toFixed(
-        0
-      )} left (${pct}% used)`;
-      bg = '#15803D';
-      fg = '#ECFDF5';
-    }
-
-    return { show: true, text, bg, fg };
-  }, [loadingBudget, currentBudget, currentBudgetAccount, spendThisMonth]);
-
-  // ➕ Add account handler
   const handleAddAccount = () => {
-    const name = newName.trim();
-    if (!name) return;
-    actions.addAccount(name);
-    setNewName('');
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+
+    const account = actions.addAccount(trimmed);
     setAdding(false);
+    setNewName('');
+    navigation.navigate('Account', { accountId: account.id });
   };
 
   return (
@@ -223,183 +53,169 @@ export default function DashboardScreen({ navigation }: Props) {
       {/* HEADER */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.label}>Total balance</Text>
-          <Text style={styles.total}>£{totalBalance.toFixed(2)}</Text>
-
-          {/* This month income / expense (all accounts) */}
-          <Text style={styles.monthLine}>
-            This month:{' '}
-            <Text style={styles.monthIncome}>
-              +£{monthlyTotals.income.toFixed(2)}
-            </Text>{' '}
-            ·{' '}
-            <Text style={styles.monthExpense}>
-              -£{monthlyTotals.expense.toFixed(2)}
-            </Text>
+          <Text style={styles.label}>Total Balance</Text>
+          <Text style={styles.total}>
+            £{Math.abs(totalBalance).toFixed(2)}
           </Text>
-
-          {/* Budget pill */}
-          {budgetBadge.show && (
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: budgetBadge.bg,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  { color: budgetBadge.fg },
-                ]}
-              >
-                {monthLabel} · {budgetBadge.text}
-              </Text>
-            </View>
-          )}
-
-          {/* No budget yet → nudge */}
-          {!loadingBudget && !currentBudget && (
-            <Pressable
-              onPress={() => navigation.navigate('Budgets')}
-              style={styles.linkRow}
-            >
-              <Text style={styles.linkText}>Set a monthly budget →</Text>
-            </Pressable>
-          )}
-
-          {/* DEBUG: what Dashboard thinks is happening */}
-          {budgetAccountId && (
-            <View style={{ marginTop: 6 }}>
-              <Text style={{ color: '#6B7280', fontSize: 11 }}>
-                Debug · accountId: {String(budgetAccountId)}
-              </Text>
-              <Text style={{ color: '#6B7280', fontSize: 11 }}>
-                Debug · budget: £{(currentBudget ?? 0).toFixed(2)} · spendThisMonth: £
-                {spendThisMonth.toFixed(2)} · txCount: {budgetAccountTxs.length}
-              </Text>
-            </View>
-          )}
         </View>
+        <Text style={[styles.trend, positiveTrend ? styles.trendUp : styles.trendDown]}>
+          {positiveTrend ? '▲ Up' : '▼ Down'}
+        </Text>
       </View>
 
-      {/* ACCOUNTS LIST */}
+      {/* ACCOUNTS + ADD ACCOUNT */}
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {accounts.length === 0 && (
+        {accounts.length === 0 && !adding && (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyTitle}>No accounts yet</Text>
             <Text style={styles.emptySubtle}>
-              Add an account to start tracking balances and transactions.
+              Create your first account to start tracking transactions.
             </Text>
+            <Pressable
+              style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
+              onPress={() => setAdding(true)}
+            >
+              <Text style={styles.btnText}>Add account</Text>
+            </Pressable>
           </View>
         )}
 
-        {accounts.map((a) => {
-          // All transactions for this account
+        {accounts.map(a => {
           const accTxs = allTxs.filter(t => t.accountId === a.id);
 
-          // Balance for this account
           const bal = accTxs.reduce((sum, t) => {
             return sum + (t.type === 'income' ? t.amount : -t.amount);
           }, 0);
 
-          // Most recent transaction (assuming newest by date)
           const sorted = [...accTxs].sort((x, y) =>
             (y.date || '').localeCompare(x.date || '')
           );
           const lastTx = sorted[0] || null;
-          const lastDate = lastTx?.date ? new Date(`${lastTx.date}T00:00:00`) : null;
+          const lastDate = lastTx?.date
+            ? new Date(`${lastTx.date}T00:00:00`)
+            : null;
 
-          // …rest of your JSX unchanged…
           return (
             <Pressable
               key={String(a.id)}
-              /* your existing styles and onPress here */
+              style={({ pressed }) => [
+                styles.card,
+                pressed && { opacity: 0.8 },
+              ]}
+              onPress={() => navigation.navigate('Account', { accountId: a.id })}
             >
-              {/* use `bal`, `lastTx`, `lastDate` exactly like before */}
+              <View style={styles.cardTop}>
+                <Text style={styles.cardName}>{a.name}</Text>
+                <Text
+                  style={[
+                    styles.cardBalance,
+                    bal < 0 ? styles.cardBalanceNeg : styles.cardBalancePos,
+                  ]}
+                >
+                  £{Math.abs(bal).toFixed(2)}
+                </Text>
+              </View>
+
+              {lastTx ? (
+                <Text style={styles.lastTx}>
+                  {/* Main label: note if present, otherwise Income/Expense */}
+                  {lastTx.note
+                    ? lastTx.note
+                    : lastTx.type === 'income'
+                    ? 'Income'
+                    : 'Expense'}
+
+                  {/* Optional date, as a nested Text */}
+                  {lastDate && (
+                    <Text style={styles.lastTx}>
+                      {' · '}
+                      {lastDate.toLocaleDateString()}
+                    </Text>
+                  )}
+                </Text>
+              ) : (
+                <Text style={styles.lastTxEmpty}>No transactions yet</Text>
+              )}
+
             </Pressable>
           );
         })}
 
-
-        {/* ADD ACCOUNT PANEL */}
+        {/* ADD ACCOUNT INLINE FORM */}
         {adding && (
-          <View style={styles.addCard}>
-            <Text style={styles.addLabel}>New account name</Text>
+          <View style={styles.addBox}>
+            <Text style={styles.addLabel}>New Account Name</Text>
             <TextInput
               value={newName}
               onChangeText={setNewName}
               placeholder="e.g. Holiday Fund"
               placeholderTextColor="#6B7280"
-              style={styles.addInput}
+              style={styles.input}
             />
             <View style={styles.addRow}>
               <Pressable
-                style={[styles.addBtn, styles.addBtnCancel]}
+                style={[styles.btn, styles.btnGhost]}
                 onPress={() => {
                   setAdding(false);
                   setNewName('');
                 }}
               >
-                <Text style={styles.addBtnText}>Cancel</Text>
+                <Text style={styles.btnText}>Cancel</Text>
               </Pressable>
               <Pressable
-                style={[styles.addBtn, styles.addBtnSave]}
+                style={[styles.btn, styles.btnPrimary]}
                 onPress={handleAddAccount}
               >
-                <Text style={styles.addBtnText}>Add</Text>
+                <Text style={styles.btnText}>Add</Text>
               </Pressable>
             </View>
           </View>
         )}
+
+        {!adding && accounts.length > 0 && (
+          <Pressable
+            style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
+            onPress={() => setAdding(true)}
+          >
+            <Text style={styles.btnText}>Add another account</Text>
+          </Pressable>
+        )}
       </ScrollView>
 
-      {/* BOTTOM QUICK MENU */}
-      <View style={styles.quickBar}>
+      {/* FOOTER NAV MENU */}
+      <View style={styles.footer}>
         <Pressable
-          style={styles.quickBtnPrimary}
-          onPress={() => setAdding(true)}
+          style={[styles.footerBtn, styles.footerBtnPrimary]}
+          onPress={() => navigation.navigate('Dashboard')}
         >
-          <Text style={styles.quickLabelPrimary}>+ Add account</Text>
+          <Text style={styles.footerText}>Dashboard</Text>
         </Pressable>
-
         <Pressable
-          style={styles.quickBtn}
-          onPress={() => navigation.navigate('TxnEditor')}
-        >
-          <Text style={styles.quickLabel}>+ Transaction</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.quickBtn}
+          style={[styles.footerBtn, styles.footerBtnGhost]}
           onPress={() => navigation.navigate('History')}
         >
-          <Text style={styles.quickLabel}>History</Text>
+          <Text style={styles.footerText}>History</Text>
         </Pressable>
-
         <Pressable
-          style={styles.quickBtn}
+          style={[styles.footerBtn, styles.footerBtnGhost]}
           onPress={() => navigation.navigate('Budgets')}
         >
-          <Text style={styles.quickLabel}>Budgets</Text>
+          <Text style={styles.footerText}>Budgets</Text>
         </Pressable>
-
         <Pressable
-          style={styles.quickBtn}
-          onPress={() => navigation.navigate('Reports')}
-        >
-          <Text style={styles.quickLabel}>Reports</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.quickBtn}
+          style={[styles.footerBtn, styles.footerBtnGhost]}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Text style={styles.quickLabel}>Settings</Text>
+          <Text style={styles.footerText}>Settings</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.footerBtn, styles.footerBtnGhost]}
+          onPress={() => navigation.navigate('ImportCSV')}
+        >
+          <Text style={styles.footerText}>Import CSV</Text>
         </Pressable>
       </View>
     </View>
@@ -409,71 +225,51 @@ export default function DashboardScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#0B0D13',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
   header: {
-    marginBottom: 12,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
   },
   label: {
     color: '#9CA3AF',
-    fontSize: 13,
+    fontSize: 14,
   },
   total: {
     color: '#F9FAFB',
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     marginTop: 4,
   },
-  badge: {
-    marginTop: 8,
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    alignSelf: 'flex-start',
+  trend: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+  trendUp: {
+    color: '#4ADE80',
   },
-  linkRow: {
-    marginTop: 6,
+  trendDown: {
+    color: '#F97373',
   },
-  linkText: {
-    color: '#60A5FA',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-
   scroll: {
     flex: 1,
   },
-  emptyCard: {
-    backgroundColor: '#020617',
+
+  // Account cards
+  card: {
+    backgroundColor: '#111827',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    marginTop: 8,
-  },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  emptySubtle: {
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-
-  card: {
-    backgroundColor: '#020617',
-    borderRadius: 16,
-    padding: 14,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#1E293B',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
   cardTop: {
     flexDirection: 'row',
@@ -482,106 +278,119 @@ const styles = StyleSheet.create({
   },
   cardName: {
     color: '#F9FAFB',
+    fontSize: 18,
     fontWeight: '700',
-    fontSize: 16,
   },
   cardBalance: {
+    fontSize: 18,
     fontWeight: '800',
-    fontSize: 16,
   },
-  cardSubtle: {
+  cardBalancePos: {
+    color: '#4ADE80',
+  },
+  cardBalanceNeg: {
+    color: '#F97373',
+  },
+  lastTx: {
     color: '#9CA3AF',
+    fontSize: 13,
     marginTop: 6,
-    fontSize: 12,
+  },
+  lastTxEmpty: {
+    color: '#6B7280',
+    fontSize: 13,
+    marginTop: 6,
   },
 
-  addCard: {
-    backgroundColor: '#020617',
-    borderRadius: 16,
-    padding: 14,
+  // Add account box
+  addBox: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 16,
     marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
   },
   addLabel: {
     color: '#9CA3AF',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  addInput: {
+  input: {
     backgroundColor: '#0F172A',
     color: '#fff',
     borderColor: '#1F2937',
     borderWidth: 1,
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     marginBottom: 8,
   },
   addRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  addBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    marginLeft: 8,
-  },
-  addBtnCancel: {
-    backgroundColor: '#1F2937',
-  },
-  addBtnSave: {
-    backgroundColor: '#2563EB',
-  },
-  addBtnText: {
-    color: '#F9FAFB',
-    fontWeight: '600',
-    fontSize: 13,
+    justifyContent: 'space-between',
+    gap: 8,
   },
 
-  quickBar: {
+  // Buttons
+  btn: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPrimary: {
+    backgroundColor: '#2563EB',
+  },
+  btnGhost: {
+    backgroundColor: '#1F2937',
+  },
+  btnText: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+  },
+
+  // Empty state
+  emptyCard: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    color: '#F9FAFB',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  emptySubtle: {
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+
+  // Footer nav
+  footer: {
     borderTopWidth: 1,
     borderColor: '#111827',
     paddingTop: 8,
     paddingBottom: Platform.OS === 'ios' ? 16 : 10,
     marginTop: 4,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 6,
   },
-  quickBtnPrimary: {
+  footerBtn: {
+    flex: 1,
     paddingVertical: 8,
-    paddingHorizontal: 14,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerBtnPrimary: {
     backgroundColor: '#2563EB',
   },
-  quickLabelPrimary: {
+  footerBtnGhost: {
+    backgroundColor: '#020617',
+  },
+  footerText: {
     color: '#F9FAFB',
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 13,
   },
-  quickBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: '#0B1120',
-  },
-  quickLabel: {
-    color: '#E5E7EB',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-    monthLine: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  monthIncome: {
-    color: '#4ADE80',
-    fontWeight: '600',
-  },
-  monthExpense: {
-    color: '#F97373',
-    fontWeight: '600',
-  },
-
 });
