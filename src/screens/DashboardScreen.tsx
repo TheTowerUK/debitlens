@@ -185,6 +185,14 @@ export default function DashboardScreen({ navigation }: Props) {
         )}
       </ScrollView>
 
+      {/* FLOATING ADD TRANSACTION BUTTON */}
+      <Pressable
+        style={styles.fab}
+        onPress={() => navigation.navigate('TxnEditor')}
+      >
+        <Text style={styles.fabText}>+ Transaction</Text>
+      </Pressable>
+
       {/* FOOTER NAV MENU */}
       <View style={styles.footer}>
         <Pressable
@@ -258,7 +266,25 @@ const styles = StyleSheet.create({
   scroll: {
     flex: 1,
   },
-
+  fab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 70, // a bit above footer so they don’t overlap
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    backgroundColor: '#2563EB',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  fabText: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+    fontSize: 14,
+  },
   // Account cards
   card: {
     backgroundColor: '#111827',
