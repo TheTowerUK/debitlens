@@ -75,6 +75,7 @@ export default function HistoryScreen({ navigation }: Props) {
 
           return (
             <Pressable
+              onPress={() => navigation.navigate('TxnEditor', { txId: item.id })}
               onLongPress={() => onDeleteTx(item.id)}
               style={({ pressed }) => [
                 styles.row,

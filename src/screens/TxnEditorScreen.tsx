@@ -1,5 +1,5 @@
 // src/screens/TxnEditorScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -19,170 +19,196 @@ type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
 export default function TxnEditorScreen({ navigation, route }: Props) {
   const { state, actions } = useApp();
   const accounts = state.accounts || [];
+  const allTxs = state.transactions || [];
 
-  const initialAccountId =
-    route.params?.accountId && accounts.some(a => a.id === route.params?.accountId)
-      ? route.params.accountId
-      : accounts[0]?.id ?? null;
+  const txId = route.params?.txId;
+  const initialAccountId = route.params?.accountId;
 
-  const initialMode: 'income' | 'expense' =
-    route.params?.mode === 'income' || route.params?.mode === 'expense'
-      ? route.params.mode
-      : 'expense';
+  const existingTx = txId
+    ? allTxs.find(t => t.id === txId)
+    : undefined;
 
-  const [accountId, setAccountId] = useState<string | null>(initialAccountId);
-  const [mode, setMode] = useState<'income' | 'expense'>(initialMode);
-  const [amountText, setAmountText] = useState('');
-  const [note, setNote] = useState('');
-
-  const accountName = useMemo(
-    () => accounts.find(a => a.id === accountId)?.name ?? 'Account',
-    [accounts, accountId]
+  const [accountId, setAccountId] = useState<string>(
+    existingTx?.accountId ||
+      initialAccountId ||
+      (accounts[0]?.id ?? '')
   );
 
-  const onSave = () => {
-    if (!accountId) {
-      Alert.alert('No account', 'Please select an account.');
-      return;
-    }
-    const n = parseFloat(amountText.trim());
-    if (!Number.isFinite(n) || n <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive number.');
-      return;
-    }
+  const [type, setType] = useState<'income' | 'expense'>(
+    existingTx?.type || 'expense'
+  );
 
-    // Date in YYYY-MM-DD format (today)
-    const today = new Date().toISOString().slice(0, 10);
+  const [amount, setAmount] = useState(
+    existingTx ? String(existingTx.amount) : ''
+  );
 
-    actions.addTransaction({
-      accountId,
-      amount: n,
-      type: mode,
-      note: note.trim() || undefined,
-      date: today,
-    });
+  const [note, setNote] = useState(existingTx?.note || '');
 
-    navigation.goBack();
-  };
+  const [date, setDate] = useState(
+    existingTx?.date || new Date().toISOString().slice(0, 10)
+  );
 
-  if (!accounts.length) {
+  const isEditing = !!txId;
+
+  if (isEditing && !existingTx) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.subtle}>You need an account first.</Text>
+      <View style={styles.wrap}>
+        <Text style={styles.error}>
+          Transaction not found.
+        </Text>
         <Pressable
           style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
-          onPress={() => navigation.navigate('Dashboard')}
+          onPress={() => navigation.goBack()}
         >
-          <Text style={styles.btnText}>Go to Dashboard</Text>
+          <Text style={styles.btnText}>Back</Text>
         </Pressable>
       </View>
     );
   }
 
+  const onSave = () => {
+    const trimmedAmount = amount.trim();
+    const n = Number(trimmedAmount);
+    if (!accountId) {
+      return Alert.alert('Select an account');
+    }
+    if (!trimmedAmount || Number.isNaN(n)) {
+      return Alert.alert('Enter a valid amount');
+    }
+    if (!date.trim()) {
+      return Alert.alert('Enter a date (YYYY-MM-DD)');
+    }
+
+    if (isEditing && txId) {
+      actions.updateTransaction(txId, {
+        accountId,
+        amount: n,
+        type,
+        note: note.trim() || undefined,
+        date: date.trim(),
+      });
+    } else {
+      actions.addTransaction({
+        accountId,
+        amount: n,
+        type,
+        note: note.trim() || undefined,
+        date: date.trim(),
+      });
+    }
+
+    navigation.goBack();
+  };
+
   return (
     <ScrollView
       style={styles.wrap}
-      contentContainerStyle={{ paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: 24 }}
     >
-      <Text style={styles.h1}>New transaction</Text>
-      <Text style={styles.subtle}>
-        {mode === 'income'
-          ? `Adding income to ${accountName}.`
-          : `Adding an expense from ${accountName}.`}
+      <Text style={styles.h1}>
+        {isEditing ? 'Edit transaction' : 'New transaction'}
       </Text>
 
-      {/* Account picker */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Account</Text>
-        <View style={styles.pillRow}>
-          {accounts.map(a => (
-            <Pressable
-              key={a.id}
-              onPress={() => setAccountId(a.id)}
-              style={[
-                styles.pill,
-                accountId === a.id && styles.pillActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  accountId === a.id && styles.pillTextActive,
-                ]}
-              >
-                {a.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {/* Amount */}
+      <Text style={styles.label}>Amount</Text>
+      <TextInput
+        value={amount}
+        onChangeText={setAmount}
+        keyboardType="decimal-pad"
+        placeholder="0.00"
+        placeholderTextColor="#6B7280"
+        style={styles.input}
+      />
+
+      {/* Type */}
+      <Text style={styles.label}>Type</Text>
+      <View style={styles.row}>
+        <Pressable
+          style={[
+            styles.pill,
+            type === 'income' && styles.pillActive,
+          ]}
+          onPress={() => setType('income')}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              type === 'income' && styles.pillTextActive,
+            ]}
+          >
+            Income
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[
+            styles.pill,
+            type === 'expense' && styles.pillActive,
+          ]}
+          onPress={() => setType('expense')}
+        >
+          <Text
+            style={[
+              styles.pillText,
+              type === 'expense' && styles.pillTextActive,
+            ]}
+          >
+            Expense
+          </Text>
+        </Pressable>
       </View>
 
-      {/* Type & amount */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Type</Text>
-        <View style={styles.pillRow}>
+      {/* Account */}
+      <Text style={styles.label}>Account</Text>
+      <View style={styles.rowWrap}>
+        {accounts.map(a => (
           <Pressable
+            key={String(a.id)}
             style={[
               styles.pill,
-              mode === 'expense' && styles.pillActiveExpense,
+              accountId === a.id && styles.pillActive,
             ]}
-            onPress={() => setMode('expense')}
+            onPress={() => setAccountId(a.id)}
           >
             <Text
               style={[
                 styles.pillText,
-                mode === 'expense' && styles.pillTextActive,
+                accountId === a.id && styles.pillTextActive,
               ]}
             >
-              Expense
+              {a.name}
             </Text>
           </Pressable>
-          <Pressable
-            style={[
-              styles.pill,
-              mode === 'income' && styles.pillActiveIncome,
-            ]}
-            onPress={() => setMode('income')}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                mode === 'income' && styles.pillTextActive,
-              ]}
-            >
-              Income
-            </Text>
-          </Pressable>
-        </View>
-
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-          Amount
-        </Text>
-        <TextInput
-          value={amountText}
-          onChangeText={setAmountText}
-          keyboardType="decimal-pad"
-          placeholder="e.g. 42.50"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        ))}
+        {accounts.length === 0 && (
+          <Text style={styles.subtle}>
+            No accounts yet – go back and create one first.
+          </Text>
+        )}
       </View>
+
+      {/* Date */}
+      <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
+      <TextInput
+        value={date}
+        onChangeText={setDate}
+        placeholder="2025-11-09"
+        placeholderTextColor="#6B7280"
+        style={styles.input}
+      />
 
       {/* Note */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Note (optional)</Text>
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="Groceries, rent, salary..."
-          placeholderTextColor="#6B7280"
-          style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-          multiline
-        />
-      </View>
+      <Text style={styles.label}>Note</Text>
+      <TextInput
+        value={note}
+        onChangeText={setNote}
+        placeholder="Optional description"
+        placeholderTextColor="#6B7280"
+        style={[styles.input, { height: 80 }]}
+        multiline
+      />
 
-      {/* Actions */}
-      <View style={styles.actionRow}>
+      {/* Buttons */}
+      <View style={styles.buttonRow}>
         <Pressable
           style={[styles.btn, styles.btnGhost]}
           onPress={() => navigation.goBack()}
@@ -193,7 +219,9 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           style={[styles.btn, styles.btnPrimary]}
           onPress={onSave}
         >
-          <Text style={styles.btnText}>Save</Text>
+          <Text style={styles.btnText}>
+            {isEditing ? 'Save changes' : 'Add transaction'}
+          </Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -203,72 +231,21 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
-    padding: 16,
+    backgroundColor: '#0B0D13',
+    paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 52 : 24,
-  },
-  center: {
-    flex: 1,
-    backgroundColor: '#020617',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   h1: {
     color: '#F9FAFB',
     fontSize: 22,
     fontWeight: '800',
+    marginBottom: 16,
+  },
+  label: {
+    color: '#E5E7EB',
+    marginTop: 8,
     marginBottom: 4,
-  },
-  subtle: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginBottom: 12,
-  },
-  card: {
-    backgroundColor: '#020617',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  sectionTitle: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  pillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  pillActiveExpense: {
-    backgroundColor: '#B91C1C',
-    borderColor: '#B91C1C',
-  },
-  pillActiveIncome: {
-    backgroundColor: '#15803D',
-    borderColor: '#15803D',
-  },
-  pillText: {
-    color: '#E5E7EB',
-    fontSize: 13,
     fontWeight: '600',
-  },
-  pillTextActive: {
-    color: '#F9FAFB',
   },
   input: {
     backgroundColor: '#0F172A',
@@ -276,28 +253,64 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     borderWidth: 1,
     borderRadius: 10,
-    padding: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
-  actionRow: {
+  subtle: {
+    color: '#9CA3AF',
+    marginTop: 4,
+  },
+  row: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    gap: 8,
+    marginBottom: 4,
+  },
+  rowWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pill: {
+    backgroundColor: '#111827',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+  },
+  pillActive: {
+    backgroundColor: '#2563EB',
+  },
+  pillText: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+  },
+  pillTextActive: {
+    color: '#F9FAFB',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: 8,
     marginTop: 16,
   },
   btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    flex: 1,
+    paddingVertical: 12,
     borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   btnPrimary: {
     backgroundColor: '#2563EB',
   },
   btnGhost: {
-    backgroundColor: '#0B1120',
+    backgroundColor: '#1F2937',
   },
   btnText: {
     color: '#F9FAFB',
     fontWeight: '700',
-    fontSize: 13,
+  },
+  error: {
+    color: '#FCA5A5',
+    marginTop: 16,
   },
 });
