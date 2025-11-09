@@ -1,12 +1,13 @@
 // src/screens/HistoryScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
+  FlatList,
+  Pressable,
   StyleSheet,
   Platform,
-  ScrollView,
-  Pressable,
+  Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -15,171 +16,90 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
 export default function HistoryScreen({ navigation }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
-
-  // Small helper: map accountId → name
-  const accountNameFor = (id: string | undefined | null): string => {
-    if (!id) return 'Unknown account';
-    const acc = accounts.find(a => a.id === id);
-    return acc?.name || 'Unknown account';
-  };
-
-  const filtered = useMemo(() => {
-    let list = txs;
-    if (selectedAccountId !== 'all') {
-      list = list.filter(t => t.accountId === selectedAccountId);
-    }
-    // newest first by date, then id
-    return [...list].sort((a, b) => {
-      const da = a.date || '';
-      const db = b.date || '';
-      const cmp = db.localeCompare(da);
-      if (cmp !== 0) return cmp;
-      return String(b.id).localeCompare(String(a.id));
+  const rows = useMemo(() => {
+    const byId: Record<string, string> = {};
+    accounts.forEach(a => {
+      byId[a.id] = a.name || 'Account';
     });
-  }, [txs, selectedAccountId]);
 
-  const monthLabel = useMemo(() => {
-    const now = new Date();
-    return now.toLocaleString(undefined, { month: 'long', year: 'numeric' });
-  }, []);
+    return [...txs]
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .map(tx => ({
+        ...tx,
+        accountName: byId[tx.accountId] || 'Account',
+      }));
+  }, [accounts, txs]);
 
-  const formatDate = (raw: string | undefined) => {
-    if (!raw) return 'No date';
-    const s = raw.includes('T') ? raw : `${raw}T00:00:00`;
-    const d = new Date(s);
-    if (isNaN(d.getTime())) return raw;
-    return d.toLocaleDateString();
+  const onDeleteTx = (id: string) => {
+    Alert.alert(
+      'Delete transaction',
+      'Are you sure you want to delete this transaction?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            actions.deleteTransaction(id);
+          },
+        },
+      ]
+    );
   };
 
   return (
     <View style={styles.wrap}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Text style={styles.title}>History</Text>
-        <Text style={styles.subtle}>
-          All transactions · {monthLabel}
-        </Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.h1}>History</Text>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+          <Text style={styles.backLink}>Back</Text>
+        </Pressable>
       </View>
 
-      {/* ACCOUNT FILTER */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterRow}
-        contentContainerStyle={{ paddingRight: 8 }}
-      >
-        <Pressable
-          onPress={() => setSelectedAccountId('all')}
-          style={[
-            styles.filterPill,
-            selectedAccountId === 'all' && styles.filterPillActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              selectedAccountId === 'all' && styles.filterTextActive,
-            ]}
-          >
-            All accounts
-          </Text>
-        </Pressable>
-
-        {accounts.map(acc => (
-          <Pressable
-            key={acc.id}
-            onPress={() => setSelectedAccountId(acc.id)}
-            style={[
-              styles.filterPill,
-              selectedAccountId === acc.id && styles.filterPillActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.filterText,
-                selectedAccountId === acc.id && styles.filterTextActive,
-              ]}
-            >
-              {acc.name}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* LIST */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {filtered.length === 0 && (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No transactions</Text>
-            <Text style={styles.emptySubtle}>
-              Add a transaction from the Dashboard to see it appear here.
-            </Text>
-          </View>
-        )}
-
-        {filtered.map(tx => {
-          const isIncome = tx.type === 'income';
-          const sign = isIncome ? '+' : '−';
+      <FlatList
+        data={rows}
+        keyExtractor={item => String(item.id)}
+        contentContainerStyle={{ paddingBottom: 16 }}
+        ListEmptyComponent={
+          <Text style={styles.empty}>No transactions yet.</Text>
+        }
+        renderItem={({ item }) => {
+          const isIncome = item.type === 'income';
+          const sign = isIncome ? '+' : '-';
+          const amount = `${sign}£${Number(item.amount || 0).toFixed(2)}`;
+          const d = item.date ? new Date(`${item.date}T00:00:00`) : null;
 
           return (
-            <View key={tx.id} style={styles.txCard}>
-              <View style={styles.txTopRow}>
-                <Text style={styles.txAccount}>
-                  {accountNameFor(tx.accountId)}
-                </Text>
-                <Text
-                  style={[
-                    styles.txAmount,
-                    isIncome ? styles.txIncome : styles.txExpense,
-                  ]}
-                >
-                  {sign}£{Math.abs(tx.amount).toFixed(2)}
+            <Pressable
+              onLongPress={() => onDeleteTx(item.id)}
+              style={({ pressed }) => [
+                styles.row,
+                pressed && { opacity: 0.8 },
+              ]}
+            >
+              <View style={styles.rowLeft}>
+                <Text style={styles.rowTitle}>{item.accountName}</Text>
+                <Text style={styles.rowSub}>
+                  {item.note || (isIncome ? 'Income' : 'Expense')}
+                  {d ? ` · ${d.toLocaleDateString()}` : ''}
                 </Text>
               </View>
-
-              <View style={styles.txBottomRow}>
-                <Text style={styles.txMeta}>
-                  {formatDate(tx.date)} · {isIncome ? 'Income' : 'Expense'}
-                </Text>
-                {tx.note ? (
-                  <Text
-                    style={styles.txNote}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {tx.note}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
+              <Text
+                style={[
+                  styles.rowAmount,
+                  isIncome ? styles.rowAmountIncome : styles.rowAmountExpense,
+                ]}
+              >
+                {amount}
+              </Text>
+            </Pressable>
           );
-        })}
-      </ScrollView>
-
-      {/* FOOTER / NAVIGATION */}
-      <View style={styles.footer}>
-        <Pressable
-          style={[styles.footerBtn, styles.footerBtnPrimary]}
-          onPress={() => navigation.navigate('Dashboard')}
-        >
-          <Text style={styles.footerText}>Back to Dashboard</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.footerBtn, styles.footerBtnGhost]}
-          onPress={() => navigation.navigate('Budgets')}
-        >
-          <Text style={styles.footerText}>View Budgets</Text>
-        </Pressable>
-      </View>
+        }}
+      />
     </View>
   );
 }
@@ -187,134 +107,58 @@ export default function HistoryScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#0B0D13',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
-  header: {
-    marginBottom: 8,
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  title: {
+  h1: {
     color: '#F9FAFB',
     fontSize: 22,
     fontWeight: '800',
   },
-  subtle: {
+  backLink: {
+    color: '#93C5FD',
+    fontWeight: '600',
+  },
+  empty: {
     color: '#9CA3AF',
-    marginTop: 2,
+    marginTop: 16,
   },
-  filterRow: {
-    marginTop: 12,
-    maxHeight: 40,
-  },
-  filterPill: {
-    backgroundColor: '#020617',
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    marginRight: 8,
-  },
-  filterPillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  filterText: {
-    color: '#E5E7EB',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  filterTextActive: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-  },
-  scroll: {
-    flex: 1,
-    marginTop: 8,
-  },
-  emptyCard: {
-    backgroundColor: '#020617',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    marginTop: 8,
-  },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  emptySubtle: {
-    color: '#9CA3AF',
-    marginTop: 4,
-  },
-  txCard: {
-    backgroundColor: '#020617',
-    borderRadius: 16,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-    marginTop: 8,
-  },
-  txTopRow: {
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: '#111827',
   },
-  txAccount: {
-    color: '#E5E7EB',
-    fontWeight: '600',
-    fontSize: 14,
+  rowLeft: {
+    flexShrink: 1,
+    paddingRight: 8,
   },
-  txAmount: {
-    fontWeight: '800',
-    fontSize: 15,
+  rowTitle: {
+    color: '#F9FAFB',
+    fontWeight: '700',
   },
-  txIncome: {
-    color: '#4ADE80',
-  },
-  txExpense: {
-    color: '#F97373',
-  },
-  txBottomRow: {
-    marginTop: 4,
-  },
-  txMeta: {
+  rowSub: {
     color: '#9CA3AF',
-    fontSize: 12,
-  },
-  txNote: {
-    color: '#E5E7EB',
     fontSize: 12,
     marginTop: 2,
   },
-  footer: {
-    borderTopWidth: 1,
-    borderColor: '#111827',
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 16 : 10,
-    marginTop: 4,
-    flexDirection: 'row',
-    gap: 8,
+  rowAmount: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  footerBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
+  rowAmountIncome: {
+    color: '#4ADE80',
   },
-  footerBtnPrimary: {
-    backgroundColor: '#2563EB',
-  },
-  footerBtnGhost: {
-    backgroundColor: '#0B1120',
-  },
-  footerText: {
-    color: '#F9FAFB',
-    fontWeight: '600',
-    fontSize: 13,
+  rowAmountExpense: {
+    color: '#F97373',
   },
 });

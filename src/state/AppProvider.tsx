@@ -44,6 +44,9 @@ export type AppActions = {
   // Replace full transactions array (kept for compatibility)
   setTransactions: (txs: Transaction[]) => void;
 
+  // Delete full transactions array (kept for compatibility)
+  deleteTransaction: (txId: string) => void;
+
   // Delete an account + all its transactions
   deleteAccount: (accountId: string) => void;
 };
@@ -136,6 +139,13 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
+    const deleteTransaction = useCallback((txId: string) => {
+    setState(prev => ({
+      ...prev,
+      transactions: prev.transactions.filter(t => t.id !== txId),
+    }));
+  }, []);
+
   // --- PIN management ---
 
   const getPin = useCallback(async () => {
@@ -159,6 +169,7 @@ export function AppProvider({ children }: Props) {
       updateAccount,
       addTransaction,
       setTransactions,
+      deleteTransaction,
       deleteAccount,
     },
     getPin,
