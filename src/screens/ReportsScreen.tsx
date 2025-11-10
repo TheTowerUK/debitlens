@@ -7,7 +7,10 @@ import {
   ScrollView,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
@@ -145,6 +148,63 @@ export default function ReportsScreen({ navigation }: Props) {
     return rows;
   }, [txsInRange, byId]);
 
+  // ---- CSV export for current range ----
+  const onExportCsv = async () => {
+    try {
+      if (!txsInRange.length) {
+        Alert.alert('Nothing to export', 'There are no transactions in this range.');
+        return;
+      }
+
+      // Simple CSV: date, account, type, amount, note
+      const esc = (v: any) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const header = ['date', 'account', 'type', 'amount', 'note'];
+      const lines = txsInRange.map(t => {
+        const accName = byId[t.accountId] || 'Account';
+        return [
+          t.date || '',
+          accName,
+          t.type || '',
+          Number(t.amount || 0),
+          t.note || '',
+        ].map(esc).join(',');
+      });
+
+      const csv = `${header.join(',')}\n${lines.join('\n')}`;
+
+      const fsAny = FileSystem as any;
+      const base = fsAny.cacheDirectory ?? '';
+      const path = `${base}report-range-${Date.now()}.csv`;
+      const encoding = fsAny.EncodingType?.UTF8 ?? 'utf8';
+
+      if (typeof fsAny.writeAsStringAsync === 'function') {
+        await fsAny.writeAsStringAsync(path, csv, { encoding });
+      } else {
+        await fsAny.writeAsStringAsync(path, csv);
+      }
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Share report CSV',
+        });
+      } else {
+        Alert.alert('CSV saved', path);
+      }
+    } catch (e: any) {
+      console.warn('[reports] export failed', e);
+      Alert.alert('Export failed', e?.message || String(e));
+    }
+  };
+
   return (
     <ScrollView
       style={styles.wrap}
@@ -239,6 +299,11 @@ export default function ReportsScreen({ navigation }: Props) {
           Based on {txsInRange.length} transaction
           {txsInRange.length === 1 ? '' : 's'} in this range.
         </Text>
+
+        {/* Export button */}
+        <Pressable style={styles.exportBtn} onPress={onExportCsv}>
+          <Text style={styles.exportText}>Export CSV for this range</Text>
+        </Pressable>
       </View>
 
       {/* Per-account net */}
@@ -300,7 +365,6 @@ export default function ReportsScreen({ navigation }: Props) {
           })
         )}
       </View>
-
     </ScrollView>
   );
 }
@@ -399,6 +463,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 8,
+  },
+
+  exportBtn: {
+    marginTop: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+  },
+  exportText: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+    fontSize: 13,
   },
 
   row: {
