@@ -292,7 +292,7 @@ export default function ReportsScreen({ navigation }: Props) {
                     {d ? ` · ${d.toLocaleDateString()}` : ''}
                   </Text>
                 </View>
-                <Text style={styles.rowAmount}>
+                <Text style={[styles.rowAmount, styles.rowAmountExpense]}>
                   -£{amt.toFixed(2)}
                 </Text>
               </View>
@@ -300,6 +300,7 @@ export default function ReportsScreen({ navigation }: Props) {
           })
         )}
       </View>
+
     </ScrollView>
   );
 }
