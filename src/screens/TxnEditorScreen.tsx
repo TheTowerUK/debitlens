@@ -32,14 +32,26 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const params = route?.params || {};
-  const editingId: string | undefined = params.id;
+  // Safely read route params
+  const params = route?.params ?? {};
+
+  // Be flexible about what other screens send:
+  // id, txnId, transactionId, or a full tx object.
+  const editingId: string | undefined =
+    params.id ??
+    params.txnId ??
+    params.transactionId ??
+    (params.tx && params.tx.id);
+
   const initialAccountId: string | undefined = params.accountId;
   const initialTypeParam: 'income' | 'expense' | undefined = params.type;
 
-  const existing = editingId
-    ? txs.find((t) => t.id === editingId)
-    : undefined;
+  // If we have an id, look up in state; otherwise accept a full tx passed in params
+  const existing =
+    editingId
+      ? txs.find((t) => t.id === editingId)
+      : params.tx || undefined;
+
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
