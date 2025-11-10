@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import Svg, { Path, Line, Text as SvgText } from 'react-native-svg';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
@@ -18,6 +19,81 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 
 type RangeKey = 'this' | 'last' | 'last3';
+
+// Simple inline chart component: draws net-by-month as a line
+function NetLineChart({ data }: { data: { x: string; y: number }[] }) {
+  const width = 260;
+  const height = 140;
+  const paddingLeft = 24;
+  const paddingRight = 8;
+  const paddingTop = 12;
+  const paddingBottom = 24;
+
+  if (!data.length) {
+    return (
+      <Text style={{ color: '#9CA3AF', fontSize: 12 }}>
+        Add some transactions to see your trend.
+      </Text>
+    );
+  }
+
+  const ys = data.map(d => d.y);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const span = maxY - minY || 1;
+
+  const innerWidth = width - paddingLeft - paddingRight;
+  const innerHeight = height - paddingTop - paddingBottom;
+
+  const points = data.map((d, i) => {
+    const t = data.length === 1 ? 0.5 : i / (data.length - 1);
+    const x = paddingLeft + t * innerWidth;
+    const normY = (d.y - minY) / span; // 0..1
+    const y = paddingTop + (1 - normY) * innerHeight;
+    return { x, y, label: d.x, value: d.y };
+  });
+
+  const pathD = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+    .join(' ');
+
+  return (
+    <Svg width="100%" height={height}>
+      {/* horizontal mid-line */}
+      <Line
+        x1={paddingLeft}
+        y1={paddingTop + innerHeight / 2}
+        x2={width - paddingRight}
+        y2={paddingTop + innerHeight / 2}
+        stroke="#1F2937"
+        strokeWidth={1}
+      />
+      {/* line */}
+      <Path d={pathD} stroke="#60A5FA" strokeWidth={2} fill="none" />
+      {/* dots */}
+      {points.map((p, i) => (
+        <Path
+          key={i}
+          d={`M ${p.x} ${p.y} m -2 0 a 2 2 0 1 0 4 0 a 2 2 0 1 0 -4 0`}
+          fill="#93C5FD"
+        />
+      ))}
+      {/* x labels */}
+      {points.map((p, i) => (
+        <SvgText
+          key={`label-${i}`}
+          x={p.x}
+          y={height - 6}
+          fontSize={10}
+          fill="#9CA3AF"
+          textAnchor="middle"
+        >
+          {p.label}
+        </SvgText>
+      ))}
+    </Svg>
+  );
+}
 
 export default function ReportsScreen({ navigation }: Props) {
   const { state } = useApp();
@@ -143,62 +219,103 @@ export default function ReportsScreen({ navigation }: Props) {
       expense: v.expense,
       net: v.income - v.expense,
     }));
-    // sort by absolute net (biggest impact first)
     rows.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
     return rows;
   }, [txsInRange, byId]);
 
-  // ---- CSV export for current range ----
-const onExportCsv = async () => {
-  try {
-    if (!txsInRange.length) {
-      Alert.alert('Nothing to export', 'There are no transactions in this range.');
-      return;
-    }
-
-    const esc = (v: any) => {
-      if (v === null || v === undefined) return '';
-      const s = String(v);
-      if (s.includes('"') || s.includes(',') || s.includes('\n')) {
-        return `"${s.replace(/"/g, '""')}"`;
-      }
-      return s;
-    };
-
-    const header = ['date', 'account', 'type', 'amount', 'note'];
-    const lines = txsInRange.map(t => {
-      const accName = byId[t.accountId] || 'Account';
-      return [
-        t.date || '',
-        accName,
-        t.type || '',
-        Number(t.amount || 0),
-        t.note || '',
-      ].map(esc).join(',');
-    });
-
-    const csv = `${header.join(',')}\n${lines.join('\n')}`;
-
-    const base = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
-    const path = `${base}report-range-${Date.now()}.csv`;
-    const encoding =
-      (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
-
-    await (FileSystem as any).writeAsStringAsync(path, csv, { encoding });
-
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(path, {
-        mimeType: 'text/csv',
-        dialogTitle: 'Share report CSV',
+  // ---- Net-by-month chart (last 6 months) ----
+  const chartData = useMemo(() => {
+    const months: { key: string; label: string }[] = [];
+    let y = year;
+    let m = month;
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(y, m - 1, 1);
+      months.unshift({
+        key: monthKeyOf(y, m),
+        label: d.toLocaleString(undefined, { month: 'short' }),
       });
-    } else {
-      Alert.alert('CSV saved', path);
+      m -= 1;
+      if (m === 0) {
+        m = 12;
+        y -= 1;
+      }
     }
-  } catch (e: any) {
-    console.warn('[reports] export failed', e);
-    Alert.alert('Export failed', e?.message || String(e));
-  }
-};
+
+    const map: Record<string, number> = {};
+    for (const t of txs) {
+      const d = t.date || '';
+      const key = d.slice(0, 7);
+      const match = months.find(mm => mm.key === key);
+      if (!match) continue;
+      const amt = Number(t.amount || 0);
+      const sign = t.type === 'income' ? 1 : -1;
+      map[key] = (map[key] ?? 0) + sign * amt;
+    }
+
+    return months.map(m => ({
+      x: m.label,
+      y: map[m.key] ?? 0,
+    }));
+  }, [txs, year, month]);
+
+  const hasChartData = chartData.some(p => p.y !== 0);
+
+  // ---- CSV export for current range ----
+  const onExportCsv = async () => {
+    try {
+      if (!txsInRange.length) {
+        Alert.alert('Nothing to export', 'There are no transactions in this range.');
+        return;
+      }
+
+      const esc = (v: any) => {
+        if (v === null || v === undefined) return '';
+        const s = String(v);
+        if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const header = ['date', 'account', 'type', 'amount', 'note'];
+      const lines = txsInRange.map(t => {
+        const accName = byId[t.accountId] || 'Account';
+        return [
+          t.date || '',
+          accName,
+          t.type || '',
+          Number(t.amount || 0),
+          t.note || '',
+        ]
+          .map(esc)
+          .join(',');
+      });
+
+      const csv = `${header.join(',')}\n${lines.join('\n')}`;
+
+      const base =
+        (FileSystem as any).cacheDirectory ??
+        (FileSystem as any).documentDirectory ??
+        '';
+      const path = `${base}report-range-${Date.now()}.csv`;
+      const encoding =
+        (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
+
+      await (FileSystem as any).writeAsStringAsync(path, csv, { encoding });
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(path, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Share report CSV',
+        });
+      } else {
+        Alert.alert('CSV saved', path);
+      }
+    } catch (e: any) {
+      console.warn('[reports] export failed', e);
+      Alert.alert('Export failed', e?.message || String(e));
+    }
+  };
 
   return (
     <ScrollView
@@ -214,6 +331,18 @@ const onExportCsv = async () => {
         <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
           <Text style={styles.backLink}>Back</Text>
         </Pressable>
+      </View>
+
+      {/* Net-by-month chart */}
+      <View style={styles.chartCard}>
+        <Text style={styles.cardTitle}>Net by month</Text>
+        {hasChartData ? (
+          <NetLineChart data={chartData} />
+        ) : (
+          <Text style={styles.subtleSmall}>
+            Add some transactions to see your trend over the last 6 months.
+          </Text>
+        )}
       </View>
 
       {/* Range selector */}
@@ -321,7 +450,9 @@ const onExportCsv = async () => {
               <Text
                 style={[
                   styles.rowAmount,
-                  row.net >= 0 ? styles.rowAmountIncome : styles.rowAmountExpense,
+                  row.net >= 0
+                    ? styles.rowAmountIncome
+                    : styles.rowAmountExpense,
                 ]}
               >
                 {row.net >= 0 ? '+' : '-'}£{Math.abs(row.net).toFixed(2)}
@@ -394,6 +525,14 @@ const styles = StyleSheet.create({
   backLink: {
     color: '#93C5FD',
     fontWeight: '600',
+  },
+
+  // Chart card
+  chartCard: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
   },
 
   rangeRow: {
