@@ -221,10 +221,11 @@ export default function DashboardScreen({ navigation }: Props) {
         </Pressable>
         <Pressable
           style={[styles.footerBtn, styles.footerBtnGhost]}
-          onPress={() => navigation.navigate('ImportCSV')}
+          onPress={() => navigation.navigate('Reports')}
         >
-          <Text style={styles.footerText}>Import CSV</Text>
+          <Text style={styles.footerText}>Reports</Text>
         </Pressable>
+
       </View>
     </View>
   );
