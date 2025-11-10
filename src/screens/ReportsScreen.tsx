@@ -9,7 +9,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -149,61 +149,56 @@ export default function ReportsScreen({ navigation }: Props) {
   }, [txsInRange, byId]);
 
   // ---- CSV export for current range ----
-  const onExportCsv = async () => {
-    try {
-      if (!txsInRange.length) {
-        Alert.alert('Nothing to export', 'There are no transactions in this range.');
-        return;
-      }
-
-      // Simple CSV: date, account, type, amount, note
-      const esc = (v: any) => {
-        if (v === null || v === undefined) return '';
-        const s = String(v);
-        if (s.includes('"') || s.includes(',') || s.includes('\n')) {
-          return `"${s.replace(/"/g, '""')}"`;
-        }
-        return s;
-      };
-
-      const header = ['date', 'account', 'type', 'amount', 'note'];
-      const lines = txsInRange.map(t => {
-        const accName = byId[t.accountId] || 'Account';
-        return [
-          t.date || '',
-          accName,
-          t.type || '',
-          Number(t.amount || 0),
-          t.note || '',
-        ].map(esc).join(',');
-      });
-
-      const csv = `${header.join(',')}\n${lines.join('\n')}`;
-
-      const fsAny = FileSystem as any;
-      const base = fsAny.cacheDirectory ?? '';
-      const path = `${base}report-range-${Date.now()}.csv`;
-      const encoding = fsAny.EncodingType?.UTF8 ?? 'utf8';
-
-      if (typeof fsAny.writeAsStringAsync === 'function') {
-        await fsAny.writeAsStringAsync(path, csv, { encoding });
-      } else {
-        await fsAny.writeAsStringAsync(path, csv);
-      }
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(path, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Share report CSV',
-        });
-      } else {
-        Alert.alert('CSV saved', path);
-      }
-    } catch (e: any) {
-      console.warn('[reports] export failed', e);
-      Alert.alert('Export failed', e?.message || String(e));
+const onExportCsv = async () => {
+  try {
+    if (!txsInRange.length) {
+      Alert.alert('Nothing to export', 'There are no transactions in this range.');
+      return;
     }
-  };
+
+    const esc = (v: any) => {
+      if (v === null || v === undefined) return '';
+      const s = String(v);
+      if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const header = ['date', 'account', 'type', 'amount', 'note'];
+    const lines = txsInRange.map(t => {
+      const accName = byId[t.accountId] || 'Account';
+      return [
+        t.date || '',
+        accName,
+        t.type || '',
+        Number(t.amount || 0),
+        t.note || '',
+      ].map(esc).join(',');
+    });
+
+    const csv = `${header.join(',')}\n${lines.join('\n')}`;
+
+    const base = FileSystem.cacheDirectory ?? FileSystem.documentDirectory ?? '';
+    const path = `${base}report-range-${Date.now()}.csv`;
+    const encoding =
+      (FileSystem as any).EncodingType?.UTF8 ?? 'utf8';
+
+    await (FileSystem as any).writeAsStringAsync(path, csv, { encoding });
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(path, {
+        mimeType: 'text/csv',
+        dialogTitle: 'Share report CSV',
+      });
+    } else {
+      Alert.alert('CSV saved', path);
+    }
+  } catch (e: any) {
+    console.warn('[reports] export failed', e);
+    Alert.alert('Export failed', e?.message || String(e));
+  }
+};
 
   return (
     <ScrollView
