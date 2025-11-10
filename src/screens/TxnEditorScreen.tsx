@@ -1,103 +1,134 @@
 // src/screens/TxnEditorScreen.tsx
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
+  ScrollView,
   Platform,
   Alert,
-  ScrollView,
 } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
+const CATEGORIES = [
+  'General',
+  'Groceries',
+  'Bills',
+  'Transport',
+  'Shopping',
+  'Entertainment',
+  'Savings',
+];
+
+type Props = {
+  navigation: any;
+  route: any;
+};
 
 export default function TxnEditorScreen({ navigation, route }: Props) {
   const { state, actions } = useApp();
   const accounts = state.accounts || [];
-  const allTxs = state.transactions || [];
+  const txs = state.transactions || [];
 
-  const txId = route.params?.txId;
-  const initialAccountId = route.params?.accountId;
+  const params = route?.params || {};
+  const editingId: string | undefined = params.id;
+  const initialAccountId: string | undefined = params.accountId;
+  const initialTypeParam: 'income' | 'expense' | undefined = params.type;
 
-  const existingTx = txId
-    ? allTxs.find(t => t.id === txId)
+  const existing = editingId
+    ? txs.find((t) => t.id === editingId)
     : undefined;
 
-  const [accountId, setAccountId] = useState<string>(
-    existingTx?.accountId ||
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const [accountId, setAccountId] = React.useState<string>(
+    existing?.accountId ||
       initialAccountId ||
       (accounts[0]?.id ?? '')
   );
-
-  const [type, setType] = useState<'income' | 'expense'>(
-    existingTx?.type || 'expense'
+  const [amount, setAmount] = React.useState<string>(
+    existing ? String(existing.amount) : ''
   );
-
-  const [amount, setAmount] = useState(
-    existingTx ? String(existingTx.amount) : ''
+  const [type, setType] = React.useState<'income' | 'expense'>(
+    existing?.type || initialTypeParam || 'expense'
   );
-
-  const [note, setNote] = useState(existingTx?.note || '');
-
-  const [date, setDate] = useState(
-    existingTx?.date || new Date().toISOString().slice(0, 10)
+  const [note, setNote] = React.useState<string>(existing?.note || '');
+  const [date, setDate] = React.useState<string>(
+    existing?.date || todayStr
   );
+  const [category, setCategory] = React.useState<string>(
+    existing?.category || 'General'
+  );
+  const [saving, setSaving] = React.useState(false);
 
-  const isEditing = !!txId;
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      title: editingId ? 'Edit transaction' : 'New transaction',
+    });
+  }, [navigation, editingId]);
 
-  if (isEditing && !existingTx) {
-    return (
-      <View style={styles.wrap}>
-        <Text style={styles.error}>
-          Transaction not found.
-        </Text>
-        <Pressable
-          style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.btnText}>Back</Text>
-        </Pressable>
-      </View>
-    );
-  }
+  const onSave = async () => {
+    const amt = Number(amount);
 
-  const onSave = () => {
-    const trimmedAmount = amount.trim();
-    const n = Number(trimmedAmount);
     if (!accountId) {
-      return Alert.alert('Select an account');
+      Alert.alert('Account required', 'Please choose an account.');
+      return;
     }
-    if (!trimmedAmount || Number.isNaN(n)) {
-      return Alert.alert('Enter a valid amount');
-    }
-    if (!date.trim()) {
-      return Alert.alert('Enter a date (YYYY-MM-DD)');
-    }
-
-    if (isEditing && txId) {
-      actions.updateTransaction(txId, {
-        accountId,
-        amount: n,
-        type,
-        note: note.trim() || undefined,
-        date: date.trim(),
-      });
-    } else {
-      actions.addTransaction({
-        accountId,
-        amount: n,
-        type,
-        note: note.trim() || undefined,
-        date: date.trim(),
-      });
+    if (!amount || isNaN(amt)) {
+      Alert.alert('Amount required', 'Enter a valid amount.');
+      return;
     }
 
-    navigation.goBack();
+    const cleanDate = date || todayStr;
+
+    const payload = {
+      accountId,
+      amount: amt,
+      type,
+      date: cleanDate,
+      note: note.trim() || null,
+      category: category || null,
+    };
+
+    try {
+      setSaving(true);
+      if (editingId) {
+        // assumes actions.updateTransaction(id, payload) exists
+        await actions.updateTransaction(editingId, payload);
+      } else {
+        // assumes actions.addTransaction(payload) exists
+        await actions.addTransaction(payload);
+      }
+      navigation.goBack();
+    } catch (e: any) {
+      console.warn('save txn failed', e);
+      Alert.alert('Error', e?.message || 'Could not save transaction.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async () => {
+    if (!editingId) return;
+    Alert.alert('Delete transaction?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            // assumes actions.deleteTransaction(id) exists
+            await actions.deleteTransaction(editingId);
+            navigation.goBack();
+          } catch (e: any) {
+            console.warn('delete txn failed', e);
+            Alert.alert('Error', e?.message || 'Could not delete transaction.');
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -105,9 +136,72 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
       style={styles.wrap}
       contentContainerStyle={{ paddingBottom: 24 }}
     >
-      <Text style={styles.h1}>
-        {isEditing ? 'Edit transaction' : 'New transaction'}
-      </Text>
+      {/* Account selector */}
+      <Text style={styles.label}>Account</Text>
+      <View style={styles.accountRow}>
+        {accounts.length === 0 ? (
+          <Text style={styles.subtle}>
+            No accounts yet. Go back and add one on the Dashboard.
+          </Text>
+        ) : (
+          accounts.map((acc) => (
+            <Pressable
+              key={acc.id}
+              onPress={() => setAccountId(acc.id)}
+              style={[
+                styles.accPill,
+                accountId === acc.id && styles.accPillActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.accPillText,
+                  accountId === acc.id && styles.accPillTextActive,
+                ]}
+              >
+                {acc.name || 'Account'}
+              </Text>
+            </Pressable>
+          ))
+        )}
+      </View>
+
+      {/* Type */}
+      <Text style={styles.label}>Type</Text>
+      <View style={styles.typeRow}>
+        <Pressable
+          onPress={() => setType('expense')}
+          style={[
+            styles.typePill,
+            type === 'expense' && styles.typePillActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.typePillText,
+              type === 'expense' && styles.typePillTextActive,
+            ]}
+          >
+            Expense
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setType('income')}
+          style={[
+            styles.typePill,
+            type === 'income' && styles.typePillActive,
+          ]}
+        >
+          <Text
+            style={[
+              styles.typePillText,
+              type === 'income' && styles.typePillTextActive,
+            ]}
+          >
+            Income
+          </Text>
+        </Pressable>
+      </View>
 
       {/* Amount */}
       <Text style={styles.label}>Amount</Text>
@@ -120,110 +214,72 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         style={styles.input}
       />
 
-      {/* Type */}
-      <Text style={styles.label}>Type</Text>
-      <View style={styles.row}>
-        <Pressable
-          style={[
-            styles.pill,
-            type === 'income' && styles.pillActive,
-          ]}
-          onPress={() => setType('income')}
-        >
-          <Text
-            style={[
-              styles.pillText,
-              type === 'income' && styles.pillTextActive,
-            ]}
-          >
-            Income
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.pill,
-            type === 'expense' && styles.pillActive,
-          ]}
-          onPress={() => setType('expense')}
-        >
-          <Text
-            style={[
-              styles.pillText,
-              type === 'expense' && styles.pillTextActive,
-            ]}
-          >
-            Expense
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Account */}
-      <Text style={styles.label}>Account</Text>
-      <View style={styles.rowWrap}>
-        {accounts.map(a => (
-          <Pressable
-            key={String(a.id)}
-            style={[
-              styles.pill,
-              accountId === a.id && styles.pillActive,
-            ]}
-            onPress={() => setAccountId(a.id)}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                accountId === a.id && styles.pillTextActive,
-              ]}
-            >
-              {a.name}
-            </Text>
-          </Pressable>
-        ))}
-        {accounts.length === 0 && (
-          <Text style={styles.subtle}>
-            No accounts yet – go back and create one first.
-          </Text>
-        )}
-      </View>
-
       {/* Date */}
-      <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
+      <Text style={styles.label}>Date</Text>
       <TextInput
         value={date}
         onChangeText={setDate}
-        placeholder="2025-11-09"
+        placeholder="YYYY-MM-DD"
         placeholderTextColor="#6B7280"
         style={styles.input}
       />
+
+      {/* Category */}
+      <Text style={styles.label}>Category</Text>
+      <View style={styles.catRow}>
+        {CATEGORIES.map((cat) => (
+          <Pressable
+            key={cat}
+            onPress={() => setCategory(cat)}
+            style={[
+              styles.catPill,
+              category === cat && styles.catPillActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.catPillText,
+                category === cat && styles.catPillTextActive,
+              ]}
+            >
+              {cat}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
 
       {/* Note */}
       <Text style={styles.label}>Note</Text>
       <TextInput
         value={note}
         onChangeText={setNote}
-        placeholder="Optional description"
+        placeholder="Optional note"
         placeholderTextColor="#6B7280"
-        style={[styles.input, { height: 80 }]}
+        style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
         multiline
       />
 
-      {/* Buttons */}
-      <View style={styles.buttonRow}>
+      {/* Save */}
+      <Pressable
+        onPress={onSave}
+        style={styles.saveBtn}
+        disabled={saving}
+      >
+        <Text style={styles.saveText}>
+          {saving ? 'Saving…' : 'Save transaction'}
+        </Text>
+      </Pressable>
+
+      {/* Delete (only in edit mode) */}
+      {editingId && (
         <Pressable
-          style={[styles.btn, styles.btnGhost]}
-          onPress={() => navigation.goBack()}
+          onPress={onDelete}
+          style={styles.deleteBtn}
+          disabled={saving}
         >
-          <Text style={styles.btnText}>Cancel</Text>
+          <Text style={styles.deleteText}>Delete transaction</Text>
         </Pressable>
-        <Pressable
-          style={[styles.btn, styles.btnPrimary]}
-          onPress={onSave}
-        >
-          <Text style={styles.btnText}>
-            {isEditing ? 'Save changes' : 'Add transaction'}
-          </Text>
-        </Pressable>
-      </View>
+      )}
     </ScrollView>
   );
 }
@@ -235,82 +291,134 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 52 : 24,
   },
-  h1: {
-    color: '#F9FAFB',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 16,
-  },
   label: {
     color: '#E5E7EB',
-    marginTop: 8,
-    marginBottom: 4,
+    fontSize: 14,
     fontWeight: '600',
-  },
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#F9FAFB',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginTop: 12,
+    marginBottom: 4,
   },
   subtle: {
     color: '#9CA3AF',
-    marginTop: 4,
+    fontSize: 12,
   },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 4,
-  },
-  rowWrap: {
+
+  accountRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    marginBottom: 8,
   },
-  pill: {
-    backgroundColor: '#111827',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+  accPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 6,
+    marginBottom: 6,
+    backgroundColor: '#020617',
   },
-  pillActive: {
+  accPillActive: {
     backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
-  pillText: {
+  accPillText: {
     color: '#E5E7EB',
+    fontSize: 12,
     fontWeight: '600',
   },
-  pillTextActive: {
+  accPillTextActive: {
     color: '#F9FAFB',
   },
-  buttonRow: {
+
+  typeRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 16,
+    marginBottom: 8,
+    marginTop: 4,
   },
-  btn: {
-    flex: 1,
-    paddingVertical: 12,
+  typePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 6,
+    backgroundColor: '#020617',
   },
-  btnPrimary: {
+  typePillActive: {
     backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
-  btnGhost: {
-    backgroundColor: '#1F2937',
+  typePillText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '600',
   },
-  btnText: {
+  typePillTextActive: {
+    color: '#F9FAFB',
+  },
+
+  input: {
+    backgroundColor: '#020617',
+    color: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+
+  catRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  catPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 6,
+    marginBottom: 6,
+    backgroundColor: '#020617',
+  },
+  catPillActive: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  catPillText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  catPillTextActive: {
+    color: '#F9FAFB',
+  },
+
+  saveBtn: {
+    marginTop: 16,
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  saveText: {
     color: '#F9FAFB',
     fontWeight: '700',
   },
-  error: {
-    color: '#FCA5A5',
-    marginTop: 16,
+
+  deleteBtn: {
+    marginTop: 12,
+    backgroundColor: '#7F1D1D',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  deleteText: {
+    color: '#FEE2E2',
+    fontWeight: '700',
   },
 });

@@ -476,12 +476,14 @@ export default function ReportsScreen({ navigation }: Props) {
               <View key={String(tx.id)} style={styles.row}>
                 <View style={styles.rowLeft}>
                   <Text style={styles.rowTitle}>
-                    {tx.note || 'Expense'}
+                    {tx.category || tx.note || 'Expense'}
                   </Text>
                   <Text style={styles.rowSub}>
+                    {tx.category ? `${tx.category} · ` : ''}
                     {accName}
                     {d ? ` · ${d.toLocaleDateString()}` : ''}
                   </Text>
+
                 </View>
                 <Text style={[styles.rowAmount, styles.rowAmountExpense]}>
                   -£{amt.toFixed(2)}

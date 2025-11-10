@@ -19,9 +19,11 @@ export type Transaction = {
   accountId: string;
   amount: number;
   type: 'income' | 'expense';
-  date: string; // 'YYYY-MM-DD' or ISO string
-  note?: string;
+  date: string;
+  note?: string | null;
+  category?: string | null; // ← NEW, optional
 };
+
 
 export type AppState = {
   accounts: Account[];
