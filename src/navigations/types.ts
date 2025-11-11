@@ -9,6 +9,9 @@ export type RootStackParamList = {
   Reports?: undefined;
   Budgets?: undefined;
   Notifications?: undefined;
-  Recurring?: undefined;  
+  Recurring?: undefined;
+  Payments: undefined;  
+  SplashAuth: undefined;
+  TxnTxnEditor: { id?: string; accountId?: string; type?: 'income' | 'expense' };
   TxnEditor?: { txId?: string; accountId?: string };
 };

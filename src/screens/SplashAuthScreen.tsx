@@ -1,147 +1,217 @@
-// src/screens/SplashAuthScreen.js (diagnostic)
+// src/screens/SplashAuthScreen.tsx
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
-import * as LocalAuthentication from 'expo-local-authentication';
+import {
+  View,
+  Text,
+  TextInput,
+  Pressable,
+  StyleSheet,
+  Platform,
+  Alert,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-export default function SplashAuthScreen({ navigation }) {
-  const { isHydrated, getPin, setPin } = useApp();
-  const [mode, setMode] = React.useState('loading'); // loading | biometric | pin | setpin
-  const [pinInput, setPinInput] = React.useState('');
-  const [debug, setDebug] = React.useState({ hydrated: false, storedPin: null, canBiometric: null });
+// If your route is still called "Login" in the navigator, this is correct.
+// If you *do* have a "SplashAuth" route in RootStackParamList, change 'Login' to 'SplashAuth'.
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-  React.useEffect(() => {
-    let cancelled = false;
+export default function SplashAuthScreen({ navigation }: Props) {
+  const { getPin, setPin } = useApp();
 
-    const run = async () => {
+  // Use a simple string type to avoid TSX parsing issues with string literal unions
+  const [mode, setMode] = useState<string>('loading');
+  const [pin, setPinInput] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  // Decide whether to show "Sign in" or "Create PIN"
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
       try {
-        console.log('[Splash] isHydrated=', isHydrated);
-        if (!isHydrated) { setMode('loading'); return; }
-
-        const stored = await getPin().catch(() => null);
-        let canBiometric = false;
-        if (Platform.OS !== 'web') {
-          const [hasHw, enrolled, supported] = await Promise.all([
-            LocalAuthentication.hasHardwareAsync().catch(() => false),
-            LocalAuthentication.isEnrolledAsync().catch(() => false),
-            LocalAuthentication.supportedAuthenticationTypesAsync().catch(() => []),
-          ]);
-          canBiometric = !!(hasHw && enrolled && (supported?.length ?? 0) > 0);
-        }
-
-        if (cancelled) return;
-        setDebug({ hydrated: isHydrated, storedPin: stored ? 'yes' : 'no', canBiometric });
-
-        if (canBiometric) {
-          setMode('biometric');
-          return; // wait for user to tap the button
-        }
-        setMode(stored ? 'pin' : 'setpin');
-      } catch (e) {
-        console.log('[Splash] error deciding mode', e);
-        setMode('pin');
+        const stored = await getPin();
+        if (!mounted) return;
+        setMode(stored ? 'signin' : 'setpin');
+      } catch {
+        if (!mounted) return;
+        setMode('signin');
       }
+    })();
+
+    return () => {
+      mounted = false;
     };
+  }, [getPin]);
 
-    run();
-    return () => { cancelled = true; };
-  }, [isHydrated, getPin]);
+  const onSignIn = async () => {
+    try {
+      const stored = await getPin();
+      const entered = pin.trim();
 
-  // Minimal UI
+      // Only allow if there *is* a stored PIN and it matches
+      if (stored && stored.trim() === entered) {
+        navigation.replace('Dashboard');
+      } else {
+        Alert.alert('Incorrect PIN', 'Please try again.');
+        setPinInput('');
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to verify PIN right now.');
+    }
+  };
+
+  const onSavePin = async () => {
+    const p1 = pin.trim();
+    const p2 = confirm.trim();
+
+    if (!/^\d{4,6}$/.test(p1)) {
+      return Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
+    }
+    if (p1 !== p2) {
+      return Alert.alert('Mismatch', 'PINs do not match.');
+    }
+
+    try {
+      await setPin(p1);
+      navigation.replace('Dashboard');
+    } catch {
+      Alert.alert('Error', 'Unable to save PIN right now.');
+    }
+  };
+
   if (mode === 'loading') {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.subtle}>Preparing… (hydrated: {String(isHydrated)})</Text>
-        <Pressable onPress={() => navigation.replace('Dashboard')} style={styles.linkBtn}>
-          <Text style={styles.linkTxt}>Skip to Dashboard</Text>
-        </Pressable>
+        <Text style={styles.subtle}>Preparing…</Text>
       </View>
     );
   }
 
+  const isValidPin = /^\d{4,6}$/.test(pin.trim());
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>Secure Access</Text>
+      <Text style={styles.h1}>Welcome</Text>
       <Text style={styles.subtle}>
-        mode={mode} • hydrated={String(debug.hydrated)} • pin={debug.storedPin} • biometrics={String(debug.canBiometric)}
+        {mode === 'signin'
+          ? 'Enter your PIN to continue'
+          : 'Create a PIN for quick access'}
       </Text>
 
-      {mode === 'biometric' ? (
-        <Pressable
-          style={styles.primary}
-          onPress={async () => {
-            try {
-              const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock' });
-              if (res.success) {
-                navigation.replace('Dashboard');
-              } else {
-                const stored = await getPin().catch(() => null);
-                setMode(stored ? 'pin' : 'setpin');
-              }
-            } catch {
-              const stored = await getPin().catch(() => null);
-              setMode(stored ? 'pin' : 'setpin');
-            }
-          }}
-        >
-          <Text style={styles.primaryText}>Use Face/Touch ID</Text>
-        </Pressable>
+      {mode === 'signin' ? (
+        <>
+          <TextInput
+            value={pin}
+            onChangeText={setPinInput}
+            placeholder="PIN (4–6 digits)"
+            placeholderTextColor="#6B7280"
+            secureTextEntry
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+
+          <Pressable
+            style={styles.primary}
+            onPress={onSignIn}
+            disabled={!isValidPin}
+          >
+            <Text style={styles.primaryText}>Sign In</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => {
+              setPinInput('');
+              setMode('setpin');
+            }}
+          >
+            <Text style={styles.ghostText}>Set / Change PIN</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => navigation.replace('Dashboard')}
+          >
+            <Text style={styles.ghostText}>Continue without PIN</Text>
+          </Pressable>
+        </>
       ) : (
         <>
           <TextInput
-            value={pinInput}
+            value={pin}
             onChangeText={setPinInput}
-            keyboardType="number-pad"
-            placeholder={mode === 'setpin' ? 'Create PIN (4–6 digits)' : 'Enter PIN'}
+            placeholder="New PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
             secureTextEntry
+            keyboardType="number-pad"
             style={styles.input}
           />
-          {mode === 'pin' && (
-            <Pressable
-              style={styles.primary}
-              onPress={async () => {
-                const stored = await getPin().catch(() => null);
-                if (stored && stored === pinInput.trim()) {
-                  navigation.replace('Dashboard');
-                } else {
-                  setPinInput('');
-                  alert('Incorrect PIN');
-                }
-              }}
-            >
-              <Text style={styles.primaryText}>Unlock</Text>
-            </Pressable>
-          )}
-          {mode === 'setpin' && (
-            <Pressable
-              style={styles.primary}
-              onPress={async () => {
-                const v = pinInput.trim();
-                if (!/^\d{4,6}$/.test(v)) { alert('Enter a 4–6 digit PIN'); return; }
-                await setPin(v);
-                navigation.replace('Dashboard');
-              }}
-            >
-              <Text style={styles.primaryText}>Save PIN</Text>
-            </Pressable>
-          )}
+          <TextInput
+            value={confirm}
+            onChangeText={setConfirm}
+            placeholder="Confirm PIN"
+            placeholderTextColor="#6B7280"
+            secureTextEntry
+            keyboardType="number-pad"
+            style={styles.input}
+          />
+
+          <Pressable
+            style={styles.primary}
+            onPress={onSavePin}
+            disabled={!isValidPin || confirm.trim().length === 0}
+          >
+            <Text style={styles.primaryText}>Save PIN</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => {
+              setPinInput('');
+              setConfirm('');
+              setMode('signin');
+            }}
+          >
+            <Text style={styles.ghostText}>Back to Sign In</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.ghost, { marginTop: 8 }]}
+            onPress={() => navigation.replace('Dashboard')}
+          >
+            <Text style={styles.ghostText}>Continue without PIN</Text>
+          </Pressable>
         </>
       )}
-
-      <Pressable onPress={() => navigation.replace('Dashboard')} style={[styles.linkBtn, { marginTop: 16 }]}>
-        <Text style={styles.linkTxt}>Skip to Dashboard</Text>
-      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: '#0B0D13', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  wrap: { flex: 1, backgroundColor: '#0B0D13', padding: 24, justifyContent: 'center' },
-  h1: { color: '#fff', fontSize: 28, fontWeight: '700', marginBottom: 8 },
-  subtle: { color: '#9CA3AF', marginBottom: 16 },
+  wrap: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    padding: 24,
+    paddingTop: Platform.OS === 'ios' ? 64 : 32,
+  },
+  center: {
+    flex: 1,
+    backgroundColor: '#0B0D13',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  h1: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  subtle: {
+    color: '#9CA3AF',
+    marginBottom: 16,
+  },
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
@@ -149,10 +219,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
-    marginBottom: 12
+    marginBottom: 10,
   },
-  primary: { backgroundColor: '#2563EB', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  primaryText: { color: '#fff', fontWeight: '700' },
-  linkBtn: { paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, borderColor: '#1F2937' },
-  linkTxt: { color: '#E5E7EB' }
+  primary: {
+    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  primaryText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  ghost: {
+    backgroundColor: '#1F2937',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  ghostText: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+  },
 });

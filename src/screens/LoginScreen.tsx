@@ -14,10 +14,11 @@ import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+type Mode = 'loading' | 'signin' | 'setpin';
 
 export default function LoginScreen({ navigation }: Props) {
   const { getPin, setPin } = useApp();
-  const [mode, setMode] = useState<'loading' | 'signin' | 'setpin'>('loading');
+  const [mode, setMode] = useState<Mode>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
 
@@ -42,7 +43,10 @@ export default function LoginScreen({ navigation }: Props) {
   const onSignIn = async () => {
     try {
       const stored = await getPin();
-      if ((stored || '') === pin.trim()) {
+      const entered = pin.trim();
+
+      // Only allow if there *is* a stored PIN and it matches
+      if (stored && stored.trim() === entered) {
         navigation.replace('Dashboard');
       } else {
         Alert.alert('Incorrect PIN', 'Please try again.');
@@ -56,12 +60,14 @@ export default function LoginScreen({ navigation }: Props) {
   const onSavePin = async () => {
     const p1 = pin.trim();
     const p2 = confirm.trim();
+
     if (!/^\d{4,6}$/.test(p1)) {
       return Alert.alert('Invalid PIN', 'Enter 4–6 digits.');
     }
     if (p1 !== p2) {
       return Alert.alert('Mismatch', 'PINs do not match.');
     }
+
     try {
       await setPin(p1);
       navigation.replace('Dashboard');
@@ -77,6 +83,8 @@ export default function LoginScreen({ navigation }: Props) {
       </View>
     );
   }
+
+  const isValidPin = /^\d{4,6}$/.test(pin.trim());
 
   return (
     <View style={styles.wrap}>
@@ -99,7 +107,11 @@ export default function LoginScreen({ navigation }: Props) {
             style={styles.input}
           />
 
-          <Pressable style={styles.primary} onPress={onSignIn}>
+          <Pressable
+            style={styles.primary}
+            onPress={onSignIn}
+            disabled={!isValidPin}
+          >
             <Text style={styles.primaryText}>Sign In</Text>
           </Pressable>
 
@@ -141,7 +153,11 @@ export default function LoginScreen({ navigation }: Props) {
             style={styles.input}
           />
 
-          <Pressable style={styles.primary} onPress={onSavePin}>
+          <Pressable
+            style={styles.primary}
+            onPress={onSavePin}
+            disabled={!isValidPin || confirm.trim().length === 0}
+          >
             <Text style={styles.primaryText}>Save PIN</Text>
           </Pressable>
 

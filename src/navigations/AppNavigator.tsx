@@ -6,6 +6,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import type { RootStackParamList } from './types';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
+import PaymentsScreen from '../screens/Payments';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 // In AppNavigator.tsx
@@ -26,6 +27,8 @@ export default function AppNavigator() {
       <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Dashboard' }} />
       <Stack.Screen name="Budgets" component={require('../screens/BudgetsScreen').default} options={{ title: 'Budgets' }}/>
       <Stack.Screen name="TxnEditor" component={TxnEditorScreen} options={{ title: 'New transaction' }}/>
+      <Stack.Screen name="Payments" component={PaymentsScreen}/>
+
       {/* Add Account etc when ready */}
     </Stack.Navigator>
   );
