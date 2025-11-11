@@ -1,77 +1,34 @@
-// src/notifications/bootstrapper.js
-import React, { useEffect, useState } from 'react';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
-import { useApp } from '../state/AppProvider';
+// src/notifications/bootstrapper.ts
 
-import * as Notifications from 'expo-notifications';
-
-Notifications.setNotificationHandler({
-  handleNotification: async (): Promise<Notifications.NotificationBehavior> => {
-    return {
-      shouldShowAlert: true,
-      shouldPlaySound: false,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    };
-  },
-});
-
-
-// Schedules a daily local notification at HH:MM (24h) local time
-async function scheduleDailyLocal(timeHHMM) {
-  const [hh, mm] = String(timeHHMM || '09:00').split(':').map((x) => parseInt(x, 10) || 0);
-  // Cancel previous schedules we manage
-  const all = await Notifications.getAllScheduledNotificationsAsync();
-  for (const n of all) {
-    if (n.identifier?.startsWith?.('DebitLens_daily_')) {
-      await Notifications.cancelScheduledNotificationAsync(n.identifier);
-    }
+/**
+ * Notification bootstrapper
+ *
+ * For now this is a no-op: we don't yet have a prefs/settings slice
+ * on the global app state, so we avoid reading state.prefs entirely.
+ *
+ * When you're ready to add notification preferences, you can expand
+ * this to listen to store changes and register/cancel notifications.
+ */
+export function attachNotificationBootstrap(
+  _store: {
+    getState: () => unknown;
+    subscribe: (listener: () => void) => void;
   }
-  await Notifications.scheduleNotificationAsync({
-    identifier: `DebitLens_daily_${hh}_${mm}`,
-    content: {
-      title: 'Daily budget check',
-      body: 'Tap to review budgets and alerts.',
-      data: { screen: 'Notifications' },
-    },
-    trigger: {
-      hour: hh,
-      minute: mm,
-      repeats: true,
-      channelId: Platform.OS === 'android' ? 'DebitLens-default' : undefined,
-    },
-  });
+): void {
+  // No-op for now – notifications prefs not wired into global state yet.
+  // Example of what could go here later:
+  //
+  // let lastState = _store.getState();
+  //
+  // _store.subscribe(() => {
+  //   const state = _store.getState();
+  //   // compare state with lastState and adjust notifications
+  //   // (e.g. schedule/cancel push notifications)
+  //   lastState = state;
+  // });
 }
 
-export default function NotificationBootstrapper() {
-  const { state } = useApp();
-
-  useEffect(() => {
-    const inExpoGo = Constants.appOwnership === 'expo';
-
-    // Local notifications are okay in Expo Go (the warnings you saw were for remote push on Android).
-    // We still skip any channel setup on web.
-    (async () => {
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('DebitLens-default', {
-          name: 'DebitLens',
-          importance: Notifications.AndroidImportance.DEFAULT,
-        });
-      }
-
-      if (!state?.prefs?.notifications?.enabled) return;
-
-      // Ask for permission (idempotent)
-      const { status } = await Notifications.requestPermissionsAsync();
-      if (status !== 'granted') return;
-
-      // (Re)schedule daily summary at the user’s preferred time
-      const t = state?.prefs?.notifications?.dailyTime || '09:00';
-      await scheduleDailyLocal(t);
-    })();
-  }, [state?.prefs?.notifications?.enabled, state?.prefs?.notifications?.dailyTime]);
-
-  return null;
-}
+// Support both named and default import styles:
+//   import { attachNotificationBootstrap } from '...'
+//   import attachNotificationBootstrap from '...'
+export default attachNotificationBootstrap;
