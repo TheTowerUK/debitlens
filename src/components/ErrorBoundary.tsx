@@ -1,5 +1,6 @@
 // src/components/ErrorBoundary.tsx
 import React from 'react';
+import { View, Text } from 'react-native';
 
 type Props = {
   children?: React.ReactNode;
@@ -20,15 +21,15 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     // log error somewhere
     console.log('ErrorBoundary caught', error, info);
   }
-
   render() {
     if (this.state.hasError) {
       return (
-        <div>
-          <h2>Something went wrong</h2>
-        </div>
+        <View>
+          <Text style={{ fontSize: 18, fontWeight: '600' }}>Something went wrong</Text>
+        </View>
       );
     }
     return this.props.children ?? null;
   }
-}
+  }
+
