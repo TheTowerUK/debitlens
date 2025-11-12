@@ -11,7 +11,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Budget'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
 type BudgetRow = {
   category: string;
