@@ -1,12 +1,11 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  Pressable,
-  TextInput,
   StyleSheet,
+  FlatList,
+  Pressable,
   Platform,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -16,217 +15,201 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { state, actions } = useApp();
-
+  const { state } = useApp();
   const accounts = state.accounts || [];
-  const allTxs = state.transactions || [];
+  const txs = state.transactions || [];
 
-  // Add-account UI
-  const [adding, setAdding] = useState(false);
-  const [newName, setNewName] = useState('');
+  const { totalBalance, totalIncome, totalExpense } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
 
-  // Total balance (all accounts)
-  const totalBalance = useMemo(() => {
-    return accounts.reduce((sum, a) => {
-      const accTxs = allTxs.filter(t => t.accountId === a.id);
-      const bal = accTxs.reduce((sub, t) => {
-        return sub + (t.type === 'income' ? t.amount : -t.amount);
-      }, 0);
-      return sum + bal;
-    }, 0);
-  }, [accounts, allTxs]);
+    for (const t of txs) {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income') {
+        income += amt;
+      } else {
+        expense += amt;
+      }
+    }
 
-  const positiveTrend = totalBalance >= 0;
+    return {
+      totalBalance: income - expense,
+      totalIncome: income,
+      totalExpense: expense,
+    };
+  }, [txs]);
 
-  const handleAddAccount = () => {
-    const trimmed = newName.trim();
-    if (!trimmed) return;
+  const recentTxs = useMemo(() => {
+    const copy = [...txs];
+    copy.sort(
+      (x, y) =>
+        (y.date ? Date.parse(y.date) : 0) -
+        (x.date ? Date.parse(x.date) : 0)
+    );
+    return copy.slice(0, 10);
+  }, [txs]);
 
-    const account = actions.addAccount(trimmed);
-    setAdding(false);
-    setNewName('');
-    navigation.navigate('Account', { accountId: account.id });
+  const handleQuickAdd = (type: 'income' | 'expense') => {
+    navigation.navigate('TxnEditor', { type });
   };
 
   return (
     <View style={styles.wrap}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.label}>Total Balance</Text>
-          <Text style={styles.total}>
-            £{Math.abs(totalBalance).toFixed(2)}
+      <Text style={styles.h1}>Base44</Text>
+      <Text style={styles.subtle}>
+        Snapshot of your accounts and recent activity.
+      </Text>
+
+      {/* Summary */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Net balance</Text>
+          <Text style={styles.summaryValue}>
+            £{totalBalance.toFixed(2)}
           </Text>
         </View>
-        <Text style={[styles.trend, positiveTrend ? styles.trendUp : styles.trendDown]}>
-          {positiveTrend ? '▲ Up' : '▼ Down'}
-        </Text>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Income</Text>
+          <Text style={[styles.summaryValue, styles.incomeText]}>
+            +£{totalIncome.toFixed(2)}
+          </Text>
+          <Text style={[styles.summaryValue, styles.expenseText]}>
+            -£{totalExpense.toFixed(2)}
+          </Text>
+        </View>
       </View>
 
-      {/* ACCOUNTS + ADD ACCOUNT */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 120 }}
-      >
-        {accounts.length === 0 && !adding && (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No accounts yet</Text>
-            <Text style={styles.emptySubtle}>
-              Create your first account to start tracking transactions.
-            </Text>
-            <Pressable
-              style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
-              onPress={() => setAdding(true)}
-            >
-              <Text style={styles.btnText}>Add account</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {accounts.map(a => {
-          const accTxs = allTxs.filter(t => t.accountId === a.id);
-
-          const bal = accTxs.reduce((sum, t) => {
-            return sum + (t.type === 'income' ? t.amount : -t.amount);
-          }, 0);
-
-          const sorted = [...accTxs].sort((x, y) =>
-            (y.date || '').localeCompare(x.date || '')
-          );
-          const lastTx = sorted[0] || null;
-          const lastDate = lastTx?.date
-            ? new Date(`${lastTx.date}T00:00:00`)
-            : null;
-
-          return (
-            <Pressable
-              key={String(a.id)}
-              style={({ pressed }) => [
-                styles.card,
-                pressed && { opacity: 0.8 },
-              ]}
-              onPress={() => navigation.navigate('Account', { accountId: a.id })}
-            >
-              <View style={styles.cardTop}>
-                <Text style={styles.cardName}>{a.name}</Text>
-                <Text
-                  style={[
-                    styles.cardBalance,
-                    bal < 0 ? styles.cardBalanceNeg : styles.cardBalancePos,
-                  ]}
-                >
-                  £{Math.abs(bal).toFixed(2)}
-                </Text>
-              </View>
-
-              {lastTx ? (
-                <Text style={styles.lastTx}>
-                  {/* Main label: note if present, otherwise Income/Expense */}
-                  {lastTx.note
-                    ? lastTx.note
-                    : lastTx.type === 'income'
-                    ? 'Income'
-                    : 'Expense'}
-
-                  {/* Optional date, as a nested Text */}
-                  {lastDate && (
-                    <Text style={styles.lastTx}>
-                      {' · '}
-                      {lastDate.toLocaleDateString()}
-                    </Text>
-                  )}
-                </Text>
-              ) : (
-                <Text style={styles.lastTxEmpty}>No transactions yet</Text>
-              )}
-
-            </Pressable>
-          );
-        })}
-
-        {/* ADD ACCOUNT INLINE FORM */}
-        {adding && (
-          <View style={styles.addBox}>
-            <Text style={styles.addLabel}>New Account Name</Text>
-            <TextInput
-              value={newName}
-              onChangeText={setNewName}
-              placeholder="e.g. Holiday Fund"
-              placeholderTextColor="#6B7280"
-              style={styles.input}
-            />
-            <View style={styles.addRow}>
-              <Pressable
-                style={[styles.btn, styles.btnGhost]}
-                onPress={() => {
-                  setAdding(false);
-                  setNewName('');
-                }}
-              >
-                <Text style={styles.btnText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.btn, styles.btnPrimary]}
-                onPress={handleAddAccount}
-              >
-                <Text style={styles.btnText}>Add</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-
-        {!adding && accounts.length > 0 && (
-          <Pressable
-            style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-            onPress={() => setAdding(true)}
-          >
-            <Text style={styles.btnText}>Add another account</Text>
-          </Pressable>
-        )}
-      </ScrollView>
-
-      {/* FLOATING ADD TRANSACTION BUTTON */}
-      <Pressable
-        style={styles.fab}
-        onPress={() => navigation.navigate('TxnEditor')}
-      >
-        <Text style={styles.fabText}>+ Transaction</Text>
-      </Pressable>
-
-      {/* FOOTER NAV MENU */}
-      <View style={styles.footer}>
+      {/* Quick actions */}
+      <View style={styles.quickRow}>
         <Pressable
-          style={[styles.footerBtn, styles.footerBtnPrimary]}
-          onPress={() => navigation.navigate('Dashboard')}
+          style={[styles.quickButton, styles.quickIncome]}
+          onPress={() => handleQuickAdd('income')}
         >
-          <Text style={styles.footerText}>Dashboard</Text>
+          <Text style={styles.quickText}>Add income</Text>
         </Pressable>
         <Pressable
-          style={[styles.footerBtn, styles.footerBtnGhost]}
-          onPress={() => navigation.navigate('History')}
+          style={[styles.quickButton, styles.quickExpense]}
+          onPress={() => handleQuickAdd('expense')}
         >
-          <Text style={styles.footerText}>History</Text>
+          <Text style={styles.quickText}>Add expense</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.quickRow}>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Payments')}
+        >
+          <Text style={styles.secondaryText}>Payments</Text>
         </Pressable>
         <Pressable
-          style={[styles.footerBtn, styles.footerBtnGhost]}
-          onPress={() => navigation.navigate('Budgets')}
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Recurring')}
         >
-          <Text style={styles.footerText}>Budgets</Text>
+          <Text style={styles.secondaryText}>Recurring</Text>
         </Pressable>
         <Pressable
-          style={[styles.footerBtn, styles.footerBtnGhost]}
-          onPress={() => navigation.navigate('Settings')}
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Budget')}
         >
-          <Text style={styles.footerText}>Settings</Text>
+          <Text style={styles.secondaryText}>Budgets</Text>
         </Pressable>
         <Pressable
-          style={[styles.footerBtn, styles.footerBtnGhost]}
+          style={styles.secondaryButton}
           onPress={() => navigation.navigate('Reports')}
         >
-          <Text style={styles.footerText}>Reports</Text>
+          <Text style={styles.secondaryText}>Reports</Text>
         </Pressable>
-
       </View>
+
+      {/* Accounts */}
+      <Text style={styles.sectionTitle}>Accounts</Text>
+      {accounts.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>No accounts yet</Text>
+          <Text style={styles.emptyText}>
+            Once you add accounts, they&apos;ll appear here with their
+            balances.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={accounts}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(a) => a.id}
+          contentContainerStyle={{ paddingVertical: 8 }}
+          renderItem={({ item }) => {
+            const accTxs = txs.filter((t) => t.accountId === item.id);
+            const bal = accTxs.reduce((sum, t) => {
+              return sum + (t.type === 'income' ? t.amount : -t.amount);
+            }, 0);
+
+            return (
+              <Pressable
+                style={styles.accountCard}
+                onPress={() =>
+                  navigation.navigate('Account', { accountId: item.id })
+                }
+              >
+                <Text style={styles.accountName}>{item.name}</Text>
+                <Text style={styles.accountBalance}>
+                  £{Number(bal).toFixed(2)}
+                </Text>
+                <Text style={styles.accountMeta}>
+                  {accTxs.length} transaction
+                  {accTxs.length === 1 ? '' : 's'}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+      )}
+
+      {/* Recent transactions */}
+      <Text style={styles.sectionTitle}>Recent activity</Text>
+      {recentTxs.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>No activity yet</Text>
+          <Text style={styles.emptyText}>
+            Add income or expenses to see them listed here.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recentTxs}
+          keyExtractor={(t) => t.id}
+          contentContainerStyle={{ paddingBottom: 32 }}
+          renderItem={({ item }) => {
+            const isIncome = item.type === 'income';
+            const sign = isIncome ? '+' : '-';
+            const label = item.category || 'Uncategorised';
+            const note = item.note || '';
+
+            return (
+              <View style={styles.txRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txLabel}>{label}</Text>
+                  {note ? (
+                    <Text style={styles.txNote}>{note}</Text>
+                  ) : null}
+                  {item.date ? (
+                    <Text style={styles.txMeta}>{item.date}</Text>
+                  ) : null}
+                </View>
+                <Text
+                  style={[
+                    styles.txAmount,
+                    isIncome ? styles.incomeText : styles.expenseText,
+                  ]}
+                >
+                  {sign}£{Number(item.amount).toFixed(2)}
+                </Text>
+              </View>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -234,190 +217,159 @@ export default function DashboardScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
+    backgroundColor: '#020617',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 52 : 24,
+    paddingTop: Platform.OS === 'ios' ? 56 : 24,
   },
-  header: {
+  h1: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  subtle: {
+    color: '#9CA3AF',
     marginBottom: 16,
+  },
+  summaryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    marginBottom: 12,
   },
-  label: {
-    color: '#9CA3AF',
-    fontSize: 14,
-  },
-  total: {
-    color: '#F9FAFB',
-    fontSize: 28,
-    fontWeight: '800',
-    marginTop: 4,
-  },
-  trend: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  trendUp: {
-    color: '#4ADE80',
-  },
-  trendDown: {
-    color: '#F97373',
-  },
-  scroll: {
+  summaryCard: {
     flex: 1,
-  },
-  fab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 70, // a bit above footer so they don’t overlap
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 999,
-    backgroundColor: '#2563EB',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  fabText: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  // Account cards
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardName: {
-    color: '#F9FAFB',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  cardBalance: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  cardBalancePos: {
-    color: '#4ADE80',
-  },
-  cardBalanceNeg: {
-    color: '#F97373',
-  },
-  lastTx: {
-    color: '#9CA3AF',
-    fontSize: 13,
-    marginTop: 6,
-  },
-  lastTxEmpty: {
-    color: '#6B7280',
-    fontSize: 13,
-    marginTop: 6,
-  },
-
-  // Add account box
-  addBox: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 12,
-  },
-  addLabel: {
-    color: '#9CA3AF',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
-    borderColor: '#1F2937',
-    borderWidth: 1,
-    borderRadius: 10,
     padding: 12,
-    marginBottom: 8,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 8,
   },
-  addRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
+  summaryLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 4,
   },
-
-  // Buttons
-  btn: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: '#2563EB',
-  },
-  btnGhost: {
-    backgroundColor: '#1F2937',
-  },
-  btnText: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-  },
-
-  // Empty state
-  emptyCard: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  emptyTitle: {
+  summaryValue: {
     color: '#F9FAFB',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  emptySubtle: {
-    color: '#9CA3AF',
-    marginTop: 4,
+  incomeText: {
+    color: '#22C55E',
   },
-
-  // Footer nav
-  footer: {
-    borderTopWidth: 1,
-    borderColor: '#111827',
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 16 : 10,
-    marginTop: 4,
+  expenseText: {
+    color: '#F97373',
+  },
+  quickRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 6,
+    marginBottom: 12,
+    flexWrap: 'wrap',
   },
-  footerBtn: {
+  quickButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: 999,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 8,
   },
-  footerBtnPrimary: {
-    backgroundColor: '#2563EB',
+  quickIncome: {
+    backgroundColor: 'rgba(22, 163, 74, 0.2)',
   },
-  footerBtnGhost: {
-    backgroundColor: '#020617',
+  quickExpense: {
+    backgroundColor: 'rgba(220, 38, 38, 0.2)',
   },
-  footerText: {
+  quickText: {
     color: '#F9FAFB',
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 13,
+  },
+  secondaryButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 8,
+    marginTop: 4,
+  },
+  secondaryText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  emptyBox: {
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
+  },
+  emptyTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+  },
+  accountCard: {
+    width: 180,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 10,
+  },
+  accountName: {
+    color: '#F9FAFB',
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  accountBalance: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  accountMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#111827',
+  },
+  txLabel: {
+    color: '#F9FAFB',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  txNote: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  txMeta: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  txAmount: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 12,
   },
 });

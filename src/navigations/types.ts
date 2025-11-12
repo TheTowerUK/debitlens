@@ -12,6 +12,10 @@ export type RootStackParamList = {
   Recurring?: undefined;
   Payments: undefined;  
   SplashAuth: undefined;
-  TxnTxnEditor: { id?: string; accountId?: string; type?: 'income' | 'expense' };
-  TxnEditor?: { txId?: string; accountId?: string };
+  Budget: undefined;
+  TxnEditor: {
+    id?: string;                    // used by TxnEditorScreen as params.id
+    accountId?: string;
+    type?: 'income' | 'expense';    // used by Dashboard quick-add
+  };
 };

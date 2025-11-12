@@ -13,14 +13,13 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-// If your route is still called "Login" in the navigator, this is correct.
-// If you *do* have a "SplashAuth" route in RootStackParamList, change 'Login' to 'SplashAuth'.
+// Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export default function SplashAuthScreen({ navigation }: Props) {
   const { getPin, setPin } = useApp();
 
-  // Use a simple string type to avoid TSX parsing issues with string literal unions
+  // Use simple string modes: 'loading' | 'sign' | 'pin'
   const [mode, setMode] = useState<string>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -33,10 +32,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
       try {
         const stored = await getPin();
         if (!mounted) return;
-        setMode(stored ? 'signin' : 'setpin');
+        setMode(stored ? 'sign' : 'pin');
       } catch {
         if (!mounted) return;
-        setMode('signin');
+        setMode('sign');
       }
     })();
 
@@ -50,7 +49,6 @@ export default function SplashAuthScreen({ navigation }: Props) {
       const stored = await getPin();
       const entered = pin.trim();
 
-      // Only allow if there *is* a stored PIN and it matches
       if (stored && stored.trim() === entered) {
         navigation.replace('Dashboard');
       } else {
@@ -91,16 +89,18 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
   const isValidPin = /^\d{4,6}$/.test(pin.trim());
 
+  const isSignMode = mode === 'sign';
+
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Welcome</Text>
       <Text style={styles.subtle}>
-        {mode === 'signin'
+        {isSignMode
           ? 'Enter your PIN to continue'
           : 'Create a PIN for quick access'}
       </Text>
 
-      {mode === 'signin' ? (
+      {isSignMode ? (
         <>
           <TextInput
             value={pin}
@@ -124,7 +124,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
             style={[styles.ghost, { marginTop: 8 }]}
             onPress={() => {
               setPinInput('');
-              setMode('setpin');
+              setMode('pin');
             }}
           >
             <Text style={styles.ghostText}>Set / Change PIN</Text>
@@ -171,7 +171,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
             onPress={() => {
               setPinInput('');
               setConfirm('');
-              setMode('signin');
+              setMode('sign');
             }}
           >
             <Text style={styles.ghostText}>Back to Sign In</Text>
