@@ -7,6 +7,7 @@ import {
   FlatList,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -38,6 +39,21 @@ export default function DashboardScreen({ navigation }: Props) {
       totalExpense: expense,
     };
   }, [txs]);
+
+const goAddAccount = () => {
+  // Check what routes this navigator actually has
+  const routeNames = (navigation.getState?.() as any)?.routeNames as string[] | undefined;
+
+  if (routeNames?.includes('AddAccount')) {
+    navigation.navigate('AddAccount');
+  } else {
+    Alert.alert(
+      'Add account unavailable',
+      'This app does not include an Add Account screen. You can remove this button, or add an AddAccount route later.'
+    );
+  }
+};
+
 
   const recentTxs = useMemo(() => {
     const copy = [...txs];
@@ -83,7 +99,7 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.quickRow}>
         <Pressable
           style={[styles.secondaryButton, styles.addAccountButton]}
-          onPress={() => navigation.navigate('AddAccount')}
+          onPress={goAddAccount}
         >
           <Text style={[styles.secondaryText, styles.addAccountText]}>
             Add account
@@ -91,7 +107,6 @@ export default function DashboardScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      {/* Section divider */}
       <View style={styles.sectionDivider} />
 
 
