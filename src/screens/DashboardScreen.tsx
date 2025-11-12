@@ -80,8 +80,6 @@ export default function DashboardScreen({ navigation }: Props) {
       </View>
 
       {/* Quick actions */}
-
-      {/* Quick actions */}
       <View style={styles.quickRow}>
         <Pressable
           style={[styles.secondaryButton, styles.addAccountButton]}
