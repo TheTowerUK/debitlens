@@ -55,7 +55,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>Base44</Text>
+      <Text style={styles.h1}>DebitLens</Text>
       <Text style={styles.subtle}>
         Snapshot of your accounts and recent activity.
       </Text>
