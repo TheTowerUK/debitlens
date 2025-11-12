@@ -80,6 +80,17 @@ export default function DashboardScreen({ navigation }: Props) {
       </View>
 
       {/* Quick actions */}
+
+      <View style={styles.quickRow}>
+        {/* existing quick buttons */}
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('AddAccount')}
+        >
+          <Text style={styles.secondaryText}>Add account</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.quickRow}>
         <Pressable
           style={[styles.quickButton, styles.quickIncome]}
@@ -110,7 +121,7 @@ export default function DashboardScreen({ navigation }: Props) {
         </Pressable>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Budget')}
+          onPress={() => navigation.navigate('Budgets')}
         >
           <Text style={styles.secondaryText}>Budgets</Text>
         </Pressable>
