@@ -23,37 +23,13 @@ export default function DashboardScreen({ navigation }: Props) {
   const { totalBalance, totalIncome, totalExpense } = useMemo(() => {
     let income = 0;
     let expense = 0;
-
     for (const t of txs) {
       const amt = Number(t.amount) || 0;
-      if (t.type === 'income') {
-        income += amt;
-      } else {
-        expense += amt;
-      }
+      if (t.type === 'income') income += amt;
+      else expense += amt;
     }
-
-    return {
-      totalBalance: income - expense,
-      totalIncome: income,
-      totalExpense: expense,
-    };
+    return { totalBalance: income - expense, totalIncome: income, totalExpense: expense };
   }, [txs]);
-
-const goAddAccount = () => {
-  // Check what routes this navigator actually has
-  const routeNames = (navigation.getState?.() as any)?.routeNames as string[] | undefined;
-
-  if (routeNames?.includes('AddAccount')) {
-    navigation.navigate('AddAccount');
-  } else {
-    Alert.alert(
-      'Add account unavailable',
-      'This app does not include an Add Account screen. You can remove this button, or add an AddAccount route later.'
-    );
-  }
-};
-
 
   const recentTxs = useMemo(() => {
     const copy = [...txs];
@@ -69,23 +45,32 @@ const goAddAccount = () => {
     navigation.navigate('TxnEditor', { type });
   };
 
+  // Safe handler for AddAccount (no warning if route not registered)
+  const goAddAccount = () => {
+    const routeNames = (navigation.getState?.() as any)?.routeNames as string[] | undefined;
+    if (routeNames?.includes('AddAccount')) {
+      navigation.navigate('AddAccount');
+    } else {
+      Alert.alert(
+        'Add account unavailable',
+        'This build does not include an Add Account screen yet.'
+      );
+    }
+  };
+
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>DebitLens</Text>
-      <Text style={styles.subtle}>
-        Snapshot of your accounts and recent activity.
-      </Text>
+      <Text style={styles.h1}>Debit Lens</Text>
+      <Text style={styles.subtle}>Snapshot of your accounts and recent activity.</Text>
 
       {/* Summary */}
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Net balance</Text>
-          <Text style={styles.summaryValue}>
-            £{totalBalance.toFixed(2)}
-          </Text>
+          <Text style={styles.summaryValue}>£{totalBalance.toFixed(2)}</Text>
         </View>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Income</Text>
+          <Text style={styles.summaryLabel}>Income / Spending</Text>
           <Text style={[styles.summaryValue, styles.incomeText]}>
             +£{totalIncome.toFixed(2)}
           </Text>
@@ -95,21 +80,7 @@ const goAddAccount = () => {
         </View>
       </View>
 
-      {/* Quick actions */}
-      <View style={styles.quickRow}>
-        <Pressable
-          style={[styles.secondaryButton, styles.addAccountButton]}
-          onPress={goAddAccount}
-        >
-          <Text style={[styles.secondaryText, styles.addAccountText]}>
-            Add account
-          </Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.sectionDivider} />
-
-
+      {/* Quick add */}
       <View style={styles.quickRow}>
         <Pressable
           style={[styles.quickButton, styles.quickIncome]}
@@ -125,6 +96,7 @@ const goAddAccount = () => {
         </Pressable>
       </View>
 
+      {/* Navigation pills */}
       <View style={styles.quickRow}>
         <Pressable
           style={styles.secondaryButton}
@@ -144,6 +116,21 @@ const goAddAccount = () => {
         >
           <Text style={styles.secondaryText}>Budgets</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.quickRow}>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Text style={styles.secondaryText}>Settings</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Text style={styles.secondaryText}>Notifications</Text>
+        </Pressable>
         <Pressable
           style={styles.secondaryButton}
           onPress={() => navigation.navigate('Reports')}
@@ -152,14 +139,26 @@ const goAddAccount = () => {
         </Pressable>
       </View>
 
+      {/* Add account (wide) */}
+      <View style={styles.quickRow}>
+        <Pressable
+          style={[styles.secondaryButton, styles.addAccountButton]}
+          onPress={goAddAccount}
+        >
+          <Text style={[styles.secondaryText, styles.addAccountText]}>
+            Add account
+          </Text>
+        </Pressable>
+      </View>
+      <View style={styles.sectionDivider} />
+
       {/* Accounts */}
       <Text style={styles.sectionTitle}>Accounts</Text>
       {accounts.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyTitle}>No accounts yet</Text>
           <Text style={styles.emptyText}>
-            Once you add accounts, they&apos;ll appear here with their
-            balances.
+            Once you add accounts, they&apos;ll appear here with their balances.
           </Text>
         </View>
       ) : (
@@ -171,24 +170,16 @@ const goAddAccount = () => {
           contentContainerStyle={{ paddingVertical: 8 }}
           renderItem={({ item }) => {
             const accTxs = txs.filter((t) => t.accountId === item.id);
-            const bal = accTxs.reduce((sum, t) => {
-              return sum + (t.type === 'income' ? t.amount : -t.amount);
-            }, 0);
-
+            const bal = accTxs.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
             return (
               <Pressable
                 style={styles.accountCard}
-                onPress={() =>
-                  navigation.navigate('Account', { accountId: item.id })
-                }
+                onPress={() => navigation.navigate('Account', { accountId: item.id })}
               >
                 <Text style={styles.accountName}>{item.name}</Text>
-                <Text style={styles.accountBalance}>
-                  £{Number(bal).toFixed(2)}
-                </Text>
+                <Text style={styles.accountBalance}>£{Number(bal).toFixed(2)}</Text>
                 <Text style={styles.accountMeta}>
-                  {accTxs.length} transaction
-                  {accTxs.length === 1 ? '' : 's'}
+                  {accTxs.length} transaction{accTxs.length === 1 ? '' : 's'}
                 </Text>
               </Pressable>
             );
@@ -215,17 +206,12 @@ const goAddAccount = () => {
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
             const note = item.note || '';
-
             return (
               <View style={styles.txRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txLabel}>{label}</Text>
-                  {note ? (
-                    <Text style={styles.txNote}>{note}</Text>
-                  ) : null}
-                  {item.date ? (
-                    <Text style={styles.txMeta}>{item.date}</Text>
-                  ) : null}
+                  {note ? <Text style={styles.txNote}>{note}</Text> : null}
+                  {item.date ? <Text style={styles.txMeta}>{item.date}</Text> : null}
                 </View>
                 <Text
                   style={[
@@ -245,28 +231,6 @@ const goAddAccount = () => {
 }
 
 const styles = StyleSheet.create({
-  addAccountButton: {
-  flex: 1,                // take the full row width
-  paddingVertical: 12,    // a touch taller
-  paddingHorizontal: 14,  // a bit wider
-  borderRadius: 14,       // slightly more rounded
-  alignSelf: 'stretch',   // ensure it stretches in the row
-  backgroundColor: '#0F172A', // subtle fill to feel “pill”
-  borderColor: '#243041',     // slightly stronger border than default
-  },
-
-  addAccountText: {
-    fontSize: 14,          // was 12 in secondaryText; a bit larger
-    fontWeight: '800',     // stronger weight for emphasis
-    letterSpacing: 0.2,
-  },
-
-  sectionDivider: {
-    height: 1,
-    backgroundColor: '#111827',
-    marginTop: 10,
-    marginBottom: 12,
-  },
   wrap: {
     flex: 1,
     backgroundColor: '#020617',
@@ -279,14 +243,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
-  subtle: {
-    color: '#9CA3AF',
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
+  subtle: { color: '#9CA3AF', marginBottom: 16 },
+
+  summaryRow: { flexDirection: 'row', marginBottom: 12 },
   summaryCard: {
     flex: 1,
     padding: 12,
@@ -296,27 +255,13 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     marginRight: 8,
   },
-  summaryLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    color: '#F9FAFB',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  incomeText: {
-    color: '#22C55E',
-  },
-  expenseText: {
-    color: '#F97373',
-  },
-  quickRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    flexWrap: 'wrap',
-  },
+  summaryLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 4 },
+  summaryValue: { color: '#F9FAFB', fontSize: 16, fontWeight: '800' },
+
+  incomeText: { color: '#22C55E' },
+  expenseText: { color: '#F97373' },
+
+  quickRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
   quickButton: {
     flex: 1,
     paddingVertical: 10,
@@ -324,17 +269,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
-  quickIncome: {
-    backgroundColor: 'rgba(22, 163, 74, 0.2)',
-  },
-  quickExpense: {
-    backgroundColor: 'rgba(220, 38, 38, 0.2)',
-  },
-  quickText: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-    fontSize: 13,
-  },
+  quickIncome: { backgroundColor: 'rgba(22, 163, 74, 0.2)' },
+  quickExpense: { backgroundColor: 'rgba(220, 38, 38, 0.2)' },
+  quickText: { color: '#F9FAFB', fontWeight: '700', fontSize: 13 },
+
   secondaryButton: {
     paddingVertical: 8,
     paddingHorizontal: 10,
@@ -344,18 +282,23 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginTop: 4,
   },
-  secondaryText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '600',
+  secondaryText: { color: '#E5E7EB', fontSize: 12, fontWeight: '600' },
+
+  // Add account pill tweaks + divider
+  addAccountButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    alignSelf: 'stretch',
+    backgroundColor: '#0F172A',
+    borderColor: '#243041',
   },
-  sectionTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 6,
-  },
+  addAccountText: { fontSize: 14, fontWeight: '800', letterSpacing: 0.2 },
+  sectionDivider: { height: 1, backgroundColor: '#111827', marginTop: 10, marginBottom: 12 },
+
+  sectionTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '700', marginTop: 8, marginBottom: 6 },
+
   emptyBox: {
     marginTop: 8,
     marginBottom: 16,
@@ -363,16 +306,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#0F172A',
   },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-  },
+  emptyTitle: { color: '#E5E7EB', fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  emptyText: { color: '#9CA3AF', fontSize: 14 },
+
   accountCard: {
     width: 180,
     padding: 12,
@@ -382,22 +318,10 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     marginRight: 10,
   },
-  accountName: {
-    color: '#F9FAFB',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  accountBalance: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  accountMeta: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
+  accountName: { color: '#F9FAFB', fontSize: 15, fontWeight: '700', marginBottom: 4 },
+  accountBalance: { color: '#E5E7EB', fontSize: 16, fontWeight: '800', marginBottom: 2 },
+  accountMeta: { color: '#9CA3AF', fontSize: 12 },
+
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -405,23 +329,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#111827',
   },
-  txLabel: {
-    color: '#F9FAFB',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  txNote: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  txMeta: {
-    color: '#6B7280',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  txAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginLeft: 12,
-  },
+  txLabel: { color: '#F9FAFB', fontSize: 14, fontWeight: '700' },
+  txNote: { color: '#9CA3AF', fontSize: 12 },
+  txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
+  txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
 });
