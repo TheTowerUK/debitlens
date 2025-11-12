@@ -81,15 +81,21 @@ export default function DashboardScreen({ navigation }: Props) {
 
       {/* Quick actions */}
 
+      {/* Quick actions */}
       <View style={styles.quickRow}>
-        {/* existing quick buttons */}
         <Pressable
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, styles.addAccountButton]}
           onPress={() => navigation.navigate('AddAccount')}
         >
-          <Text style={styles.secondaryText}>Add account</Text>
+          <Text style={[styles.secondaryText, styles.addAccountText]}>
+            Add account
+          </Text>
         </Pressable>
       </View>
+
+      {/* Section divider */}
+      <View style={styles.sectionDivider} />
+
 
       <View style={styles.quickRow}>
         <Pressable
@@ -226,6 +232,28 @@ export default function DashboardScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  addAccountButton: {
+  flex: 1,                // take the full row width
+  paddingVertical: 12,    // a touch taller
+  paddingHorizontal: 14,  // a bit wider
+  borderRadius: 14,       // slightly more rounded
+  alignSelf: 'stretch',   // ensure it stretches in the row
+  backgroundColor: '#0F172A', // subtle fill to feel “pill”
+  borderColor: '#243041',     // slightly stronger border than default
+  },
+
+  addAccountText: {
+    fontSize: 14,          // was 12 in secondaryText; a bit larger
+    fontWeight: '800',     // stronger weight for emphasis
+    letterSpacing: 0.2,
+  },
+
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#111827',
+    marginTop: 10,
+    marginBottom: 12,
+  },
   wrap: {
     flex: 1,
     backgroundColor: '#020617',
