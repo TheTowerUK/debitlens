@@ -1,16 +1,10 @@
 // src/screens/NotificationScreen.tsx
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Switch,
-  Platform,
-} from 'react-native';
+import {  View,  Text,  StyleSheet,  Switch,  Platform,} from 'react-native';
 // If you want to use the app context later, you can:
 // import { useApp } from '../state/AppProvider';
 
-export default function NotificationScreen() {
+export default function NotificationsScreen() {
   // Local UI state for now – avoids relying on missing AppState/AppActions fields
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);

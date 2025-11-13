@@ -1,12 +1,6 @@
 // src/screens/Payments.tsx
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Platform,
-} from 'react-native';
+import {  View,  Text,  StyleSheet,  FlatList,  Platform,} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';

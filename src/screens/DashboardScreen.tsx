@@ -1,14 +1,6 @@
 // src/screens/DashboardScreen.tsx
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  Platform,
-  Alert,
-} from 'react-native';
+import {  View,  Text,  StyleSheet,  FlatList,  Pressable,  Platform,  Alert,} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
@@ -117,6 +109,7 @@ const go = (route: keyof RootStackParamList, params?: any) => {
       </View>
 
       {/* Navigation pills */}
+      
       <View style={styles.quickRow}>
         <Pressable
           style={styles.secondaryButton}
@@ -136,15 +129,15 @@ const go = (route: keyof RootStackParamList, params?: any) => {
         >
           <Text style={styles.secondaryText}>Budgets</Text>
         </Pressable>
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Reports')}
+        >
+          <Text style={styles.secondaryText}>Reports</Text>
+        </Pressable>
       </View>
 
       <View style={styles.quickRow}>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Settings')}
-        >
-          <Text style={styles.secondaryText}>Settings</Text>
-        </Pressable>
         <Pressable
           style={styles.secondaryButton}
           onPress={() => navigation.navigate('Notifications')}
@@ -153,9 +146,9 @@ const go = (route: keyof RootStackParamList, params?: any) => {
         </Pressable>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Reports')}
+          onPress={() => navigation.navigate('Settings')}
         >
-          <Text style={styles.secondaryText}>Reports</Text>
+          <Text style={styles.secondaryText}>Settings</Text>
         </Pressable>
       </View>
 

@@ -1,12 +1,6 @@
 // src/screens/BudgetScreen.tsx
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Platform,
-} from 'react-native';
+import {  View,  Text,  StyleSheet,  FlatList,  Platform,} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
@@ -19,7 +13,7 @@ type BudgetRow = {
   expense: number;
 };
 
-export default function BudgetScreen({}: Props) {
+export default function BudgetsScreen({}: Props) {
   const { state } = useApp();
   const txs = state.transactions || [];
 
