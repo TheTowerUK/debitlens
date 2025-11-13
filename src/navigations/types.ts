@@ -1,25 +1,31 @@
-// src/navigations/types.ts
 export type RootStackParamList = {
+  // Auth / Home
   Login: undefined;
   Dashboard: undefined;
-  //Accounts
-  Account: { accountId: string };
-  AddAccount: undefined;
 
-  //Editor
-  TxnEditor: { id?: string; accountId?: string; type?: 'income' | 'expense';    // used by Dashboard quick-add
+  // Accounts
+  Account: { accountId: string };
+  AddAccount: undefined;     // only include if you actually register it
+
+  // Editor
+  TxnEditor: {
+    id?: string;
+    txId?: string;
+    accountId?: string;
+    type?: 'income' | 'expense';
   };
 
-  //Dashboard Navigations
-  Budgets?: undefined;
-  Recurring?: undefined;
-  Payments: undefined;  
+  // Dashboard-linked
+  Payments: undefined;
+  Recurring: undefined;
+  Budgets: undefined;
 
-  //Other Screens
-  SplashAuth: undefined;
-  Notifications?: undefined;
+  // Other
+  Notifications: undefined;
   Settings: undefined;
-  ImportCSV: undefined;
-  History: undefined;
-  Reports?: undefined;
+  Reports: undefined;
+
+  // Keep only if you register the screens:
+  // ImportCSV: undefined;
+  // History: undefined;
 };

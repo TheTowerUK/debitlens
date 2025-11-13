@@ -1,4 +1,4 @@
-// src/screens/Payments.tsx
+// src/screens/PaymentsScreen.tsx
 import React from 'react';
 import {  View,  Text,  StyleSheet,  FlatList,  Platform,} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
