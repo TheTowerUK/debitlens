@@ -1,13 +1,6 @@
 // src/screens/RecurringScreen.tsx
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Pressable,
-  Platform,
-} from 'react-native';
+import {  View,  Text,  StyleSheet,  FlatList,  Pressable,  Platform,} from 'react-native';
 
 // We deliberately *do not* use useApp/AppState here yet, to avoid
 // relying on non-existent state.recurring or actions.addRecurring, etc.

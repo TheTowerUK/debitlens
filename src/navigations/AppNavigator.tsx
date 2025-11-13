@@ -8,12 +8,12 @@ import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 
 // Features
-import PaymentsScreen from '../screens/Payments';
+import PaymentsScreen from '../screens/PaymentsScreen';
 import RecurringScreen from '../screens/RecurringScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
-import NotificationsScreen from '../screens/NotificationsScreen'; // or alias import from NavigationsScreen
+import NotificationsScreen from '../screens/NotificationsScreen'; 
 
 // Temporary placeholders
 import { Text, View } from 'react-native';
