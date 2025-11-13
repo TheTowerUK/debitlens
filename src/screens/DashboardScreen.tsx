@@ -95,7 +95,7 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.quickRow}>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Budgets')}
+          onPress={() => navigation.navigate('Payments')}
         >
           <Text style={styles.secondaryText}>Payments</Text>
         </Pressable>
