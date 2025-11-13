@@ -37,7 +37,7 @@ export default function AppNavigator() {
   const Screen = RootStack.Screen;
 
   return (
-
+    
     <Navigator
       initialRouteName="Login"
       screenOptions={{

@@ -7,10 +7,7 @@ export type RootStackParamList = {
   AddAccount: undefined;
 
   //Editor
-  TxnEditor: {
-    id?: string;                    // used by TxnEditorScreen as params.id
-    accountId?: string;
-    type?: 'income' | 'expense';    // used by Dashboard quick-add
+  TxnEditor: { id?: string; accountId?: string; type?: 'income' | 'expense';    // used by Dashboard quick-add
   };
 
   //Dashboard Navigations
