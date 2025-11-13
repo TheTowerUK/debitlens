@@ -50,25 +50,7 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   };
 
-const go = (route: keyof RootStackParamList, params?: any) => {
-  // 1) Try current navigator
-  const current = (navigation.getState?.() as any)?.routeNames as string[] | undefined;
-  if (current?.includes(route as string)) {
-    // @ts-ignore
-    navigation.navigate(route, params);
-    return;
-  }
-  // 2) Try immediate parent
-  const parent = navigation.getParent?.();
-  const parentRoutes = parent?.getState?.().routeNames as string[] | undefined;
-  if (parent && parentRoutes?.includes(route as string)) {
-    // @ts-ignore
-    parent.navigate(route as never, params as never);
-    return;
-  }
-  // 3) Friendly fallback
-  Alert.alert('Screen unavailable', `No "${route}" screen in the current navigator.`);
-};
+
 
   return (
     <View style={styles.wrap}>
