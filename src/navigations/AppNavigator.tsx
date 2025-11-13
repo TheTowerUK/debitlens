@@ -13,19 +13,13 @@ import RecurringScreen from '../screens/RecurringScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
-// File name is NavigationsScreen.tsx; import it *as* NotificationsScreen
-import NotificationsScreen from '../screens/NotificationsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen'; // or alias import from NavigationsScreen
 
-// Placeholders (until real screens wired)
+// Temporary placeholders
 import { Text, View } from 'react-native';
 const AccountScreen = () => (
   <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
     <Text style={{ color: '#fff' }}>Account — coming soon</Text>
-  </View>
-);
-const AddAccountScreen = () => (
-  <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-    <Text style={{ color: '#fff' }}>Add Account — coming soon</Text>
   </View>
 );
 const ReportsScreen = () => (
@@ -34,39 +28,43 @@ const ReportsScreen = () => (
   </View>
 );
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+// Use a fresh name to avoid any accidental collisions
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
+  // Narrow TS to ignore the bogus 'id' prop requirement from prior inference
+  const Navigator = RootStack.Navigator as unknown as React.ComponentType<any>;
+  const Screen = RootStack.Screen;
+
   return (
-    <Stack.Navigator
-      id={undefined} // <-- add this back to satisfy the inferred prop requirement
+
+    <Navigator
       initialRouteName="Login"
       screenOptions={{
-        headerBackTitle: '',
         headerShown: false,
+        headerBackTitle: '',
         contentStyle: { backgroundColor: '#020617' },
       }}
     >
       {/* Auth / Home */}
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      <Screen name="Login" component={LoginScreen} />
+      <Screen name="Dashboard" component={DashboardScreen} />
 
       {/* Accounts */}
-      <Stack.Screen name="Account" component={AccountScreen} />
-      <Stack.Screen name="AddAccount" component={AddAccountScreen} />
+      <Screen name="Account" component={AccountScreen} />
 
       {/* Editor */}
-      <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
+      <Screen name="TxnEditor" component={TxnEditorScreen} />
 
-      {/* Dashboard navigations */}
-      <Stack.Screen name="Payments" component={PaymentsScreen} />
-      <Stack.Screen name="Recurring" component={RecurringScreen} />
-      <Stack.Screen name="Budgets" component={BudgetsScreen} />
+      {/* Dashboard-linked */}
+      <Screen name="Payments" component={PaymentsScreen} />
+      <Screen name="Recurring" component={RecurringScreen} />
+      <Screen name="Budgets" component={BudgetsScreen} />
+      <Screen name="Notifications" component={NotificationsScreen} />
 
       {/* Other */}
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="Reports" component={ReportsScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
-    </Stack.Navigator>
+      <Screen name="Settings" component={SettingsScreen} />
+      <Screen name="Reports" component={ReportsScreen} />
+    </Navigator>
   );
 }
