@@ -57,7 +57,7 @@ export default function AppNavigator() {
       <Screen name="TxnEditor" component={TxnEditorScreen} />
 
       {/* Dashboard-linked */}
-      <Screen name="Payments" component={BudgetsScreen} />
+      <Screen name="Payments" component={PaymentsScreen} />
       <Screen name="Recurring" component={RecurringScreen} />
       <Screen name="Budgets" component={BudgetsScreen} />
       <Screen name="Notifications" component={NotificationsScreen} />

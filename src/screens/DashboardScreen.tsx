@@ -8,6 +8,9 @@ import { useApp } from '../state/AppProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
+  
+  
+  
   const { state } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
@@ -50,7 +53,21 @@ export default function DashboardScreen({ navigation }: Props) {
     }
   };
 
-
+  const go = (route: keyof RootStackParamList, params?: any) => {
+    const current = (navigation.getState?.() as any)?.routeNames as string[] | undefined;
+    if (current?.includes(route as string)) {
+      // @ts-ignore
+      navigation.navigate(route, params);
+      return;
+    }
+    const parentNav: any = navigation.getParent?.();
+    const parentRoutes = parentNav?.getState?.()?.routeNames as string[] | undefined;
+    if (parentNav && parentRoutes?.includes(route as string)) {
+      parentNav.navigate(route as never, params as never);
+      return;
+    }
+    Alert.alert('Screen unavailable', `No "${route}" screen in the current navigator.`);
+  };
 
   return (
     <View style={styles.wrap}>
@@ -78,6 +95,7 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.quickRow}>
         <Pressable
           style={[styles.quickButton, styles.quickIncome]}
+
           onPress={() => handleQuickAdd('income')}
         >
           <Text style={styles.quickText}>Add income</Text>
@@ -91,45 +109,32 @@ export default function DashboardScreen({ navigation }: Props) {
       </View>
 
       {/* Navigation pills */}
-      
+
       <View style={styles.quickRow}>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Payments')}
-        >
+        <Pressable style={styles.secondaryButton} onPress={() => go('Payments')}>
           <Text style={styles.secondaryText}>Payments</Text>
         </Pressable>
         <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Recurring')}
-        >
-          <Text style={styles.secondaryText}>Recurring</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Budgets')}
-        >
+          style={styles.secondaryButton} onPress={() => go('Budgets')} >
           <Text style={styles.secondaryText}>Budgets</Text>
         </Pressable>
         <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Reports')}
-        >
+          style={styles.secondaryButton} onPress={() => go('Reports')}        >
           <Text style={styles.secondaryText}>Reports</Text>
         </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => go('Recurring')}>
+          <Text style={styles.secondaryText}>Recurring</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => go('Notifications')}>
+          <Text style={styles.secondaryText}>Notifications</Text>
+        </Pressable>
+
       </View>
 
       <View style={styles.quickRow}>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Text style={styles.secondaryText}>Notifications</Text>
-        </Pressable>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={() => navigation.navigate('Settings')}
-        >
+          onPress={() => navigation.navigate('Settings')}        >
           <Text style={styles.secondaryText}>Settings</Text>
         </Pressable>
       </View>
