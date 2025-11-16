@@ -14,6 +14,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen'; 
 import RecurringScreen from '../screens/RecurringScreen';
+import RecurringEditorScreen from '../screens/RecurringEditorScreen';
+
 
 // Temporary placeholders
 import { Text, View } from 'react-native';
@@ -61,10 +63,12 @@ export default function AppNavigator() {
       <Screen name="Recurring" component={RecurringScreen} />
       <Screen name="Budgets" component={BudgetsScreen} />
       <Screen name="Notifications" component={NotificationsScreen} />
-
+      <Screen name="RecurringEditor" component={RecurringEditorScreen} />
       {/* Other */}
       <Screen name="Settings" component={SettingsScreen} />
       <Screen name="Reports" component={ReportsScreen} />
+
+
     </Navigator>
   );
 }

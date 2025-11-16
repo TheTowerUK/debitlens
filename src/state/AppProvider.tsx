@@ -21,39 +21,50 @@ export type Transaction = {
   type: 'income' | 'expense';
   date: string;
   note?: string | null;
-  category?: string | null; // ← NEW, optional
+  category?: string | null;
 };
 
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type RecurringKind = 'income' | 'expense';
 
-export type AppState = {
-  accounts: Account[];
-  transactions: Transaction[];
-};
+export interface RecurringItem {
+  id: string;
+  title: string;
+  amount: number;
+  frequency: RecurringFrequency;
+  accountId?: string;
+  nextDueDate?: string; // ISO string
+  type?: RecurringKind;
+  active?: boolean;
+}
+
+export interface AppState {
+  // kept as any[] to avoid breaking other code that might expect extra fields
+  accounts: any[];
+  transactions: any[];
+  budgets: any[];
+  categories: any[];
+  recurring: RecurringItem[]; // 🔹 NEW FIELD
+}
 
 export type AppActions = {
-  // Create a new account with a name, returns the created account
+  // Accounts
   addAccount: (name: string) => Account;
-
-  // Replace full accounts array (kept for compatibility)
   setAccounts: (accounts: Account[]) => void;
-
-  // Update an existing account (e.g. rename)
   updateAccount: (id: string, patch: Partial<Account>) => void;
+  deleteAccount: (accountId: string) => void;
 
-  // Add a new transaction, id is auto-generated
+  // Transactions
   addTransaction: (tx: Omit<Transaction, 'id'>) => Transaction;
-
-  // Replace full transactions array (kept for compatibility)
   setTransactions: (txs: Transaction[]) => void;
-
-  // Delete full transactions array (kept for compatibility)
   deleteTransaction: (txId: string) => void;
   updateTransaction: (txId: string, patch: Partial<Transaction>) => void;
 
-  // Delete an account + all its transactions
-  deleteAccount: (accountId: string) => void;
+  // Recurring
+  addRecurring: (item: RecurringItem) => void;
+  updateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
+  deleteRecurring: (id: string) => void;
 };
-
 
 export type AppContextValue = {
   state: AppState;
@@ -76,6 +87,9 @@ export function AppProvider({ children }: Props) {
   const [state, setState] = useState<AppState>({
     accounts: [],
     transactions: [],
+    budgets: [],
+    categories: [],
+    recurring: [], // 🔹 INITIALISE HERE
   });
 
   // --- Accounts ---
@@ -109,7 +123,6 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
-
   const deleteAccount = useCallback((accountId: string) => {
     setState(prev => ({
       ...prev,
@@ -142,14 +155,14 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
-    const deleteTransaction = useCallback((txId: string) => {
+  const deleteTransaction = useCallback((txId: string) => {
     setState(prev => ({
       ...prev,
       transactions: prev.transactions.filter(t => t.id !== txId),
     }));
   }, []);
 
-    const updateTransaction = useCallback(
+  const updateTransaction = useCallback(
     (txId: string, patch: Partial<Transaction>) => {
       setState(prev => ({
         ...prev,
@@ -160,6 +173,34 @@ export function AppProvider({ children }: Props) {
     },
     []
   );
+
+  // --- Recurring ---
+
+  const addRecurring = useCallback((item: RecurringItem) => {
+    setState(prev => ({
+      ...prev,
+      recurring: [...prev.recurring, item],
+    }));
+  }, []);
+
+  const updateRecurring = useCallback(
+    (id: string, updates: Partial<RecurringItem>) => {
+      setState(prev => ({
+        ...prev,
+        recurring: prev.recurring.map(r =>
+          r.id === id ? { ...r, ...updates } : r
+        ),
+      }));
+    },
+    []
+  );
+
+  const deleteRecurring = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      recurring: prev.recurring.filter(r => r.id !== id),
+    }));
+  }, []);
 
   // --- PIN management ---
 
@@ -182,11 +223,14 @@ export function AppProvider({ children }: Props) {
       addAccount,
       setAccounts,
       updateAccount,
+      deleteAccount,
       addTransaction,
       setTransactions,
       deleteTransaction,
-      deleteAccount,
       updateTransaction,
+      addRecurring,       // 🔹 wired in
+      updateRecurring,    // 🔹 wired in
+      deleteRecurring,    // 🔹 wired in
     },
     getPin,
     setPin,

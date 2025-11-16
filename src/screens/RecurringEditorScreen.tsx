@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useApp } from '../state/AppProvider';
+
 import type {
   RecurringItem,
   RecurringFrequency,
@@ -25,7 +26,7 @@ type RouteParams = {
 const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
 
 const RecurringEditorScreen: React.FC = () => {
-  const navigation = useNavigation<any>(); // you can tighten this later with your RootStackParamList
+  const navigation = useNavigation<any>(); // can be typed later with RootStackParamList
   const route = useRoute<any>();
   const { state, actions } = useApp();
 
@@ -33,7 +34,7 @@ const RecurringEditorScreen: React.FC = () => {
   const editingId = params.id;
 
   const existing: RecurringItem | undefined = useMemo(
-    () => state.recurring.find(r => r.id === editingId),
+    () => state.recurring.find((r) => r.id === editingId),
     [state.recurring, editingId]
   );
 
@@ -66,7 +67,6 @@ const RecurringEditorScreen: React.FC = () => {
     }
 
     if (existing) {
-      // Update
       actions.updateRecurring(existing.id, {
         title: cleanTitle,
         amount: numericAmount,
@@ -75,11 +75,9 @@ const RecurringEditorScreen: React.FC = () => {
         active,
       });
     } else {
-      // Create new
       const id = `rec_${Date.now()}`;
-
       const now = new Date();
-      const nextDueDate = now.toISOString(); // you can swap this for a smarter schedule later
+      const nextDueDate = now.toISOString();
 
       const item: RecurringItem = {
         id,

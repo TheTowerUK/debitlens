@@ -1,35 +1,18 @@
 export type RootStackParamList = {
-  // Auth / Home
   Login: undefined;
   Dashboard: undefined;
-
-  // Accounts
-  Account: { accountId: string };
-  AddAccount: undefined;     // only include if you actually register it
-
-  // Editor
-  TxnEditor: {
-    id?: string;
-    txId?: string;
-    accountId?: string;
-    type?: 'income' | 'expense';
-  };
-
-  // Dashboard-linked
   Payments: undefined;
   Recurring: undefined;
-  RecurringEditor: { id?: string };
-  Budgets: undefined;
-
-  // Other
   Notifications: undefined;
+  Budgets: undefined;
   Settings: undefined;
-  Reports: undefined;
+  ImportCSV: undefined;
+  Account: undefined;
   History: undefined;
-  ImportCSV: undefined; 
+  Reports: undefined;
+  TxnEditor: { id?: string } | undefined;
 
-
-  // Keep only if you register the screens:
-  // ImportCSV: undefined;
-  // History: undefined;
+  // 🔽 ADD THIS
+  RecurringEditor: { id?: string } | undefined;
 };
+
