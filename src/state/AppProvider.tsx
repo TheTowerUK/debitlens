@@ -1,5 +1,6 @@
 // src/state/AppProvider.tsx
-import React, {
+import React,
+{
   createContext,
   useCallback,
   useContext,
@@ -21,14 +22,32 @@ export type Transaction = {
   type: 'income' | 'expense';
   date: string;
   note?: string | null;
-  category?: string | null; // ← NEW, optional
+  category?: string | null; // optional
 };
 
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
-export type AppState = {
-  accounts: Account[];
-  transactions: Transaction[];
-};
+export type RecurringKind = 'income' | 'expense';
+
+export interface RecurringItem {
+  id: string;
+  title: string;
+  amount: number;
+  frequency: RecurringFrequency;
+  accountId?: string;
+  nextDueDate?: string; // ISO string, optional
+  type?: RecurringKind; // <- NEW: income/expense for display or rules
+  active?: boolean;     // <- NEW: for toggle on/off
+}
+
+export interface AppState {
+  // NOTE: Keeping these as any[] to avoid breaking existing code
+  accounts: any[];
+  transactions: any[];
+  budgets: any[];
+  categories: any[];
+  recurring: RecurringItem[];
+}
 
 export type AppActions = {
   // Create a new account with a name, returns the created account
@@ -46,14 +65,20 @@ export type AppActions = {
   // Replace full transactions array (kept for compatibility)
   setTransactions: (txs: Transaction[]) => void;
 
-  // Delete full transactions array (kept for compatibility)
+  // Delete a transaction by id
   deleteTransaction: (txId: string) => void;
+
+  // Patch an existing transaction
   updateTransaction: (txId: string, patch: Partial<Transaction>) => void;
 
   // Delete an account + all its transactions
   deleteAccount: (accountId: string) => void;
-};
 
+  // --- Recurring items ---
+  addRecurring: (item: RecurringItem) => void;
+  updateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
+  deleteRecurring: (id: string) => void;
+};
 
 export type AppContextValue = {
   state: AppState;
@@ -76,6 +101,9 @@ export function AppProvider({ children }: Props) {
   const [state, setState] = useState<AppState>({
     accounts: [],
     transactions: [],
+    budgets: [],
+    categories: [],
+    recurring: [],
   });
 
   // --- Accounts ---
@@ -109,7 +137,6 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
-
   const deleteAccount = useCallback((accountId: string) => {
     setState(prev => ({
       ...prev,
@@ -142,14 +169,14 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
-    const deleteTransaction = useCallback((txId: string) => {
+  const deleteTransaction = useCallback((txId: string) => {
     setState(prev => ({
       ...prev,
       transactions: prev.transactions.filter(t => t.id !== txId),
     }));
   }, []);
 
-    const updateTransaction = useCallback(
+  const updateTransaction = useCallback(
     (txId: string, patch: Partial<Transaction>) => {
       setState(prev => ({
         ...prev,
@@ -160,6 +187,34 @@ export function AppProvider({ children }: Props) {
     },
     []
   );
+
+  // --- Recurring ---
+
+  const addRecurring = useCallback((item: RecurringItem) => {
+    setState(prev => ({
+      ...prev,
+      recurring: [...prev.recurring, item],
+    }));
+  }, []);
+
+  const updateRecurring = useCallback(
+    (id: string, updates: Partial<RecurringItem>) => {
+      setState(prev => ({
+        ...prev,
+        recurring: prev.recurring.map(r =>
+          r.id === id ? { ...r, ...updates } : r
+        ),
+      }));
+    },
+    []
+  );
+
+  const deleteRecurring = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      recurring: prev.recurring.filter(r => r.id !== id),
+    }));
+  }, []);
 
   // --- PIN management ---
 
@@ -187,6 +242,9 @@ export function AppProvider({ children }: Props) {
       deleteTransaction,
       deleteAccount,
       updateTransaction,
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
     },
     getPin,
     setPin,

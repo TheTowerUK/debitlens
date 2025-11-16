@@ -1,215 +1,170 @@
 // src/screens/RecurringScreen.tsx
-import React, { useState } from 'react';
-import {  View,  Text,  StyleSheet,  FlatList,  Pressable,  Platform,} from 'react-native';
+import React from 'react';
+import {
+  ScrollView,
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useApp } from '../state/AppProvider';
+import type {
+  RecurringItem,
+  RecurringFrequency,
+} from '../state/AppProvider';
 
-// We deliberately *do not* use useApp/AppState here yet, to avoid
-// relying on non-existent state.recurring or actions.addRecurring, etc.
-
-type RecurringItem = {
-  id: string;
-  label: string;
-  amount: number;
-  type: 'income' | 'expense';
-  cadence: 'weekly' | 'monthly' | 'yearly';
+// Map internal values to pretty labels
+const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
 };
 
-const initialMock: RecurringItem[] = [
-  {
-    id: '1',
-    label: 'Rent',
-    amount: 950,
-    type: 'expense',
-    cadence: 'monthly',
-  },
-  {
-    id: '2',
-    label: 'Salary',
-    amount: 2500,
-    type: 'income',
-    cadence: 'monthly',
-  },
-];
+const RecurringScreen: React.FC = () => {
+  const navigation = useNavigation<any>(); // you can later replace `any` with your typed stack param list
+  const { state, actions } = useApp();
 
-export default function RecurringScreen() {
-  const [items, setItems] = useState<RecurringItem[]>(initialMock);
+  const recurring: RecurringItem[] = state.recurring || [];
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((r) => r.id !== id));
+  const handleToggleActive = (item: RecurringItem) => {
+    actions.updateRecurring(item.id, { active: !item.active });
+  };
+
+  const handleDelete = (item: RecurringItem) => {
+    actions.deleteRecurring(item.id);
+  };
+
+  const handleEdit = (item: RecurringItem) => {
+    // Adjust route name if your navigator uses something else
+    navigation.navigate('RecurringEditor', { id: item.id });
+  };
+
+  const handleAddNew = () => {
+    navigation.navigate('RecurringEditor');
   };
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.h1}>Recurring</Text>
-      <Text style={styles.subtle}>
-        Regular incomes and expenses that repeat automatically.
-      </Text>
+    <ScrollView style={styles.wrap}>
+      <Text style={styles.h1}>Recurring Payments</Text>
 
-      {items.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No recurring items</Text>
-          <Text style={styles.emptyText}>
-            Add recurring income or expense items from the transaction editor.
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>{item.label}</Text>
-                <Text style={styles.caption}>
-                  {item.cadence === 'weekly'
-                    ? 'Repeats weekly'
-                    : item.cadence === 'monthly'
-                    ? 'Repeats monthly'
-                    : 'Repeats yearly'}
-                </Text>
-                <View style={styles.pillRow}>
-                  <View
-                    style={[
-                      styles.typePill,
-                      item.type === 'income'
-                        ? styles.incomePill
-                        : styles.expensePill,
-                    ]}
-                  >
-                    <Text style={styles.typePillText}>
-                      {item.type === 'income' ? 'income' : 'expense'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.amountCol}>
-                <Text
-                  style={[
-                    styles.amountText,
-                    item.type === 'income'
-                      ? styles.amountIncome
-                      : styles.amountExpense,
-                  ]}
-                >
-                  {item.type === 'income' ? '+' : '-'}
-                  £{item.amount.toFixed(2)}
-                </Text>
-
-                <Pressable
-                  style={styles.deleteBtn}
-                  onPress={() => removeItem(item.id)}
-                >
-                  <Text style={styles.deleteText}>Remove</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        />
+      {recurring.length === 0 && (
+        <Text style={styles.subtle}>
+          No recurring items yet. Tap "Add Recurring" to create one.
+        </Text>
       )}
-    </View>
+
+      {recurring.map((r) => (
+        <View key={r.id} style={styles.card}>
+          <Pressable onPress={() => handleEdit(r)}>
+            <Text style={styles.itemTitle}>{r.title}</Text>
+            <Text style={styles.itemSubtitle}>
+              £
+              {typeof r.amount === 'number'
+                ? r.amount.toFixed(2)
+                : r.amount}{' '}
+              • {FREQUENCY_LABEL[r.frequency]}
+              {r.type
+                ? ` • ${r.type === 'income' ? 'Income' : 'Expense'}`
+                : ''}
+            </Text>
+            {r.nextDueDate && (
+              <Text style={styles.subtle}>
+                Next due:{' '}
+                {new Date(r.nextDueDate).toLocaleDateString()}
+              </Text>
+            )}
+          </Pressable>
+
+          <View style={styles.rowActions}>
+            <Pressable onPress={() => handleToggleActive(r)}>
+              <Text style={[styles.badge, r.active ? styles.badgeActive : styles.badgePaused]}>
+                {r.active ? 'Active' : 'Paused'}
+              </Text>
+            </Pressable>
+
+            <Pressable onPress={() => handleDelete(r)}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
+
+      <Pressable style={styles.button} onPress={handleAddNew}>
+        <Text style={styles.buttonText}>Add Recurring</Text>
+      </Pressable>
+    </ScrollView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#050816',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    paddingTop: 24,
   },
   h1: {
     color: '#fff',
     fontSize: 24,
     fontWeight: '800',
-    marginBottom: 4,
-  },
-  subtle: {
-    color: '#9CA3AF',
     marginBottom: 16,
   },
-  emptyBox: {
-    marginTop: 32,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
-  },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+  subtle: {
+    color: '#9ca3af',
+    marginBottom: 8,
   },
   card: {
-    flexDirection: 'row',
-    padding: 12,
+    backgroundColor: '#111827',
     borderRadius: 12,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 12,
   },
-  label: {
-    color: '#F9FAFB',
-    fontSize: 16,
-    fontWeight: '700',
+  itemTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
   },
-  caption: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 2,
+  itemSubtitle: {
+    color: '#9ca3af',
+    marginTop: 4,
   },
-  pillRow: {
+  rowActions: {
     flexDirection: 'row',
-    marginTop: 6,
+    justifyContent: 'flex-end',
+    marginTop: 10,
+    columnGap: 16,
   },
-  typePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  incomePill: {
-    backgroundColor: 'rgba(22, 163, 74, 0.15)',
-  },
-  expensePill: {
-    backgroundColor: 'rgba(220, 38, 38, 0.15)',
-  },
-  typePillText: {
-    color: '#E5E7EB',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    fontWeight: '700',
-  },
-  amountCol: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginLeft: 12,
-  },
-  amountText: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  amountIncome: {
-    color: '#22C55E',
-  },
-  amountExpense: {
-    color: '#F97373',
-  },
-  deleteBtn: {
-    marginTop: 6,
+  badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#4B5563',
+    fontSize: 12,
+    overflow: 'hidden',
+  },
+  badgeActive: {
+    color: '#22c55e',
+  },
+  badgePaused: {
+    color: '#fbbf24',
   },
   deleteText: {
-    color: '#9CA3AF',
-    fontSize: 11,
+    color: '#f87171',
+    fontSize: 14,
+  },
+  button: {
+    marginTop: 24,
+    backgroundColor: '#2563eb',
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#f9fafb',
     fontWeight: '600',
+    fontSize: 16,
   },
 });
+
+export default RecurringScreen;
