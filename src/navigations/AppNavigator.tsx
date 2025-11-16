@@ -8,7 +8,7 @@ import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 
 // Features
-import PaymentsScreen from '../screens/PaymentsScreen';
+import PaymentsScreen from '../screens/Payments';
 import RecurringScreen from '../screens/RecurringScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import SettingsScreen from '../screens/SettingsScreen';

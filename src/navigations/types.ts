@@ -24,6 +24,9 @@ export type RootStackParamList = {
   Notifications: undefined;
   Settings: undefined;
   Reports: undefined;
+  History: undefined;
+  ImportCSV: undefined; 
+
 
   // Keep only if you register the screens:
   // ImportCSV: undefined;
