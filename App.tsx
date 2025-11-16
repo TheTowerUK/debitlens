@@ -24,7 +24,6 @@ import TxnEditorScreen from './src/screens/TxnEditorScreen';
 import PaymentsScreen from './src/screens/Payments';
 import RecurringScreen from './src/screens/RecurringScreen';
 import NotificationsScreen from './src/screens/NavigationsScreen'; // <- or './src/screens/NotificationsScreen'
-import RecurringEditorScreen from './src/screens/RecurringEditorScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -53,8 +52,6 @@ export default function App() {
           <Stack.Screen name="History" component={HistoryScreen} />
           <Stack.Screen name="Reports" component={ReportsScreen} />
           <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
-          <Stack.Screen name="Recurring" component={RecurringScreen} options={{ title: 'Recurring Payments' }} />
-          <Stack.Screen name="RecurringEditor" component={RecurringEditorScreen} options={{ title: 'Recurring' }} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
