@@ -9,10 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../state/AppProvider';
-import type {
-  RecurringItem,
-  RecurringFrequency,
-} from '../state/AppProvider';
+import type {  RecurringItem,  RecurringFrequency,} from '../state/AppProvider';
 
 // Map internal values to pretty labels
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {

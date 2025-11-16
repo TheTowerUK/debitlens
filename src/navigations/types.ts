@@ -18,6 +18,7 @@ export type RootStackParamList = {
   // Dashboard-linked
   Payments: undefined;
   Recurring: undefined;
+  RecurringEditor: { id?: string };
   Budgets: undefined;
 
   // Other

@@ -9,11 +9,12 @@ import DashboardScreen from '../screens/DashboardScreen';
 
 // Features
 import PaymentsScreen from '../screens/Payments';
-import RecurringScreen from '../screens/RecurringScreen';
 import BudgetsScreen from '../screens/BudgetsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
 import NotificationsScreen from '../screens/NotificationsScreen'; 
+import RecurringScreen from '../screens/RecurringScreen';
+import RecurringEditorScreen from '../screens/RecurringEditorScreen';
 
 // Temporary placeholders
 import { Text, View } from 'react-native';
