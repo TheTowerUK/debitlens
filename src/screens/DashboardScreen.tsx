@@ -237,13 +237,18 @@ const monthlyRecurringIncome = recurring
           data={recentTxs}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingBottom: 32 }}
-          renderItem={({ item }) => {
+           renderItem={({ item }) => {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
             const note = item.note || '';
+
+            const handlePress = () => {
+              navigation.navigate('TxnEditor', { id: item.id });
+            };
+
             return (
-              <View style={styles.txRow}>
+              <Pressable style={styles.txRow} onPress={handlePress}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txLabel}>{label}</Text>
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
@@ -257,9 +262,10 @@ const monthlyRecurringIncome = recurring
                 >
                   {sign}£{Number(item.amount).toFixed(2)}
                 </Text>
-              </View>
+              </Pressable>
             );
           }}
+
         />
       )}
     </View>
