@@ -111,6 +111,22 @@ const monthlyRecurringIncome = recurring
         </View>
       </View>
 
+      {/* Recurring impact */}
+      <View style={styles.recurringRow}>
+        <View style={styles.recurringCard}>
+          <Text style={styles.summaryLabel}>Recurring (monthly)</Text>
+          <Text style={styles.recurringLine}>
+            <Text style={styles.recurringLabel}>Out: </Text>
+            <Text style={styles.expenseText}>£{monthlyRecurringExpense.toFixed(2)}</Text>
+          </Text>
+          <Text style={styles.recurringLine}>
+            <Text style={styles.recurringLabel}>In: </Text>
+            <Text style={styles.incomeText}>£{monthlyRecurringIncome.toFixed(2)}</Text>
+          </Text>
+        </View>
+      </View>
+
+
       {/* Quick add */}
       <View style={styles.quickRow}>
         <Pressable
@@ -353,4 +369,22 @@ const styles = StyleSheet.create({
   txNote: { color: '#9CA3AF', fontSize: 12 },
   txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
   txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
+    recurringRow: {
+    marginBottom: 12,
+  },
+  recurringCard: {
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  recurringLine: {
+    marginTop: 2,
+  },
+  recurringLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+
 });
