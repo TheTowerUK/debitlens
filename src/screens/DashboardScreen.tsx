@@ -9,11 +9,31 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
   
-  
-  
+  // Rough monthly equivalents for each frequency
+const MONTHLY_FACTOR: Record<'daily' | 'weekly' | 'monthly' | 'yearly', number> = {
+  daily: 30,         // rough average
+  weekly: 4.345,     // 52 weeks / 12 months
+  monthly: 1,
+  yearly: 1 / 12,
+};
+
+function toMonthlyAmount(amount: number, frequency: 'daily' | 'weekly' | 'monthly' | 'yearly'): number {
+  return amount * MONTHLY_FACTOR[frequency];
+}
+
   const { state } = useApp();
+  const recurring = state.recurring ?? [];
+
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
+
+  const monthlyRecurringExpense = recurring
+  .filter(r => r.active !== false && r.type !== 'income')
+  .reduce((sum, r) => sum + toMonthlyAmount(Number(r.amount) || 0, r.frequency), 0);
+
+const monthlyRecurringIncome = recurring
+  .filter(r => r.active !== false && r.type === 'income')
+  .reduce((sum, r) => sum + toMonthlyAmount(Number(r.amount) || 0, r.frequency), 0);
 
   const { totalBalance, totalIncome, totalExpense } = useMemo(() => {
     let income = 0;

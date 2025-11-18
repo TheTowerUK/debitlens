@@ -7,12 +7,30 @@ export type RootStackParamList = {
   Budgets: undefined;
   Settings: undefined;
   ImportCSV: undefined;
-  Account: undefined;
+
+  Account:
+    | {
+        accountId?: string;
+      }
+    | undefined;
+
+  // New: route name used by goAddAccount in Dashboard
+  AddAccount: undefined;
+
   History: undefined;
   Reports: undefined;
-  TxnEditor: { id?: string } | undefined;
 
-  // 🔽 ADD THIS
-  RecurringEditor: { id?: string } | undefined;
+  RecurringEditor:
+    | {
+        id?: string;
+      }
+    | undefined;
+
+  TxnEditor:
+    | {
+        id?: string;
+        accountId?: string;
+        type?: 'income' | 'expense';
+      }
+    | undefined;
 };
-

@@ -54,7 +54,8 @@ export default function AppNavigator() {
 
       {/* Accounts */}
       <Screen name="Account" component={AccountScreen} />
-
+      <Screen name="AddAccount" component={AccountScreen} /> 
+      
       {/* Editor */}
       <Screen name="TxnEditor" component={TxnEditorScreen} />
 

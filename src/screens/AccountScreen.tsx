@@ -13,10 +13,11 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
+type Props = NativeStackScreenProps<RootStackParamList>;
 
-export default function AccountScreen({ route, navigation }: Props) {
-  const { accountId } = route.params;
+export default function AccountScreen({ navigation, route }: Props) {
+  // if you use route.params?.accountId, this still works:
+  const accountId = (route.params as any)?.accountId as string | undefined;
   const { state, actions } = useApp();
 
   const account = state.accounts.find(a => a.id === accountId);
