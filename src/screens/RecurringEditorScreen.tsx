@@ -12,11 +12,10 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { useApp } from '../state/AppProvider';
-
-import type {
-  RecurringItem,
-  RecurringFrequency,
+import {
+  useApp,
+  type RecurringItem,
+  type RecurringFrequency,
 } from '../state/AppProvider';
 
 type RouteParams = {
@@ -33,9 +32,12 @@ const RecurringEditorScreen: React.FC = () => {
   const params: RouteParams = route.params || {};
   const editingId = params.id;
 
+  const recurring = state.recurring || [];
+  const accounts = state.accounts || [];
+
   const existing: RecurringItem | undefined = useMemo(
-    () => state.recurring.find((r) => r.id === editingId),
-    [state.recurring, editingId]
+    () => recurring.find((r) => r.id === editingId),
+    [recurring, editingId]
   );
 
   const [title, setTitle] = useState(existing?.title ?? '');
@@ -50,6 +52,9 @@ const RecurringEditorScreen: React.FC = () => {
   );
   const [active, setActive] = useState<boolean>(
     existing?.active ?? true
+  );
+  const [accountId, setAccountId] = useState<string | undefined>(
+    existing?.accountId ?? accounts[0]?.id
   );
 
   const onSave = () => {
@@ -66,15 +71,28 @@ const RecurringEditorScreen: React.FC = () => {
       return;
     }
 
+    if (!accounts.length) {
+      Alert.alert(
+        'No accounts',
+        'Please create at least one account before adding a recurring item.'
+      );
+      return;
+    }
+
+    const chosenAccountId = accountId || accounts[0].id;
+
     if (existing) {
+      // Update
       actions.updateRecurring(existing.id, {
         title: cleanTitle,
         amount: numericAmount,
         frequency,
         type,
         active,
+        accountId: chosenAccountId,
       });
     } else {
+      // Create new
       const id = `rec_${Date.now()}`;
       const now = new Date();
       const nextDueDate = now.toISOString();
@@ -87,6 +105,7 @@ const RecurringEditorScreen: React.FC = () => {
         type,
         active,
         nextDueDate,
+        accountId: chosenAccountId,
       };
 
       actions.addRecurring(item);
@@ -147,6 +166,38 @@ const RecurringEditorScreen: React.FC = () => {
             placeholder="0.00"
             placeholderTextColor="#6b7280"
           />
+        </View>
+
+        {/* Account */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Account</Text>
+          {accounts.length === 0 ? (
+            <Text style={styles.helperText}>
+              No accounts yet. Add an account from the Dashboard before creating recurring items.
+            </Text>
+          ) : (
+            <View style={styles.rowWrap}>
+              {accounts.map((acc: any) => (
+                <Pressable
+                  key={acc.id}
+                  style={[
+                    styles.chip,
+                    accountId === acc.id && styles.chipSelected,
+                  ]}
+                  onPress={() => setAccountId(acc.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      accountId === acc.id && styles.chipTextSelected,
+                    ]}
+                  >
+                    {acc.name || 'Account'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Type */}
@@ -293,6 +344,10 @@ const styles = StyleSheet.create({
     color: '#e5e7eb',
     marginBottom: 6,
     fontWeight: '500',
+  },
+  helperText: {
+    color: '#9ca3af',
+    fontSize: 13,
   },
   input: {
     backgroundColor: '#111827',
