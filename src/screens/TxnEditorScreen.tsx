@@ -1,5 +1,5 @@
 // src/screens/TxnEditorScreen.tsx
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,430 +7,354 @@ import {
   Pressable,
   StyleSheet,
   ScrollView,
+  KeyboardAvoidingView,
   Platform,
   Alert,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-const CATEGORIES = [
-  'General',
-  'Groceries',
-  'Bills',
-  'Transport',
-  'Shopping',
-  'Entertainment',
-  'Savings',
-];
-
-type Props = {
-  navigation: any;
-  route: any;
-};
+type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
 
 export default function TxnEditorScreen({ navigation, route }: Props) {
   const { state, actions } = useApp();
+
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  // Safely read route params
-  const params = route?.params ?? {};
-
-  // Be flexible about what other screens send:
-  // id, txnId, transactionId, or a full tx object.
-  const editingId: string | undefined =
-    params.id ??
-    params.txnId ??
-    params.transactionId ??
-    (params.tx && params.tx.id);
-
-  const initialAccountId: string | undefined = params.accountId;
+  const params = route.params ?? {};
+  const editingId = params.id;
+  const initialAccountId = params.accountId;
   const initialTypeParam: 'income' | 'expense' | undefined = params.type;
 
-  // If we have an id, look up in state; otherwise accept a full tx passed in params
-  const existing =
-    editingId
-      ? txs.find((t) => t.id === editingId)
-      : params.tx || undefined;
-
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-
-  const [accountId, setAccountId] = React.useState<string>(
-    existing?.accountId ||
-      initialAccountId ||
-      (accounts[0]?.id ?? '')
+  const existing = useMemo(
+    () => (editingId ? txs.find((t: any) => t.id === editingId) : undefined),
+    [txs, editingId]
   );
-  const [amount, setAmount] = React.useState<string>(
+
+  const [accountId, setAccountId] = useState<string | undefined>(
+    existing?.accountId ?? initialAccountId ?? accounts[0]?.id
+  );
+  const [type, setType] = useState<'income' | 'expense'>(
+    existing?.type ?? initialTypeParam ?? 'expense'
+  );
+  const [amount, setAmount] = useState(
     existing ? String(existing.amount) : ''
   );
-  const [type, setType] = React.useState<'income' | 'expense'>(
-    existing?.type || initialTypeParam || 'expense'
+  const [date, setDate] = useState(
+    existing?.date ?? new Date().toISOString().slice(0, 10)
   );
-  const [note, setNote] = React.useState<string>(existing?.note || '');
-  const [date, setDate] = React.useState<string>(
-    existing?.date || todayStr
-  );
-  const [category, setCategory] = React.useState<string>(
-    existing?.category || 'General'
-  );
-  const [saving, setSaving] = React.useState(false);
+  const [category, setCategory] = useState(existing?.category ?? '');
+  const [note, setNote] = useState(existing?.note ?? '');
 
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      title: editingId ? 'Edit transaction' : 'New transaction',
-    });
-  }, [navigation, editingId]);
+  const screenTitle = existing ? 'Edit Transaction' : 'Add Transaction';
 
-  const onSave = async () => {
-    const amt = Number(amount);
-
-    if (!accountId) {
-      Alert.alert('Account required', 'Please choose an account.');
-      return;
-    }
-    if (!amount || isNaN(amt)) {
-      Alert.alert('Amount required', 'Enter a valid amount.');
+  const onSave = () => {
+    if (!accounts.length) {
+      Alert.alert(
+        'No accounts',
+        'Please add an account before creating transactions.'
+      );
       return;
     }
 
-    const cleanDate = date || todayStr;
+    const chosenAccountId = accountId || accounts[0].id;
+    const numericAmount = Number(amount);
 
-    const payload = {
-      accountId,
-      amount: amt,
-      type,
-      date: cleanDate,
-      note: note.trim() || null,
-      category: category || null,
-    };
-
-    try {
-      setSaving(true);
-      if (editingId) {
-        // assumes actions.updateTransaction(id, payload) exists
-        await actions.updateTransaction(editingId, payload);
-      } else {
-        // assumes actions.addTransaction(payload) exists
-        await actions.addTransaction(payload);
-      }
-      navigation.goBack();
-    } catch (e: any) {
-      console.warn('save txn failed', e);
-      Alert.alert('Error', e?.message || 'Could not save transaction.');
-    } finally {
-      setSaving(false);
+    if (!numericAmount || isNaN(numericAmount)) {
+      Alert.alert('Invalid amount', 'Please enter a valid amount.');
+      return;
     }
+
+    const txDate =
+      date && date.trim().length > 0
+        ? date
+        : new Date().toISOString().slice(0, 10);
+
+    if (existing) {
+      actions.updateTransaction(existing.id, {
+        accountId: chosenAccountId,
+        amount: numericAmount,
+        type,
+        date: txDate,
+        category: category || null,
+        note: note || null,
+      });
+    } else {
+      actions.addTransaction({
+        accountId: chosenAccountId,
+        amount: numericAmount,
+        type,
+        date: txDate,
+        category: category || null,
+        note: note || null,
+      });
+    }
+
+    navigation.goBack();
   };
 
-  const onDelete = async () => {
-    if (!editingId) return;
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            // assumes actions.deleteTransaction(id) exists
-            await actions.deleteTransaction(editingId);
+  const onDelete = () => {
+    if (!existing) return;
+    Alert.alert(
+      'Delete transaction',
+      'Are you sure you want to delete this transaction?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            actions.deleteTransaction(existing.id);
             navigation.goBack();
-          } catch (e: any) {
-            console.warn('delete txn failed', e);
-            Alert.alert('Error', e?.message || 'Could not delete transaction.');
-          }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   return (
-    <ScrollView
-      style={styles.wrap}
-      contentContainerStyle={{ paddingBottom: 24 }}
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* Account selector */}
-      <Text style={styles.label}>Account</Text>
-      <View style={styles.accountRow}>
-        {accounts.length === 0 ? (
-          <Text style={styles.subtle}>
-            No accounts yet. Go back and add one on the Dashboard.
-          </Text>
-        ) : (
-          accounts.map((acc) => (
+      <ScrollView contentContainerStyle={styles.wrap}>
+        <Text style={styles.h1}>{screenTitle}</Text>
+
+        {/* Accounts */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Account</Text>
+          {accounts.length === 0 ? (
+            <Text style={styles.helperText}>
+              No accounts yet. Add an account from the Dashboard.
+            </Text>
+          ) : (
+            <View style={styles.rowWrap}>
+              {accounts.map((acc: any) => (
+                <Pressable
+                  key={acc.id}
+                  style={[
+                    styles.chip,
+                    accountId === acc.id && styles.chipSelected,
+                  ]}
+                  onPress={() => setAccountId(acc.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      accountId === acc.id && styles.chipTextSelected,
+                    ]}
+                  >
+                    {acc.name || 'Account'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Type */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Type</Text>
+          <View style={styles.row}>
             <Pressable
-              key={acc.id}
-              onPress={() => setAccountId(acc.id)}
               style={[
-                styles.accPill,
-                accountId === acc.id && styles.accPillActive,
+                styles.chip,
+                type === 'expense' && styles.chipSelected,
               ]}
+              onPress={() => setType('expense')}
             >
               <Text
                 style={[
-                  styles.accPillText,
-                  accountId === acc.id && styles.accPillTextActive,
+                  styles.chipText,
+                  type === 'expense' && styles.chipTextSelected,
                 ]}
               >
-                {acc.name || 'Account'}
+                Expense
               </Text>
             </Pressable>
-          ))
-        )}
-      </View>
-
-      {/* Type */}
-      <Text style={styles.label}>Type</Text>
-      <View style={styles.typeRow}>
-        <Pressable
-          onPress={() => setType('expense')}
-          style={[
-            styles.typePill,
-            type === 'expense' && styles.typePillActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.typePillText,
-              type === 'expense' && styles.typePillTextActive,
-            ]}
-          >
-            Expense
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setType('income')}
-          style={[
-            styles.typePill,
-            type === 'income' && styles.typePillActive,
-          ]}
-        >
-          <Text
-            style={[
-              styles.typePillText,
-              type === 'income' && styles.typePillTextActive,
-            ]}
-          >
-            Income
-          </Text>
-        </Pressable>
-      </View>
-
-      {/* Amount */}
-      <Text style={styles.label}>Amount</Text>
-      <TextInput
-        value={amount}
-        onChangeText={setAmount}
-        keyboardType="decimal-pad"
-        placeholder="0.00"
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
-
-      {/* Date */}
-      <Text style={styles.label}>Date</Text>
-      <TextInput
-        value={date}
-        onChangeText={setDate}
-        placeholder="YYYY-MM-DD"
-        placeholderTextColor="#6B7280"
-        style={styles.input}
-      />
-
-      {/* Category */}
-      <Text style={styles.label}>Category</Text>
-      <View style={styles.catRow}>
-        {CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat}
-            onPress={() => setCategory(cat)}
-            style={[
-              styles.catPill,
-              category === cat && styles.catPillActive,
-            ]}
-          >
-            <Text
+            <Pressable
               style={[
-                styles.catPillText,
-                category === cat && styles.catPillTextActive,
+                styles.chip,
+                type === 'income' && styles.chipSelected,
               ]}
+              onPress={() => setType('income')}
             >
-              {cat}
+              <Text
+                style={[
+                  styles.chipText,
+                  type === 'income' && styles.chipTextSelected,
+                ]}
+              >
+                Income
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Amount */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Amount</Text>
+          <TextInput
+            style={styles.input}
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="decimal-pad"
+            placeholder="0.00"
+            placeholderTextColor="#6b7280"
+          />
+        </View>
+
+        {/* Date */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Date</Text>
+          <TextInput
+            style={styles.input}
+            value={date}
+            onChangeText={setDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor="#6b7280"
+          />
+        </View>
+
+        {/* Category */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Category</Text>
+          <TextInput
+            style={styles.input}
+            value={category ?? ''}
+            onChangeText={setCategory}
+            placeholder="e.g. Groceries, Rent, Salary"
+            placeholderTextColor="#6b7280"
+          />
+        </View>
+
+        {/* Note */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Note</Text>
+          <TextInput
+            style={[styles.input, styles.noteInput]}
+            value={note ?? ''}
+            onChangeText={setNote}
+            placeholder="Optional description"
+            placeholderTextColor="#6b7280"
+            multiline
+          />
+        </View>
+
+        {/* Buttons */}
+        <View style={styles.buttonRow}>
+          {existing && (
+            <Pressable style={styles.deleteBtn} onPress={onDelete}>
+              <Text style={styles.deleteText}>Delete</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.saveBtn} onPress={onSave}>
+            <Text style={styles.saveText}>
+              {existing ? 'Save Changes' : 'Add Transaction'}
             </Text>
           </Pressable>
-        ))}
-      </View>
-
-      {/* Note */}
-      <Text style={styles.label}>Note</Text>
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        placeholder="Optional note"
-        placeholderTextColor="#6B7280"
-        style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-        multiline
-      />
-
-      {/* Save */}
-      <Pressable
-        onPress={onSave}
-        style={styles.saveBtn}
-        disabled={saving}
-      >
-        <Text style={styles.saveText}>
-          {saving ? 'Saving…' : 'Save transaction'}
-        </Text>
-      </Pressable>
-
-      {/* Delete (only in edit mode) */}
-      {editingId && (
-        <Pressable
-          onPress={onDelete}
-          style={styles.deleteBtn}
-          disabled={saving}
-        >
-          <Text style={styles.deleteText}>Delete transaction</Text>
-        </Pressable>
-      )}
-    </ScrollView>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
-    backgroundColor: '#0B0D13',
+    flexGrow: 1,
+    backgroundColor: '#020617',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 52 : 24,
+    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    paddingBottom: 32,
+  },
+  h1: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '800',
+    marginBottom: 16,
+  },
+  field: {
+    marginBottom: 20,
   },
   label: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  subtle: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-
-  accountRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 8,
-  },
-  accPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 6,
+    color: '#e5e7eb',
     marginBottom: 6,
-    backgroundColor: '#020617',
+    fontWeight: '500',
   },
-  accPillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+  helperText: {
+    color: '#9ca3af',
+    fontSize: 13,
   },
-  accPillText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  accPillTextActive: {
-    color: '#F9FAFB',
-  },
-
-  typeRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    marginTop: 4,
-  },
-  typePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 6,
-    backgroundColor: '#020617',
-  },
-  typePillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  typePillText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  typePillTextActive: {
-    color: '#F9FAFB',
-  },
-
   input: {
-    backgroundColor: '#020617',
-    color: '#F9FAFB',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    borderRadius: 10,
+    backgroundColor: '#111827',
+    color: '#f9fafb',
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
   },
-
-  catRow: {
+  noteInput: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  row: {
+    flexDirection: 'row',
+    columnGap: 8,
+  },
+  rowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 4,
-    marginBottom: 8,
+    rowGap: 8,
+    columnGap: 8,
   },
-  catPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 6,
-    marginBottom: 6,
-    backgroundColor: '#020617',
+    borderColor: '#4b5563',
+    backgroundColor: 'transparent',
   },
-  catPillActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+  chipSelected: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
-  catPillText: {
-    color: '#E5E7EB',
-    fontSize: 12,
+  chipText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+  },
+  chipTextSelected: {
+    color: '#f9fafb',
     fontWeight: '600',
   },
-  catPillTextActive: {
-    color: '#F9FAFB',
+  buttonRow: {
+    flexDirection: 'row',
+    columnGap: 12,
+    marginTop: 8,
   },
-
+  deleteBtn: {
+    backgroundColor: '#111827',
+    borderRadius: 999,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#f87171',
+  },
+  deleteText: {
+    color: '#f87171',
+    fontWeight: '500',
+  },
   saveBtn: {
-    marginTop: 16,
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    paddingVertical: 12,
+    flex: 1,
+    backgroundColor: '#2563eb',
+    borderRadius: 999,
+    paddingVertical: 14,
     alignItems: 'center',
   },
   saveText: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-  },
-
-  deleteBtn: {
-    marginTop: 12,
-    backgroundColor: '#7F1D1D',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  deleteText: {
-    color: '#FEE2E2',
-    fontWeight: '700',
+    color: '#f9fafb',
+    fontWeight: '600',
+    fontSize: 16,
   },
 });
