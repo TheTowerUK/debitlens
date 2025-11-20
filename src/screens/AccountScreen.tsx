@@ -7,156 +7,147 @@ import {
   FlatList,
   Pressable,
   Platform,
-  Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
 
-type Props = NativeStackScreenProps<RootStackParamList>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
 export default function AccountScreen({ navigation, route }: Props) {
-  // if you use route.params?.accountId, this still works:
-  const accountId = (route.params as any)?.accountId as string | undefined;
-  const { state, actions } = useApp();
+  const { state } = useApp();
 
-  const account = state.accounts.find(a => a.id === accountId);
-  const allTxs = state.transactions || [];
+  const accountId = route.params?.accountId;
+  const accounts = state.accounts || [];
+  const txs = state.transactions || [];
 
-  const txsForAccount = useMemo(
-    () =>
-      allTxs
-        .filter(t => t.accountId === accountId)
-        .sort((a, b) => (b.date || '').localeCompare(a.date || '')),
-    [allTxs, accountId]
+  const account = accounts.find((a: any) => a.id === accountId) || accounts[0];
+
+  const accountTxs = useMemo(
+    () => (account ? txs.filter((t) => t.accountId === account.id) : []),
+    [txs, account]
   );
 
-  const balance = useMemo(() => {
-    return txsForAccount.reduce((sum, t) => {
-      const amt = Number(t.amount || 0);
-      return t.type === 'income' ? sum + amt : sum - amt;
-    }, 0);
-  }, [txsForAccount]);
+  const { balance, income, expense } = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    for (const t of accountTxs) {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income') income += amt;
+      else expense += amt;
+    }
+    return {
+      balance: income - expense,
+      income,
+      expense,
+    };
+  }, [accountTxs]);
 
-  const canDelete = txsForAccount.length === 0;
+  const handleQuickAdd = (type: 'income' | 'expense') => {
+    if (!account) return;
+    navigation.navigate('TxnEditor', {
+      accountId: account.id,
+      type,
+    });
+  };
+
+  const handleEditTxn = (id: string) => {
+    navigation.navigate('TxnEditor', { id });
+  };
 
   if (!account) {
     return (
       <View style={styles.wrap}>
-        <Text style={styles.error}>Account not found.</Text>
-        <Pressable
-          style={[styles.btn, styles.btnPrimary, { marginTop: 12 }]}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.btnText}>Back</Text>
-        </Pressable>
+        <Text style={styles.h1}>Account</Text>
+        <Text style={styles.subtle}>No accounts found. Add one from the Dashboard.</Text>
       </View>
     );
   }
 
-  const onDeleteAccount = () => {
-    if (!canDelete) {
-      Alert.alert(
-        'Cannot delete account',
-        'This account still has transactions. Remove or move its transactions first.'
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Delete account',
-      `Delete “${account.name}”? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            actions.deleteAccount(accountId);
-            navigation.goBack();
-          },
-        },
-      ]
-    );
-  };
-
   return (
     <View style={styles.wrap}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.h1}>{account.name}</Text>
-          <Text
-            style={[
-              styles.balance,
-              balance < 0 ? styles.balanceNeg : styles.balancePos,
-            ]}
-          >
-            £{Math.abs(balance).toFixed(2)}
+      <Text style={styles.h1}>{account.name || 'Account'}</Text>
+      <Text style={styles.subtle}>Overview for this account.</Text>
+
+      {/* Summary */}
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Balance</Text>
+          <Text style={styles.summaryValue}>£{balance.toFixed(2)}</Text>
+        </View>
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Income / Spending</Text>
+          <Text style={[styles.summaryValue, styles.incomeText]}>
+            +£{income.toFixed(2)}
+          </Text>
+          <Text style={[styles.summaryValue, styles.expenseText]}>
+            -£{expense.toFixed(2)}
           </Text>
         </View>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
-          <Text style={styles.backLink}>Back</Text>
+      </View>
+
+      {/* Quick add */}
+      <View style={styles.quickRow}>
+        <Pressable
+          style={[styles.quickButton, styles.quickIncome]}
+          onPress={() => handleQuickAdd('income')}
+        >
+          <Text style={styles.quickText}>Add income</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.quickButton, styles.quickExpense]}
+          onPress={() => handleQuickAdd('expense')}
+        >
+          <Text style={styles.quickText}>Add expense</Text>
         </Pressable>
       </View>
 
-      {/* Quick actions */}
-      <View style={styles.actionsRow}>
-        <Pressable
-          style={[styles.btn, styles.btnPrimary, { flex: 1 }]}
-          onPress={() => navigation.navigate('TxnEditor', { accountId })}
-        >
-          <Text style={styles.btnText}>+ Transaction</Text>
-        </Pressable>
+      <View style={styles.sectionDivider} />
 
-        <Pressable
-          style={[
-            styles.btn,
-            canDelete ? styles.btnDanger : styles.btnDisabled,
-          ]}
-          onPress={onDeleteAccount}
-        >
-          <Text style={styles.btnText}>
-            {canDelete ? 'Delete account' : 'Cannot delete'}
+      {/* Transactions */}
+      <Text style={styles.sectionTitle}>Transactions</Text>
+      {accountTxs.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>No activity yet</Text>
+          <Text style={styles.emptyText}>
+            Add income or expenses to see them listed here.
           </Text>
-        </Pressable>
-      </View>
-
-      {/* Transactions list */}
-      <FlatList
-        data={txsForAccount}
-        keyExtractor={item => String(item.id)}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        ListEmptyComponent={
-          <Text style={styles.empty}>No transactions yet.</Text>
-        }
-        renderItem={({ item }) => {
-          const isIncome = item.type === 'income';
-          const sign = isIncome ? '+' : '-';
-          const d = item.date ? new Date(`${item.date}T00:00:00`) : null;
-
-          return (
-            <View style={styles.row}>
-              <View style={styles.rowLeft}>
-                <Text style={styles.rowTitle}>
-                  {item.note || (isIncome ? 'Income' : 'Expense')}
-                </Text>
-                <Text style={styles.rowSub}>
-                  {d ? d.toLocaleDateString() : ''}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.rowAmount,
-                  isIncome ? styles.rowAmountIncome : styles.rowAmountExpense,
-                ]}
+        </View>
+      ) : (
+        <FlatList
+          data={accountTxs}
+          keyExtractor={(t) => t.id}
+          contentContainerStyle={{ paddingBottom: 32 }}
+          renderItem={({ item }) => {
+            const isIncome = item.type === 'income';
+            const sign = isIncome ? '+' : '-';
+            const label = item.category || 'Uncategorised';
+            const note = item.note || '';
+            return (
+              <Pressable
+                style={styles.txRow}
+                onPress={() => handleEditTxn(item.id)}
               >
-                {sign}£{Number(item.amount || 0).toFixed(2)}
-              </Text>
-            </View>
-          );
-        }}
-      />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txLabel}>{label}</Text>
+                  {note ? <Text style={styles.txNote}>{note}</Text> : null}
+                  {item.date ? (
+                    <Text style={styles.txMeta}>{item.date}</Text>
+                  ) : null}
+                </View>
+                <Text
+                  style={[
+                    styles.txAmount,
+                    isIncome ? styles.incomeText : styles.expenseText,
+                  ]}
+                >
+                  {sign}£{Number(item.amount).toFixed(2)}
+                </Text>
+              </Pressable>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -164,99 +155,84 @@ export default function AccountScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
+    backgroundColor: '#020617',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 52 : 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: 16,
+    paddingTop: Platform.OS === 'ios' ? 56 : 24,
   },
   h1: {
-    color: '#F9FAFB',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  balance: {
+    color: '#ffffff',
     fontSize: 24,
     fontWeight: '800',
-    marginTop: 4,
+    marginBottom: 4,
   },
-  balancePos: {
-    color: '#4ADE80',
+  subtle: { color: '#9CA3AF', marginBottom: 16 },
+
+  summaryRow: { flexDirection: 'row', marginBottom: 12 },
+  summaryCard: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginRight: 8,
   },
-  balanceNeg: {
-    color: '#F97373',
-  },
-  backLink: {
-    color: '#93C5FD',
-    fontWeight: '600',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  btn: {
+  summaryLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 4 },
+  summaryValue: { color: '#F9FAFB', fontSize: 16, fontWeight: '800' },
+
+  incomeText: { color: '#22C55E' },
+  expenseText: { color: '#F97373' },
+
+  quickRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
+  quickButton: {
+    flex: 1,
     paddingVertical: 10,
-    paddingHorizontal: 14,
     borderRadius: 999,
     alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 8,
   },
-  btnPrimary: {
-    backgroundColor: '#2563EB',
+  quickIncome: { backgroundColor: 'rgba(22, 163, 74, 0.2)' },
+  quickExpense: { backgroundColor: 'rgba(220, 38, 38, 0.2)' },
+  quickText: { color: '#F9FAFB', fontWeight: '700', fontSize: 13 },
+
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#111827',
+    marginTop: 10,
+    marginBottom: 12,
   },
-  btnDanger: {
-    backgroundColor: '#B91C1C',
-  },
-  btnDisabled: {
-    backgroundColor: '#374151',
-  },
-  btnText: {
-    color: '#F9FAFB',
+  sectionTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
     fontWeight: '700',
-    fontSize: 13,
+    marginTop: 8,
+    marginBottom: 6,
   },
-  empty: {
-    color: '#9CA3AF',
-    marginTop: 16,
+
+  emptyBox: {
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#0F172A',
   },
-  row: {
+  emptyTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  emptyText: { color: '#9CA3AF', fontSize: 14 },
+
+  txRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#111827',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#111827',
   },
-  rowLeft: {
-    flexShrink: 1,
-    paddingRight: 8,
-  },
-  rowTitle: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-  },
-  rowSub: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  rowAmount: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  rowAmountIncome: {
-    color: '#4ADE80',
-  },
-  rowAmountExpense: {
-    color: '#F97373',
-  },
-  error: {
-    color: '#FCA5A5',
-    marginTop: 16,
-  },
+  txLabel: { color: '#F9FAFB', fontSize: 14, fontWeight: '700' },
+  txNote: { color: '#9CA3AF', fontSize: 12 },
+  txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
+  txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
 });
