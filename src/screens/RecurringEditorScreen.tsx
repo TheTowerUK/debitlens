@@ -25,7 +25,7 @@ type RouteParams = {
 const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
 
 const RecurringEditorScreen: React.FC = () => {
-  const navigation = useNavigation<any>(); // can be typed later with RootStackParamList
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { state, actions } = useApp();
 
@@ -57,6 +57,11 @@ const RecurringEditorScreen: React.FC = () => {
     existing?.accountId ?? accounts[0]?.id
   );
 
+  // NEW: editable next-due date (YYYY-MM-DD)
+  const [nextDueDateInput, setNextDueDateInput] = useState<string>(
+    existing?.nextDueDate ? existing.nextDueDate.slice(0, 10) : ''
+  );
+
   const onSave = () => {
     const cleanTitle = title.trim();
     const numericAmount = Number(amount);
@@ -81,8 +86,25 @@ const RecurringEditorScreen: React.FC = () => {
 
     const chosenAccountId = accountId || accounts[0].id;
 
+    // Handle next due date
+    const trimmedDate = nextDueDateInput.trim();
+    let nextDueISO: string;
+    if (!trimmedDate) {
+      // default: today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      nextDueISO = today.toISOString();
+    } else {
+      const parsed = new Date(trimmedDate);
+      if (isNaN(parsed.getTime())) {
+        Alert.alert('Invalid date', 'Please use format YYYY-MM-DD.');
+        return;
+      }
+      parsed.setHours(0, 0, 0, 0);
+      nextDueISO = parsed.toISOString();
+    }
+
     if (existing) {
-      // Update
       actions.updateRecurring(existing.id, {
         title: cleanTitle,
         amount: numericAmount,
@@ -90,12 +112,10 @@ const RecurringEditorScreen: React.FC = () => {
         type,
         active,
         accountId: chosenAccountId,
+        nextDueDate: nextDueISO,
       });
     } else {
-      // Create new
       const id = `rec_${Date.now()}`;
-      const now = new Date();
-      const nextDueDate = now.toISOString();
 
       const item: RecurringItem = {
         id,
@@ -104,7 +124,7 @@ const RecurringEditorScreen: React.FC = () => {
         frequency,
         type,
         active,
-        nextDueDate,
+        nextDueDate: nextDueISO,
         accountId: chosenAccountId,
       };
 
@@ -263,6 +283,18 @@ const RecurringEditorScreen: React.FC = () => {
               </Pressable>
             ))}
           </View>
+        </View>
+
+        {/* Next due date */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Next due date</Text>
+          <TextInput
+            style={styles.input}
+            value={nextDueDateInput}
+            onChangeText={setNextDueDateInput}
+            placeholder="YYYY-MM-DD (leave blank for today)"
+            placeholderTextColor="#6b7280"
+          />
         </View>
 
         {/* Active toggle */}

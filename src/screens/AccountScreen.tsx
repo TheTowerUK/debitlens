@@ -51,6 +51,11 @@ export default function AccountScreen({ navigation, route }: Props) {
     });
   };
 
+    const handleTransfer = () => {
+    if (!account) return;
+    navigation.navigate('Transfer', { fromAccountId: account.id });
+  };
+
   const handleEditTxn = (id: string) => {
     navigation.navigate('TxnEditor', { id });
   };
@@ -99,6 +104,16 @@ export default function AccountScreen({ navigation, route }: Props) {
           onPress={() => handleQuickAdd('expense')}
         >
           <Text style={styles.quickText}>Add expense</Text>
+        </Pressable>
+      </View>
+
+      {/* Transfer */}
+      <View style={styles.quickRow}>
+        <Pressable
+          style={[styles.quickButton, styles.quickTransfer]}
+          onPress={handleTransfer}
+        >
+          <Text style={styles.quickText}>Transfer</Text>
         </Pressable>
       </View>
 
@@ -235,4 +250,9 @@ const styles = StyleSheet.create({
   txNote: { color: '#9CA3AF', fontSize: 12 },
   txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
   txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
+
+  quickTransfer: {
+  backgroundColor: 'rgba(59, 130, 246, 0.2)', // soft blue
+  },
+
 });

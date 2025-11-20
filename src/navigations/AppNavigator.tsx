@@ -16,6 +16,7 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import RecurringScreen from '../screens/RecurringScreen';
 import RecurringEditorScreen from '../screens/RecurringEditorScreen';
 import AddAccountScreen from '../screens/AddAccountScreen';
+import TransferScreen from '../screens/TransferScreen';
 
 
 // Temporary placeholders
@@ -56,6 +57,7 @@ export default function AppNavigator() {
       {/* Accounts */}
       <Screen name="Account" component={AccountScreen} />
       <Screen name="AddAccount" component={AccountScreen} /> 
+      <Screen name="Transfer" component={TransferScreen} /> 
 
       {/* Editor */}
       <Screen name="TxnEditor" component={TxnEditorScreen} />

@@ -14,7 +14,6 @@ export type RootStackParamList = {
       }
     | undefined;
 
-  // New: route name used by goAddAccount in Dashboard
   AddAccount: undefined;
 
   History: undefined;
@@ -31,6 +30,13 @@ export type RootStackParamList = {
         id?: string;
         accountId?: string;
         type?: 'income' | 'expense';
+      }
+    | undefined;
+
+  // 🔹 NEW – optional fromAccountId to preselect source
+  Transfer:
+    | {
+        fromAccountId?: string;
       }
     | undefined;
 };
