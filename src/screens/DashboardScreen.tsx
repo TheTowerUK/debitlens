@@ -46,15 +46,18 @@ const monthlyRecurringIncome = recurring
     return { totalBalance: income - expense, totalIncome: income, totalExpense: expense };
   }, [txs]);
 
-  const recentTxs = useMemo(() => {
+  const sortedTxs = useMemo(() => {
     const copy = [...txs];
     copy.sort(
       (x, y) =>
         (y.date ? Date.parse(y.date) : 0) -
         (x.date ? Date.parse(x.date) : 0)
     );
-    return copy.slice(0, 10);
+    return copy;
   }, [txs]);
+
+  const recentTxs = sortedTxs.slice(0, 3); // just top 3 for dashboard
+
 
   const handleQuickAdd = (type: 'income' | 'expense') => {
     navigation.navigate('TxnEditor', { type });
@@ -224,7 +227,15 @@ const monthlyRecurringIncome = recurring
       )}
 
       {/* Recent transactions */}
-      <Text style={styles.sectionTitle}>Recent activity</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={styles.sectionTitle}>Recent activity</Text>
+        {sortedTxs.length > 3 && (
+          <Pressable onPress={() => navigation.navigate('RecentActivity')}>
+            <Text style={styles.viewAllLink}>View all</Text>
+          </Pressable>
+        )}
+      </View>
+
       {recentTxs.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyTitle}>No activity yet</Text>
@@ -236,19 +247,18 @@ const monthlyRecurringIncome = recurring
         <FlatList
           data={recentTxs}
           keyExtractor={(t) => t.id}
-          contentContainerStyle={{ paddingBottom: 32 }}
-           renderItem={({ item }) => {
+          scrollEnabled={false}                 // 🔹 no extra scroll, keeps layout tight
+          contentContainerStyle={{ paddingBottom: 8 }}
+          renderItem={({ item }) => {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
             const note = item.note || '';
-
-            const handlePress = () => {
-              navigation.navigate('TxnEditor', { id: item.id });
-            };
-
             return (
-              <Pressable style={styles.txRow} onPress={handlePress}>
+              <Pressable
+                style={styles.txRow}
+                onPress={() => navigation.navigate('TxnEditor', { id: item.id })}
+              >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txLabel}>{label}</Text>
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
@@ -265,9 +275,9 @@ const monthlyRecurringIncome = recurring
               </Pressable>
             );
           }}
-
         />
       )}
+
     </View>
   );
 }
@@ -391,6 +401,12 @@ const styles = StyleSheet.create({
   recurringLabel: {
     color: '#9CA3AF',
     fontSize: 12,
+  },
+
+    viewAllLink: {
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: '600',
   },
 
 });

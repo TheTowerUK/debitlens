@@ -33,10 +33,12 @@ export type RootStackParamList = {
       }
     | undefined;
 
-  // 🔹 NEW – optional fromAccountId to preselect source
   Transfer:
     | {
         fromAccountId?: string;
       }
     | undefined;
+
+  // 🔹 NEW
+  RecentActivity: undefined;
 };

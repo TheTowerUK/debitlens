@@ -27,6 +27,7 @@ import NotificationsScreen from './src/screens/NavigationsScreen'; // <- or './s
 import RecurringEditorScreen from './src/screens/RecurringEditorScreen';
 import AddAccountScreen from './src/screens/AddAccountScreen';
 import TransferScreen from './src/screens/TransferScreen';
+import RecentActivityScreen from './src/screens/RecentActivityScreen';
 
 
 
@@ -60,6 +61,7 @@ export default function App() {
           <Stack.Screen name="Reports" component={ReportsScreen} />
           <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
           <Stack.Screen name="Transfer" component={TransferScreen} />
+          <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
