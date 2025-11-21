@@ -7,6 +7,12 @@ import React, {
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 
+let idCounter = 0;
+function makeId(prefix: string): string {
+  idCounter += 1;
+  return `${prefix}${Date.now().toString(36)}_${idCounter.toString(36)}`;
+}
+
 // ---------- Types ----------
 
 export type Account = {
@@ -97,7 +103,7 @@ export function AppProvider({ children }: Props) {
   const addAccount = useCallback((name: string): Account => {
     const trimmed = name.trim();
     const account: Account = {
-      id: `acc_${Date.now()}`,
+      id: makeId('acc_'),         // <- was `acc_${Date.now()}`
       name: trimmed || 'Account',
     };
     setState(prev => ({
@@ -137,7 +143,7 @@ export function AppProvider({ children }: Props) {
     (tx: Omit<Transaction, 'id'>): Transaction => {
       const full: Transaction = {
         ...tx,
-        id: `tx_${Date.now()}`,
+        id: makeId('tx_'),       // <- was `tx_${Date.now()}`
       };
       setState(prev => ({
         ...prev,
