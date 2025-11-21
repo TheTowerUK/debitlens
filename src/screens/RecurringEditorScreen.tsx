@@ -47,17 +47,31 @@ const RecurringEditorScreen: React.FC = () => {
   const [frequency, setFrequency] = useState<RecurringFrequency>(
     existing?.frequency ?? 'monthly'
   );
-  const [type, setType] = useState<'income' | 'expense'>(
-    existing?.type ?? 'expense'
-  );
   const [active, setActive] = useState<boolean>(
     existing?.active ?? true
   );
-  const [accountId, setAccountId] = useState<string | undefined>(
+
+  // NEW: mode – single-account vs transfer
+  const [isTransfer, setIsTransfer] = useState<boolean>(existing?.isTransfer ?? false);
+
+  // For single-account recurring
+  const [singleAccountId, setSingleAccountId] = useState<string | undefined>(
     existing?.accountId ?? accounts[0]?.id
   );
+  const [type, setType] = useState<'income' | 'expense'>(
+    existing?.type ?? 'expense'
+  );
 
-  // NEW: editable next-due date (YYYY-MM-DD)
+  // For transfer recurring
+  const [fromAccountId, setFromAccountId] = useState<string | undefined>(
+    existing?.fromAccountId ?? accounts[0]?.id
+  );
+  const [toAccountId, setToAccountId] = useState<string | undefined>(
+    existing?.toAccountId ??
+      (accounts.length > 1 ? accounts[1]?.id : accounts[0]?.id)
+  );
+
+  // Next-due date (YYYY-MM-DD)
   const [nextDueDateInput, setNextDueDateInput] = useState<string>(
     existing?.nextDueDate ? existing.nextDueDate.slice(0, 10) : ''
   );
@@ -84,13 +98,10 @@ const RecurringEditorScreen: React.FC = () => {
       return;
     }
 
-    const chosenAccountId = accountId || accounts[0].id;
-
-    // Handle next due date
+    // Handle date
     const trimmedDate = nextDueDateInput.trim();
     let nextDueISO: string;
     if (!trimmedDate) {
-      // default: today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       nextDueISO = today.toISOString();
@@ -104,31 +115,72 @@ const RecurringEditorScreen: React.FC = () => {
       nextDueISO = parsed.toISOString();
     }
 
-    if (existing) {
-      actions.updateRecurring(existing.id, {
-        title: cleanTitle,
-        amount: numericAmount,
-        frequency,
-        type,
-        active,
-        accountId: chosenAccountId,
-        nextDueDate: nextDueISO,
-      });
-    } else {
-      const id = `rec_${Date.now()}`;
+    if (isTransfer) {
+      // --- Transfer recurring ---
+      if (accounts.length < 2) {
+        Alert.alert(
+          'Need more accounts',
+          'You need at least two accounts to set up a recurring transfer.'
+        );
+        return;
+      }
+
+      if (!fromAccountId || !toAccountId) {
+        Alert.alert(
+          'Select accounts',
+          'Please choose both From and To accounts.'
+        );
+        return;
+      }
+
+      if (fromAccountId === toAccountId) {
+        Alert.alert(
+          'Same account',
+          'From and To accounts must be different for a transfer.'
+        );
+        return;
+      }
 
       const item: RecurringItem = {
-        id,
+        id: existing?.id ?? `rec_${Date.now()}`, // your ID helper is optional here
         title: cleanTitle,
         amount: numericAmount,
         frequency,
+        isTransfer: true,
+        fromAccountId,
+        toAccountId,
+        active,
+        nextDueDate: nextDueISO,
+      };
+
+      if (existing) {
+        actions.updateRecurring(existing.id, item);
+      } else {
+        actions.addRecurring(item);
+      }
+    } else {
+      // --- Single-account recurring ---
+      const chosenAccountId = singleAccountId || accounts[0].id;
+
+      const item: RecurringItem = {
+        id: existing?.id ?? `rec_${Date.now()}`,
+        title: cleanTitle,
+        amount: numericAmount,
+        frequency,
+        accountId: chosenAccountId,
         type,
         active,
         nextDueDate: nextDueISO,
-        accountId: chosenAccountId,
+        isTransfer: false,
+        fromAccountId: undefined,
+        toAccountId: undefined,
       };
 
-      actions.addRecurring(item);
+      if (existing) {
+        actions.updateRecurring(existing.id, item);
+      } else {
+        actions.addRecurring(item);
+      }
     }
 
     navigation.goBack();
@@ -137,7 +189,7 @@ const RecurringEditorScreen: React.FC = () => {
   const onDelete = () => {
     if (!existing) return;
     Alert.alert(
-      'Delete recurring payment',
+      'Delete recurring item',
       `Are you sure you want to delete "${existing.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -163,6 +215,45 @@ const RecurringEditorScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.wrap}>
         <Text style={styles.h1}>{screenTitle}</Text>
 
+        {/* Mode: single vs transfer */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Mode</Text>
+          <View style={styles.row}>
+            <Pressable
+              style={[
+                styles.chip,
+                !isTransfer && styles.chipSelected,
+              ]}
+              onPress={() => setIsTransfer(false)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  !isTransfer && styles.chipTextSelected,
+                ]}
+              >
+                Single account
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.chip,
+                isTransfer && styles.chipSelected,
+              ]}
+              onPress={() => setIsTransfer(true)}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  isTransfer && styles.chipTextSelected,
+                ]}
+              >
+                Transfer between accounts
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
         {/* Title */}
         <View style={styles.field}>
           <Text style={styles.label}>Title</Text>
@@ -170,7 +261,7 @@ const RecurringEditorScreen: React.FC = () => {
             style={styles.input}
             value={title}
             onChangeText={setTitle}
-            placeholder="e.g. Netflix, Rent, Salary"
+            placeholder="e.g. Netflix, Rent, Move to savings"
             placeholderTextColor="#6b7280"
           />
         </View>
@@ -188,76 +279,147 @@ const RecurringEditorScreen: React.FC = () => {
           />
         </View>
 
-        {/* Account */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Account</Text>
-          {accounts.length === 0 ? (
-            <Text style={styles.helperText}>
-              No accounts yet. Add an account from the Dashboard before creating recurring items.
-            </Text>
-          ) : (
-            <View style={styles.rowWrap}>
-              {accounts.map((acc: any) => (
+        {/* Account / Transfer Accounts */}
+        {isTransfer ? (
+          <>
+            {/* From account */}
+            <View style={styles.field}>
+              <Text style={styles.label}>From account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.helperText}>
+                  No accounts yet. Add at least two accounts to set up a recurring transfer.
+                </Text>
+              ) : (
+                <View style={styles.rowWrap}>
+                  {accounts.map((acc: any) => (
+                    <Pressable
+                      key={acc.id}
+                      style={[
+                        styles.chip,
+                        fromAccountId === acc.id && styles.chipSelected,
+                      ]}
+                      onPress={() => setFromAccountId(acc.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          fromAccountId === acc.id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {acc.name || 'Account'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* To account */}
+            <View style={styles.field}>
+              <Text style={styles.label}>To account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.helperText}>
+                  No accounts yet. Add at least two accounts to set up a recurring transfer.
+                </Text>
+              ) : (
+                <View style={styles.rowWrap}>
+                  {accounts.map((acc: any) => (
+                    <Pressable
+                      key={acc.id}
+                      style={[
+                        styles.chip,
+                        toAccountId === acc.id && styles.chipSelected,
+                      ]}
+                      onPress={() => setToAccountId(acc.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          toAccountId === acc.id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {acc.name || 'Account'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Single account */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Account</Text>
+              {accounts.length === 0 ? (
+                <Text style={styles.helperText}>
+                  No accounts yet. Add an account from the Dashboard before creating recurring items.
+                </Text>
+              ) : (
+                <View style={styles.rowWrap}>
+                  {accounts.map((acc: any) => (
+                    <Pressable
+                      key={acc.id}
+                      style={[
+                        styles.chip,
+                        singleAccountId === acc.id && styles.chipSelected,
+                      ]}
+                      onPress={() => setSingleAccountId(acc.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          singleAccountId === acc.id && styles.chipTextSelected,
+                        ]}
+                      >
+                        {acc.name || 'Account'}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Type */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Type</Text>
+              <View style={styles.row}>
                 <Pressable
-                  key={acc.id}
                   style={[
                     styles.chip,
-                    accountId === acc.id && styles.chipSelected,
+                    type === 'expense' && styles.chipSelected,
                   ]}
-                  onPress={() => setAccountId(acc.id)}
+                  onPress={() => setType('expense')}
                 >
                   <Text
                     style={[
                       styles.chipText,
-                      accountId === acc.id && styles.chipTextSelected,
+                      type === 'expense' && styles.chipTextSelected,
                     ]}
                   >
-                    {acc.name || 'Account'}
+                    Expense
                   </Text>
                 </Pressable>
-              ))}
+                <Pressable
+                  style={[
+                    styles.chip,
+                    type === 'income' && styles.chipSelected,
+                  ]}
+                  onPress={() => setType('income')}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      type === 'income' && styles.chipTextSelected,
+                    ]}
+                  >
+                    Income
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          )}
-        </View>
-
-        {/* Type */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Type</Text>
-          <View style={styles.row}>
-            <Pressable
-              style={[
-                styles.chip,
-                type === 'expense' && styles.chipSelected,
-              ]}
-              onPress={() => setType('expense')}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  type === 'expense' && styles.chipTextSelected,
-                ]}
-              >
-                Expense
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.chip,
-                type === 'income' && styles.chipSelected,
-              ]}
-              onPress={() => setType('income')}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  type === 'income' && styles.chipTextSelected,
-                ]}
-              >
-                Income
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+          </>
+        )}
 
         {/* Frequency */}
         <View style={styles.field}>
@@ -297,7 +459,7 @@ const RecurringEditorScreen: React.FC = () => {
           />
         </View>
 
-        {/* Active toggle */}
+        {/* Status */}
         <View style={styles.field}>
           <Text style={styles.label}>Status</Text>
           <View style={styles.row}>
@@ -336,7 +498,7 @@ const RecurringEditorScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Save / Delete buttons */}
+        {/* Buttons */}
         <View style={styles.buttonRow}>
           {existing && (
             <Pressable style={styles.deleteBtn} onPress={onDelete}>

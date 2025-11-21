@@ -31,27 +31,37 @@ export type Transaction = {
 };
 
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
-export type RecurringKind = 'income' | 'expense';
 
 export interface RecurringItem {
   id: string;
   title: string;
   amount: number;
   frequency: RecurringFrequency;
+
+  // Single-account recurring (existing behaviour)
   accountId?: string;
+  type?: 'income' | 'expense';
+
+  // Transfer-specific
+  isTransfer?: boolean;
+  fromAccountId?: string;
+  toAccountId?: string;
+
+  // Scheduling
   nextDueDate?: string; // ISO string
-  type?: RecurringKind;
+
+  // Status
   active?: boolean;
 }
 
 export interface AppState {
-  // kept as any[] to avoid breaking other code that might expect extra fields
   accounts: any[];
   transactions: any[];
   budgets: any[];
   categories: any[];
-  recurring: RecurringItem[]; // 🔹 NEW FIELD
+  recurring: RecurringItem[];
 }
+
 
 export type AppActions = {
   // Accounts

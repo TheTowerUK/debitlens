@@ -1,5 +1,5 @@
 // src/screens/RecentActivityScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,15 +14,10 @@ import { useApp } from '../state/AppProvider';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RecentActivity'>;
 
-type TxnFilterType = 'all' | 'income' | 'expense' | 'transfer';
-
 const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
   const { state } = useApp();
   const txs = state.transactions ?? [];
 
-  const [filter, setFilter] = useState<TxnFilterType>('all');
-
-  // Sorted newest → oldest
   const sortedTxs = useMemo(() => {
     const copy = [...txs];
     copy.sort(
@@ -33,34 +28,6 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
     return copy;
   }, [txs]);
 
-  const filteredTxs = useMemo(() => {
-    if (filter === 'all') return sortedTxs;
-
-    if (filter === 'income') {
-      return sortedTxs.filter((t) => t.type === 'income' && t.category !== 'Transfer');
-    }
-
-    if (filter === 'expense') {
-      return sortedTxs.filter((t) => t.type === 'expense' && t.category !== 'Transfer');
-    }
-
-    // transfer
-    return sortedTxs.filter((t) => t.category === 'Transfer');
-  }, [sortedTxs, filter]);
-
-  const filterLabel = (f: TxnFilterType): string => {
-    switch (f) {
-      case 'all':
-        return 'All';
-      case 'income':
-        return 'Income';
-      case 'expense':
-        return 'Expense';
-      case 'transfer':
-        return 'Transfers';
-    }
-  };
-
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Recent activity</Text>
@@ -68,55 +35,22 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
         All your latest transactions in one place.
       </Text>
 
-      {/* FILTER ROW */}
-      <View style={styles.filterRow}>
-        {(['all', 'income', 'expense', 'transfer'] as TxnFilterType[]).map(
-          (f) => (
-            <Pressable
-              key={f}
-              style={[
-                styles.filterChip,
-                filter === f && styles.filterChipSelected,
-              ]}
-              onPress={() => setFilter(f)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  filter === f && styles.filterChipTextSelected,
-                ]}
-              >
-                {filterLabel(f)}
-              </Text>
-            </Pressable>
-          )
-        )}
-      </View>
-
-      <Text style={styles.countLabel}>
-        Showing {filteredTxs.length} transaction
-        {filteredTxs.length === 1 ? '' : 's'}
-      </Text>
-
-      {filteredTxs.length === 0 ? (
+      {sortedTxs.length === 0 ? (
         <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No activity</Text>
+          <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptyText}>
-            No transactions for this filter yet.
+            Add income or expenses to see them listed here.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={filteredTxs}
+          data={sortedTxs}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
-            const label =
-              item.category === 'Transfer'
-                ? 'Transfer'
-                : item.category || 'Uncategorised';
+            const label = item.category || 'Uncategorised';
             const note = item.note || '';
             return (
               <Pressable
@@ -135,15 +69,10 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
                 <Text
                   style={[
                     styles.txAmount,
-                    item.category === 'Transfer'
-                      ? styles.transferText
-                      : isIncome
-                      ? styles.incomeText
-                      : styles.expenseText,
+                    isIncome ? styles.incomeText : styles.expenseText,
                   ]}
                 >
-                  {item.category === 'Transfer' ? '' : sign}
-                  £{Number(item.amount).toFixed(2)}
+                  {sign}£{Number(item.amount).toFixed(2)}
                 </Text>
               </Pressable>
             );
@@ -167,41 +96,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
-
-  filterRow: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    flexWrap: 'wrap',
-  },
-  filterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 8,
-    marginBottom: 6,
-    backgroundColor: '#020617',
-  },
-  filterChipSelected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  filterChipText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  filterChipTextSelected: {
-    color: '#F9FAFB',
-    fontWeight: '700',
-  },
-  countLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 10,
-  },
+  subtle: { color: '#9CA3AF', marginBottom: 16 },
 
   emptyBox: {
     marginTop: 8,
@@ -231,7 +126,6 @@ const styles = StyleSheet.create({
   txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
   incomeText: { color: '#22C55E' },
   expenseText: { color: '#F97373' },
-  transferText: { color: '#38BDF8' }, // cyan-ish for transfers
 });
 
 export default RecentActivityScreen;
