@@ -14,6 +14,7 @@ import {
   type RecurringItem,
   type RecurringFrequency,
 } from '../state/AppProvider';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
   daily: "Daily",
@@ -208,9 +209,10 @@ const RecurringScreen: React.FC = () => {
               <Text style={styles.itemSubtitle}>{subtitle}</Text>
               {r.nextDueDate && (
                 <Text style={styles.subtle}>
-                  Next due: {new Date(r.nextDueDate).toLocaleDateString()}
+                  Next due: {formatDateDDMMYYYY(r.nextDueDate)}
                 </Text>
               )}
+
             </Pressable>
 
             <View style={styles.rowActions}>

@@ -11,6 +11,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RecentActivity'>;
 
@@ -63,8 +64,11 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
                   <Text style={styles.txLabel}>{label}</Text>
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
                   {item.date ? (
-                    <Text style={styles.txMeta}>{item.date}</Text>
+                    <Text style={styles.txMeta}>
+                      {formatDateDDMMYYYY(item.date)}
+                    </Text>
                   ) : null}
+
                 </View>
                 <Text
                   style={[

@@ -6,7 +6,7 @@ import { useApp } from '../state/AppProvider';
 import { rowHash } from '../utils/csvUtils';
 import { CSV_TEMPLATE } from '../utils/csvTemplate';
 // use todayISO from your utils if you need a fallback date, otherwise provide a small toISODate helper
-import { todayISO } from '../utils/dateUtils';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 function toISODate(input: any): string | null {
   if (!input) return null;
@@ -48,7 +48,8 @@ export default function ReportDetailScreen({ route, navigation }: any) {
     // Replace filtering logic with your real report logic using route.params
     return (state.transactions || []).map((t: any) => ({
       id: t.id,
-      date: toISODate(t.date),
+      date: toISODate(t.date),                     // keep raw / ISO
+      displayDate: formatDateDDMMYYYY(t.date),     // for showing in UI
       amount: Number(t.amount),
       type: t.type === 'income' ? 'income' : 'expense',
       accountId: t.accountId || 'unassigned',
