@@ -71,7 +71,7 @@ const RecurringEditorScreen: React.FC = () => {
       (accounts.length > 1 ? accounts[1]?.id : accounts[0]?.id)
   );
 
-  // Next-due date (YYYY-MM-DD)
+  // Next-due date (DD-MM-YYYY format)
   const [nextDueDateInput, setNextDueDateInput] = useState<string>(
     existing?.nextDueDate ? existing.nextDueDate.slice(0, 10) : ''
   );
@@ -108,7 +108,7 @@ const RecurringEditorScreen: React.FC = () => {
     } else {
       const parsed = new Date(trimmedDate);
       if (isNaN(parsed.getTime())) {
-        Alert.alert('Invalid date', 'Please use format YYYY-MM-DD.');
+        Alert.alert('Invalid date', 'Please use format DD-MM-YYYY.');
         return;
       }
       parsed.setHours(0, 0, 0, 0);
@@ -454,7 +454,7 @@ const RecurringEditorScreen: React.FC = () => {
             style={styles.input}
             value={nextDueDateInput}
             onChangeText={setNextDueDateInput}
-            placeholder="YYYY-MM-DD (leave blank for today)"
+            placeholder="DD-MM-YYYY (leave blank for today)"
             placeholderTextColor="#6b7280"
           />
         </View>

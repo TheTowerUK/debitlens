@@ -49,7 +49,7 @@ export function parseCSV(text: string): { headers: string[], rows: string[][] } 
   return { headers, rows: rows.slice(1) };
 }
 
-/** Normalizes a date string into YYYY-MM-DD */
+/** Normalizes a date string into DD-MM-YYYY */
 export function toISODate(s: string): string {
   if (!s) return '';
   const t = String(s).trim();

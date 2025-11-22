@@ -4,8 +4,8 @@ export type ReportPreset = 'THIS_MONTH' | 'LAST_MONTH' | 'THIS_WEEK' | 'CUSTOM';
 
 
 export interface ReportFilter {
-  dateFrom?: string;           // ISO "YYYY-MM-DD"
-  dateTo?: string;             // ISO "YYYY-MM-DD" (inclusive)
+  dateFrom?: string;           // ISO "DD-MM-YYYY"
+  dateTo?: string;             // ISO "DD-MM-YYYY" (inclusive)
   accountIds?: string[];
   categoryIds?: string[];
 }

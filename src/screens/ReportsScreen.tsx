@@ -11,7 +11,7 @@ import {
 import { useApp } from '../state/AppProvider';
 
 type PeriodOption = {
-  key: string;   // 'YYYY-MM'
+  key: string;   // 'MM-YYYY'
   label: string; // 'Nov 2025'
 };
 

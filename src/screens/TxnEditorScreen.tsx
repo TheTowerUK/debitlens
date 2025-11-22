@@ -213,7 +213,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
             style={styles.input}
             value={date}
             onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
+            placeholder="DD-MM-YYYY"
             placeholderTextColor="#6b7280"
           />
         </View>

@@ -7,8 +7,8 @@ import * as FileSystem from 'expo-file-system';
 // -------------------- Types --------------------
 
 export type ReportFilter = {
-  dateFrom?: string;        // ISO date 'YYYY-MM-DD'
-  dateTo?: string;          // ISO date 'YYYY-MM-DD'
+  dateFrom?: string;        // ISO date 'DD-MM-YYYY'
+  dateTo?: string;          // ISO date 'DD-MM-YYYY'
   accountIds?: string[];    // account id strings
   categoryIds?: string[];   // category id strings
 };

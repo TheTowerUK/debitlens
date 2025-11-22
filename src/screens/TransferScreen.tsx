@@ -71,7 +71,7 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
     const trimmedDate = date.trim();
     const d = trimmedDate ? new Date(trimmedDate) : new Date();
     if (isNaN(d.getTime())) {
-      Alert.alert('Invalid date', 'Please use format YYYY-MM-DD.');
+      Alert.alert('Invalid date', 'Please use format DD-MM-YYYY.');
       return;
     }
     d.setHours(0, 0, 0, 0);
@@ -204,7 +204,7 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
             style={styles.input}
             value={date}
             onChangeText={setDate}
-            placeholder="YYYY-MM-DD"
+            placeholder="DD-MM-YYYY"
             placeholderTextColor="#6b7280"
           />
         </View>
