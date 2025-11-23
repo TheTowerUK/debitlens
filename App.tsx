@@ -28,6 +28,7 @@ import RecurringEditorScreen from './src/screens/RecurringEditorScreen';
 import AddAccountScreen from './src/screens/AddAccountScreen';
 import TransferScreen from './src/screens/TransferScreen';
 import RecentActivityScreen from './src/screens/RecentActivityScreen';
+import ReportDetailScreen from './src/screens/ReportDetailScreen';
 
 
 
@@ -62,6 +63,10 @@ export default function App() {
           <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
           <Stack.Screen name="Transfer" component={TransferScreen} />
           <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
+          <Stack.Screen name="Reports" component={ReportsScreen} />
+          <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+
+
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>

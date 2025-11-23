@@ -10,13 +10,20 @@ import {
 } from 'react-native';
 import { useApp, type Transaction } from '../state/AppProvider';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 
 type PeriodKey = 'thisMonth' | 'lastMonth' | 'allTime';
+
+type ReportsNav = NativeStackNavigationProp<RootStackParamList, 'Reports'>;
+
 
 const ReportsScreen: React.FC = () => {
   const { state } = useApp();
   const txs: Transaction[] = state.transactions || [];
 
+  const navigation = useNavigation<ReportsNav>();
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
 
   // Work out date boundaries for periods
@@ -164,20 +171,28 @@ const ReportsScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <View style={styles.card}>
-          {categoryRows.map((row) => (
-            <View key={row.category} style={styles.row}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.categoryLabel}>{row.category}</Text>
-              </View>
-              <Text style={styles.amountText}>
-                £{row.amount.toFixed(2)}
-              </Text>
-            </View>
-          ))}
+  <View style={styles.card}>
+    {categoryRows.map((row) => (
+      <Pressable
+        key={row.category}
+        style={styles.row}
+        onPress={() =>
+          navigation.navigate('ReportDetail', {
+            categoryKey: row.category,
+            period,
+          })
+        }
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.categoryLabel}>{row.category}</Text>
         </View>
-      )}
-
+        <Text style={styles.amountText}>
+          £{row.amount.toFixed(2)}
+        </Text>
+      </Pressable>
+    ))}
+  </View>
+)}
       {/* Transactions list for this period */}
       <Text style={styles.sectionTitle}>Transactions in this period</Text>
       {filteredTxs.length === 0 ? (

@@ -18,6 +18,10 @@ export type RootStackParamList = {
 
   History: undefined;
   Reports: undefined;
+  ReportDetail: {
+    categoryKey: string;
+    period: 'thisMonth' | 'lastMonth' | 'allTime';
+  };
 
   RecurringEditor:
     | {
