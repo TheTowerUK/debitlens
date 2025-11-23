@@ -22,9 +22,12 @@ type ReportsNav = NativeStackNavigationProp<RootStackParamList, 'Reports'>;
 const ReportsScreen: React.FC = () => {
   const { state } = useApp();
   const txs: Transaction[] = state.transactions || [];
+  const accounts = state.accounts || [];
 
-  const navigation = useNavigation<ReportsNav>();
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
+  const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
+  const navigation = useNavigation<ReportsNav>();
+
 
   // Work out date boundaries for periods
   const now = new Date();
@@ -33,23 +36,47 @@ const ReportsScreen: React.FC = () => {
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd = thisMonthStart;
 
-  const filteredTxs = useMemo(() => {
-    return txs.filter((t) => {
-      if (!t.date) return false;
-      const d = new Date(t.date);
-      if (isNaN(d.getTime())) return false;
+const filteredTxs = useMemo(() => {
+  return txs.filter((t) => {
+    if (!t.date) return false;
+    const d = new Date(t.date);
+    if (isNaN(d.getTime())) return false;
 
-      switch (period) {
-        case 'thisMonth':
-          return d >= thisMonthStart && d < nextMonthStart;
-        case 'lastMonth':
-          return d >= lastMonthStart && d < lastMonthEnd;
-        case 'allTime':
-        default:
-          return true;
+    // Period filter
+    let inPeriod = false;
+    switch (period) {
+      case 'thisMonth':
+        inPeriod = d >= thisMonthStart && d < nextMonthStart;
+        break;
+      case 'lastMonth':
+        inPeriod = d >= lastMonthStart && d < lastMonthEnd;
+        break;
+      case 'allTime':
+      default:
+        inPeriod = true;
+        break;
+    }
+    if (!inPeriod) return false;
+
+    // Account filter
+    if (selectedAccountId !== 'all') {
+      if (!t.accountId || t.accountId !== selectedAccountId) {
+        return false;
       }
-    });
-  }, [txs, period, thisMonthStart, nextMonthStart, lastMonthStart, lastMonthEnd]);
+    }
+
+    return true;
+  });
+}, [
+  txs,
+  period,
+  selectedAccountId,
+  thisMonthStart,
+  nextMonthStart,
+  lastMonthStart,
+  lastMonthEnd,
+]);
+
 
   // Summary totals
   const { totalIncome, totalExpense, net } = useMemo(() => {
@@ -130,6 +157,55 @@ const ReportsScreen: React.FC = () => {
           onPress={() => setPeriod('allTime')}
         />
       </View>
+
+        {/* Account selector */}
+        {accounts.length > 0 && (
+          <View style={styles.accountRow}>
+            <Pressable
+              style={[
+                styles.chip,
+                selectedAccountId === 'all' && styles.chipActive,
+              ]}
+              onPress={() => setSelectedAccountId('all')}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  selectedAccountId === 'all' && styles.chipTextActive,
+                ]}
+              >
+                All accounts
+              </Text>
+            </Pressable>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingLeft: 4 }}
+            >
+              {accounts.map((acc: any) => (
+                <Pressable
+                  key={acc.id}
+                  style={[
+                    styles.chip,
+                    selectedAccountId === acc.id && styles.chipActive,
+                  ]}
+                  onPress={() => setSelectedAccountId(acc.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedAccountId === acc.id && styles.chipTextActive,
+                    ]}
+                  >
+                    {acc.name || 'Account'}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
 
       {/* Summary cards */}
       <View style={styles.summaryRow}>
@@ -406,6 +482,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginLeft: 12,
   },
+    accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    columnGap: 8,
+  },
+
 });
 
 export default ReportsScreen;
