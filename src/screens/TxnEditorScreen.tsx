@@ -13,90 +13,145 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp } from '../state/AppProvider';
+import { useApp, type Transaction } from '../state/AppProvider';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
 
-export default function TxnEditorScreen({ navigation, route }: Props) {
-  const { state, actions } = useApp();
+// Parse DD/MM/YYYY into a Date (or null if invalid)
+function parseDDMMYYYY(input: string): Date | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
 
+  const parts = trimmed.split('/');
+  if (parts.length !== 3) return null;
+
+  const [ddStr, mmStr, yyyyStr] = parts;
+  const day = Number(ddStr);
+  const month = Number(mmStr);
+  const year = Number(yyyyStr);
+
+  if (!day || !month || !year) return null;
+  if (year < 1900 || year > 9999) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+
+  const d = new Date(year, month - 1, day);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day
+  ) {
+    return null;
+  }
+
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+const TxnEditorScreen: React.FC<Props> = ({ navigation, route }) => {
+  const { state, actions } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
   const params = route.params ?? {};
   const editingId = params.id;
-  const initialAccountId = params.accountId;
-  const initialTypeParam: 'income' | 'expense' | undefined = params.type;
+  const initialTypeParam = params.type;
 
-  const existing = useMemo(
-    () => (editingId ? txs.find((t: any) => t.id === editingId) : undefined),
+  const existing: Transaction | undefined = useMemo(
+    () => (editingId ? txs.find((t) => t.id === editingId) : undefined),
     [txs, editingId]
   );
 
-  const [accountId, setAccountId] = useState<string | undefined>(
-    existing?.accountId ?? initialAccountId ?? accounts[0]?.id
-  );
+  // Type (income/expense)
   const [type, setType] = useState<'income' | 'expense'>(
     existing?.type ?? initialTypeParam ?? 'expense'
   );
-  const [amount, setAmount] = useState(
+
+  // Account selection
+  const [accountId, setAccountId] = useState<string | undefined>(
+    existing?.accountId ??
+      params.accountId ??
+      (accounts.length ? accounts[0].id : undefined)
+  );
+
+  // Amount
+  const [amountInput, setAmountInput] = useState<string>(
     existing ? String(existing.amount) : ''
   );
-  const [date, setDate] = useState(
-    existing?.date ?? new Date().toISOString().slice(0, 10)
+
+  // Date (DD/MM/YYYY for UI)
+  const initialDateISO =
+    existing?.date ?? new Date().toISOString();
+
+  const [dateInput, setDateInput] = useState<string>(
+    formatDateDDMMYYYY(initialDateISO) // gives DD/MM/YYYY
   );
-  const [category, setCategory] = useState(existing?.category ?? '');
-  const [note, setNote] = useState(existing?.note ?? '');
 
-  const screenTitle = existing ? 'Edit Transaction' : 'Add Transaction';
+  // Category & note
+  const [category, setCategory] = useState<string>(
+    existing?.category ?? ''
+  );
+  const [note, setNote] = useState<string>(
+    existing?.note ?? ''
+  );
 
-  const onSave = () => {
-    if (!accounts.length) {
-      Alert.alert(
-        'No accounts',
-        'Please add an account before creating transactions.'
-      );
-      return;
-    }
+  const isEditing = !!existing;
+  const screenTitle = isEditing ? 'Edit transaction' : 'Add transaction';
 
-    const chosenAccountId = accountId || accounts[0].id;
-    const numericAmount = Number(amount);
+  const handleSave = () => {
+    const numericAmount = Number(amountInput);
 
     if (!numericAmount || isNaN(numericAmount)) {
       Alert.alert('Invalid amount', 'Please enter a valid amount.');
       return;
     }
 
-    const txDate =
-      date && date.trim().length > 0
-        ? date
-        : new Date().toISOString().slice(0, 10);
+    if (!accounts.length) {
+      Alert.alert(
+        'No accounts',
+        'Please create an account before adding transactions.'
+      );
+      return;
+    }
 
-    if (existing) {
-      actions.updateTransaction(existing.id, {
-        accountId: chosenAccountId,
-        amount: numericAmount,
-        type,
-        date: txDate,
-        category: category || null,
-        note: note || null,
-      });
+    const chosenAccountId = accountId ?? accounts[0].id;
+
+    // Parse DD/MM/YYYY input
+    const parsedDate = parseDDMMYYYY(dateInput);
+    if (!parsedDate) {
+      Alert.alert(
+        'Invalid date',
+        'Please use format DD/MM/YYYY, e.g. 21/11/2025.'
+      );
+      return;
+    }
+    const isoDate = parsedDate.toISOString();
+
+    const cleanCategory = category.trim();
+    const cleanNote = note.trim();
+
+    const patch: Omit<Transaction, 'id'> = {
+      accountId: chosenAccountId,
+      amount: numericAmount,
+      type,
+      date: isoDate,
+      category: cleanCategory || null,
+      note: cleanNote || null,
+    };
+
+    if (isEditing && existing) {
+      actions.updateTransaction(existing.id, patch);
     } else {
-      actions.addTransaction({
-        accountId: chosenAccountId,
-        amount: numericAmount,
-        type,
-        date: txDate,
-        category: category || null,
-        note: note || null,
-      });
+      actions.addTransaction(patch);
     }
 
     navigation.goBack();
   };
 
-  const onDelete = () => {
+  const handleDelete = () => {
     if (!existing) return;
+
     Alert.alert(
       'Delete transaction',
       'Are you sure you want to delete this transaction?',
@@ -114,6 +169,10 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     );
   };
 
+  const handleCancel = () => {
+    navigation.goBack();
+  };
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -121,38 +180,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     >
       <ScrollView contentContainerStyle={styles.wrap}>
         <Text style={styles.h1}>{screenTitle}</Text>
-
-        {/* Accounts */}
-        <View style={styles.field}>
-          <Text style={styles.label}>Account</Text>
-          {accounts.length === 0 ? (
-            <Text style={styles.helperText}>
-              No accounts yet. Add an account from the Dashboard.
-            </Text>
-          ) : (
-            <View style={styles.rowWrap}>
-              {accounts.map((acc: any) => (
-                <Pressable
-                  key={acc.id}
-                  style={[
-                    styles.chip,
-                    accountId === acc.id && styles.chipSelected,
-                  ]}
-                  onPress={() => setAccountId(acc.id)}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      accountId === acc.id && styles.chipTextSelected,
-                    ]}
-                  >
-                    {acc.name || 'Account'}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
 
         {/* Type */}
         <View style={styles.field}>
@@ -193,37 +220,69 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           </View>
         </View>
 
+        {/* Account */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Account</Text>
+          {accounts.length === 0 ? (
+            <Text style={styles.helperText}>
+              No accounts yet. Add an account from the Dashboard first.
+            </Text>
+          ) : (
+            <View style={styles.rowWrap}>
+              {accounts.map((acc: any) => (
+                <Pressable
+                  key={acc.id}
+                  style={[
+                    styles.chip,
+                    accountId === acc.id && styles.chipSelected,
+                  ]}
+                  onPress={() => setAccountId(acc.id)}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      accountId === acc.id && styles.chipTextSelected,
+                    ]}
+                  >
+                    {acc.name || 'Account'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
         {/* Amount */}
         <View style={styles.field}>
           <Text style={styles.label}>Amount</Text>
           <TextInput
             style={styles.input}
-            value={amount}
-            onChangeText={setAmount}
+            value={amountInput}
+            onChangeText={setAmountInput}
             keyboardType="decimal-pad"
             placeholder="0.00"
             placeholderTextColor="#6b7280"
           />
         </View>
 
-        {/* Date */}
+        {/* Date (DD/MM/YYYY) */}
         <View style={styles.field}>
-          <Text style={styles.label}>Date</Text>
+          <Text style={styles.label}>Date (DD/MM/YYYY)</Text>
           <TextInput
             style={styles.input}
-            value={date}
-            onChangeText={setDate}
-            placeholder="DD-MM-YYYY"
+            value={dateInput}
+            onChangeText={setDateInput}
+            placeholder="DD/MM/YYYY"
             placeholderTextColor="#6b7280"
           />
         </View>
 
         {/* Category */}
         <View style={styles.field}>
-          <Text style={styles.label}>Category</Text>
+          <Text style={styles.label}>Category (optional)</Text>
           <TextInput
             style={styles.input}
-            value={category ?? ''}
+            value={category}
             onChangeText={setCategory}
             placeholder="e.g. Groceries, Rent, Salary"
             placeholderTextColor="#6b7280"
@@ -232,12 +291,12 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
         {/* Note */}
         <View style={styles.field}>
-          <Text style={styles.label}>Note</Text>
+          <Text style={styles.label}>Note (optional)</Text>
           <TextInput
             style={[styles.input, styles.noteInput]}
-            value={note ?? ''}
+            value={note}
             onChangeText={setNote}
-            placeholder="Optional description"
+            placeholder="Details or description"
             placeholderTextColor="#6b7280"
             multiline
           />
@@ -245,21 +304,26 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
         {/* Buttons */}
         <View style={styles.buttonRow}>
-          {existing && (
-            <Pressable style={styles.deleteBtn} onPress={onDelete}>
+          <Pressable style={styles.cancelBtn} onPress={handleCancel}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </Pressable>
+
+          {isEditing && (
+            <Pressable style={styles.deleteBtn} onPress={handleDelete}>
               <Text style={styles.deleteText}>Delete</Text>
             </Pressable>
           )}
-          <Pressable style={styles.saveBtn} onPress={onSave}>
+
+          <Pressable style={styles.saveBtn} onPress={handleSave}>
             <Text style={styles.saveText}>
-              {existing ? 'Save Changes' : 'Add Transaction'}
+              {isEditing ? 'Save' : 'Add'}
             </Text>
           </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   wrap: {
@@ -273,7 +337,7 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 24,
     fontWeight: '800',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   field: {
     marginBottom: 20,
@@ -295,7 +359,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   noteInput: {
-    minHeight: 80,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   row: {
@@ -330,16 +394,29 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: 'row',
-    columnGap: 12,
+    columnGap: 8,
     marginTop: 8,
+    alignItems: 'center',
+  },
+  cancelBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    backgroundColor: '#111827',
+  },
+  cancelText: {
+    color: '#e5e7eb',
+    fontWeight: '500',
   },
   deleteBtn: {
-    backgroundColor: '#111827',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 999,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
     borderWidth: 1,
     borderColor: '#f87171',
+    backgroundColor: '#111827',
   },
   deleteText: {
     color: '#f87171',
@@ -347,9 +424,9 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#2563eb',
+    paddingVertical: 12,
     borderRadius: 999,
-    paddingVertical: 14,
+    backgroundColor: '#2563eb',
     alignItems: 'center',
   },
   saveText: {
@@ -358,3 +435,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
+
+export default TxnEditorScreen;
