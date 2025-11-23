@@ -63,7 +63,6 @@ export default function App() {
           <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
           <Stack.Screen name="Transfer" component={TransferScreen} />
           <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
-          <Stack.Screen name="Reports" component={ReportsScreen} />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
 
 
