@@ -14,8 +14,42 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppProvider';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Transfer'>;
+
+type TxType = 'income' | 'expense';
+
+// Parse DD/MM/YYYY into a Date (or null if invalid)
+function parseDDMMYYYY(input: string): Date | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const parts = trimmed.split('/');
+  if (parts.length !== 3) return null;
+
+  const [ddStr, mmStr, yyyyStr] = parts;
+  const day = Number(ddStr);
+  const month = Number(mmStr);
+  const year = Number(yyyyStr);
+
+  if (!day || !month || !year) return null;
+  if (year < 1900 || year > 9999) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+
+  const d = new Date(year, month - 1, day);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day
+  ) {
+    return null;
+  }
+
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
   const { state, actions } = useApp();
@@ -33,9 +67,13 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
       : accounts[0]?.id
   );
   const [amount, setAmount] = useState<string>('');
-  const [date, setDate] = useState<string>(
-    new Date().toISOString().slice(0, 10)
+
+  // UI date as DD/MM/YYYY
+  const todayISO = new Date().toISOString();
+  const [dateInput, setDateInput] = useState<string>(
+    formatDateDDMMYYYY(todayISO)
   );
+
   const [note, setNote] = useState<string>('');
 
   const canTransfer = useMemo(() => accounts.length >= 2, [accounts.length]);
@@ -68,14 +106,15 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
       return;
     }
 
-    const trimmedDate = date.trim();
-    const d = trimmedDate ? new Date(trimmedDate) : new Date();
-    if (isNaN(d.getTime())) {
-      Alert.alert('Invalid date', 'Please use format DD-MM-YYYY.');
+    const parsedDate = parseDDMMYYYY(dateInput);
+    if (!parsedDate) {
+      Alert.alert(
+        'Invalid date',
+        'Please use format DD/MM/YYYY, e.g. 21/11/2025.'
+      );
       return;
     }
-    d.setHours(0, 0, 0, 0);
-    const isoDate = d.toISOString();
+    const isoDate = parsedDate.toISOString();
 
     const fromAcc = accounts.find((a: any) => a.id === fromAccountId);
     const toAcc = accounts.find((a: any) => a.id === toAccountId);
@@ -197,14 +236,14 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
           />
         </View>
 
-        {/* Date */}
+        {/* Date (DD/MM/YYYY) */}
         <View style={styles.field}>
-          <Text style={styles.label}>Date</Text>
+          <Text style={styles.label}>Date (DD/MM/YYYY)</Text>
           <TextInput
             style={styles.input}
-            value={date}
-            onChangeText={setDate}
-            placeholder="DD-MM-YYYY"
+            value={dateInput}
+            onChangeText={setDateInput}
+            placeholder="DD/MM/YYYY"
             placeholderTextColor="#6b7280"
           />
         </View>
@@ -228,10 +267,7 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
           <Pressable
-            style={[
-              styles.saveBtn,
-              !canTransfer && { opacity: 0.5 },
-            ]}
+            style={[styles.saveBtn, !canTransfer && { opacity: 0.5 }]}
             onPress={onSave}
             disabled={!canTransfer}
           >
@@ -322,11 +358,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cancelBtn: {
-    flex: 1,
     backgroundColor: '#111827',
     borderRadius: 999,
     paddingVertical: 14,
-    alignItems: 'center',
+    paddingHorizontal: 18,
     borderWidth: 1,
     borderColor: '#4b5563',
   },

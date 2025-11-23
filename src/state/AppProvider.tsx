@@ -30,6 +30,24 @@ export type Transaction = {
   category?: string | null;
 };
 
+export interface Budget {
+  id: string;
+  title: string;
+  amount: number;
+  // Optional category this budget is tied to; if null/empty, treated as "All expenses"
+  category?: string | null;
+  // For now we only support monthly budgets, but the field lets us extend later.
+  period?: 'monthly';
+}
+
+export interface AppState {
+  accounts: any[];       // keep your existing types if you already have them
+  transactions: any[];
+  budgets: Budget[];
+  categories: any[];
+  recurring: RecurringItem[]; // <-- ADD THIS
+}
+
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface RecurringItem {
@@ -57,7 +75,7 @@ export interface RecurringItem {
 export interface AppState {
   accounts: any[];
   transactions: any[];
-  budgets: any[];
+  budgets: Budget[];
   categories: any[];
   recurring: RecurringItem[];
 }
@@ -80,6 +98,12 @@ export type AppActions = {
   addRecurring: (item: RecurringItem) => void;
   updateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
   deleteRecurring: (id: string) => void;
+
+  // --- Budgets ---
+  addBudget: (b: Omit<Budget, 'id'>) => Budget;
+  updateBudget: (id: string, patch: Partial<Budget>) => void;
+  deleteBudget: (id: string) => void;
+
 };
 
 export type AppContextValue = {
@@ -218,6 +242,38 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
+  // --- Budgets ---
+
+  const addBudget = useCallback((b: Omit<Budget, 'id'>): Budget => {
+    const budget: Budget = {
+      id: makeId('bud_'),
+      period: 'monthly',
+      ...b,
+    };
+    setState(prev => ({
+      ...prev,
+      budgets: [...prev.budgets, budget],
+    }));
+    return budget;
+  }, []);
+
+  const updateBudget = useCallback((id: string, patch: Partial<Budget>) => {
+    setState(prev => ({
+      ...prev,
+      budgets: prev.budgets.map(b =>
+        b.id === id ? { ...b, ...patch } : b
+      ),
+    }));
+  }, []);
+
+  const deleteBudget = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      budgets: prev.budgets.filter(b => b.id !== id),
+    }));
+  }, []);
+
+
   // --- PIN management ---
 
   const getPin = useCallback(async () => {
@@ -239,18 +295,24 @@ export function AppProvider({ children }: Props) {
       addAccount,
       setAccounts,
       updateAccount,
-      deleteAccount,
       addTransaction,
       setTransactions,
       deleteTransaction,
+      deleteAccount,
       updateTransaction,
-      addRecurring,       // 🔹 wired in
-      updateRecurring,    // 🔹 wired in
-      deleteRecurring,    // 🔹 wired in
+      addRecurring,
+      updateRecurring,
+      deleteRecurring,
+
+      // budgets
+      addBudget,
+      updateBudget,
+      deleteBudget,
     },
     getPin,
     setPin,
   };
+
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }

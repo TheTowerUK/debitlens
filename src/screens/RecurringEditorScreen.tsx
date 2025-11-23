@@ -1,5 +1,5 @@
 // src/screens/RecurringEditorScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -10,19 +10,51 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-} from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+} from "react-native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import {
   useApp,
   type RecurringItem,
   type RecurringFrequency,
-} from '../state/AppProvider';
+} from "../state/AppProvider";
+import { formatDateDDMMYYYY } from "../utils/formatDate";
 
 type RouteParams = {
   id?: string;
 };
 
-const FREQUENCIES: RecurringFrequency[] = ['daily', 'weekly', 'monthly', 'yearly'];
+const FREQUENCIES: RecurringFrequency[] = ["daily", "weekly", "monthly", "yearly"];
+
+// Parse DD/MM/YYYY into a Date (or null if invalid)
+function parseDDMMYYYY(input: string): Date | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  const parts = trimmed.split("/");
+  if (parts.length !== 3) return null;
+
+  const [ddStr, mmStr, yyyyStr] = parts;
+  const day = Number(ddStr);
+  const month = Number(mmStr);
+  const year = Number(yyyyStr);
+
+  if (!day || !month || !year) return null;
+  if (year < 1900 || year > 9999) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 31) return null;
+
+  const d = new Date(year, month - 1, day);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day
+  ) {
+    return null;
+  }
+
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 const RecurringEditorScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -40,29 +72,25 @@ const RecurringEditorScreen: React.FC = () => {
     [recurring, editingId]
   );
 
-  const [title, setTitle] = useState(existing?.title ?? '');
-  const [amount, setAmount] = useState(
-    existing ? String(existing.amount) : ''
-  );
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
   const [frequency, setFrequency] = useState<RecurringFrequency>(
-    existing?.frequency ?? 'monthly'
+    existing?.frequency ?? "monthly"
   );
-  const [active, setActive] = useState<boolean>(
-    existing?.active ?? true
-  );
+  const [active, setActive] = useState<boolean>(existing?.active ?? true);
 
-  // NEW: mode – single-account vs transfer
+  // Mode: single-account vs transfer
   const [isTransfer, setIsTransfer] = useState<boolean>(existing?.isTransfer ?? false);
 
-  // For single-account recurring
+  // Single-account
   const [singleAccountId, setSingleAccountId] = useState<string | undefined>(
     existing?.accountId ?? accounts[0]?.id
   );
-  const [type, setType] = useState<'income' | 'expense'>(
-    existing?.type ?? 'expense'
+  const [type, setType] = useState<"income" | "expense">(
+    existing?.type ?? "expense"
   );
 
-  // For transfer recurring
+  // Transfer
   const [fromAccountId, setFromAccountId] = useState<string | undefined>(
     existing?.fromAccountId ?? accounts[0]?.id
   );
@@ -71,9 +99,9 @@ const RecurringEditorScreen: React.FC = () => {
       (accounts.length > 1 ? accounts[1]?.id : accounts[0]?.id)
   );
 
-  // Next-due date (DD-MM-YYYY format)
+  // Next due date (DD/MM/YYYY)
   const [nextDueDateInput, setNextDueDateInput] = useState<string>(
-    existing?.nextDueDate ? existing.nextDueDate.slice(0, 10) : ''
+    existing?.nextDueDate ? formatDateDDMMYYYY(existing.nextDueDate) : ""
   );
 
   const onSave = () => {
@@ -81,24 +109,24 @@ const RecurringEditorScreen: React.FC = () => {
     const numericAmount = Number(amount);
 
     if (!cleanTitle) {
-      Alert.alert('Missing title', 'Please enter a title.');
+      Alert.alert("Missing title", "Please enter a title.");
       return;
     }
 
     if (!numericAmount || isNaN(numericAmount)) {
-      Alert.alert('Invalid amount', 'Please enter a valid amount.');
+      Alert.alert("Invalid amount", "Please enter a valid amount.");
       return;
     }
 
     if (!accounts.length) {
       Alert.alert(
-        'No accounts',
-        'Please create at least one account before adding a recurring item.'
+        "No accounts",
+        "Please create at least one account before adding a recurring item."
       );
       return;
     }
 
-    // Handle date
+    // date handling - DD/MM/YYYY
     const trimmedDate = nextDueDateInput.trim();
     let nextDueISO: string;
     if (!trimmedDate) {
@@ -106,43 +134,40 @@ const RecurringEditorScreen: React.FC = () => {
       today.setHours(0, 0, 0, 0);
       nextDueISO = today.toISOString();
     } else {
-      const parsed = new Date(trimmedDate);
-      if (isNaN(parsed.getTime())) {
-        Alert.alert('Invalid date', 'Please use format DD-MM-YYYY.');
+      const parsed = parseDDMMYYYY(trimmedDate);
+      if (!parsed) {
+        Alert.alert(
+          "Invalid date",
+          "Please use format DD/MM/YYYY, e.g. 21/11/2025."
+        );
         return;
       }
-      parsed.setHours(0, 0, 0, 0);
       nextDueISO = parsed.toISOString();
     }
 
     if (isTransfer) {
-      // --- Transfer recurring ---
+      // transfer recurring
       if (accounts.length < 2) {
         Alert.alert(
-          'Need more accounts',
-          'You need at least two accounts to set up a recurring transfer.'
+          "Need more accounts",
+          "You need at least two accounts to set up a recurring transfer."
         );
         return;
       }
-
       if (!fromAccountId || !toAccountId) {
         Alert.alert(
-          'Select accounts',
-          'Please choose both From and To accounts.'
+          "Select accounts",
+          "Please choose both From and To accounts."
         );
         return;
       }
-
       if (fromAccountId === toAccountId) {
-        Alert.alert(
-          'Same account',
-          'From and To accounts must be different for a transfer.'
-        );
+        Alert.alert("Same account", "From and To accounts must be different.");
         return;
       }
 
       const item: RecurringItem = {
-        id: existing?.id ?? `rec_${Date.now()}`, // your ID helper is optional here
+        id: existing?.id ?? `rec_${Date.now()}`,
         title: cleanTitle,
         amount: numericAmount,
         frequency,
@@ -159,7 +184,7 @@ const RecurringEditorScreen: React.FC = () => {
         actions.addRecurring(item);
       }
     } else {
-      // --- Single-account recurring ---
+      // single-account recurring
       const chosenAccountId = singleAccountId || accounts[0].id;
 
       const item: RecurringItem = {
@@ -189,13 +214,13 @@ const RecurringEditorScreen: React.FC = () => {
   const onDelete = () => {
     if (!existing) return;
     Alert.alert(
-      'Delete recurring item',
+      "Delete recurring item",
       `Are you sure you want to delete "${existing.title}"?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: () => {
             actions.deleteRecurring(existing.id);
             navigation.goBack();
@@ -205,17 +230,17 @@ const RecurringEditorScreen: React.FC = () => {
     );
   };
 
-  const screenTitle = existing ? 'Edit Recurring' : 'Add Recurring';
+  const screenTitle = existing ? "Edit Recurring" : "Add Recurring";
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <ScrollView contentContainerStyle={styles.wrap}>
         <Text style={styles.h1}>{screenTitle}</Text>
 
-        {/* Mode: single vs transfer */}
+        {/* Mode */}
         <View style={styles.field}>
           <Text style={styles.label}>Mode</Text>
           <View style={styles.row}>
@@ -279,7 +304,7 @@ const RecurringEditorScreen: React.FC = () => {
           />
         </View>
 
-        {/* Account / Transfer Accounts */}
+        {/* Accounts section */}
         {isTransfer ? (
           <>
             {/* From account */}
@@ -287,7 +312,7 @@ const RecurringEditorScreen: React.FC = () => {
               <Text style={styles.label}>From account</Text>
               {accounts.length === 0 ? (
                 <Text style={styles.helperText}>
-                  No accounts yet. Add at least two accounts to set up a recurring transfer.
+                  Add at least two accounts before creating a recurring transfer.
                 </Text>
               ) : (
                 <View style={styles.rowWrap}>
@@ -306,7 +331,7 @@ const RecurringEditorScreen: React.FC = () => {
                           fromAccountId === acc.id && styles.chipTextSelected,
                         ]}
                       >
-                        {acc.name || 'Account'}
+                        {acc.name || "Account"}
                       </Text>
                     </Pressable>
                   ))}
@@ -319,7 +344,7 @@ const RecurringEditorScreen: React.FC = () => {
               <Text style={styles.label}>To account</Text>
               {accounts.length === 0 ? (
                 <Text style={styles.helperText}>
-                  No accounts yet. Add at least two accounts to set up a recurring transfer.
+                  Add at least two accounts before creating a recurring transfer.
                 </Text>
               ) : (
                 <View style={styles.rowWrap}>
@@ -338,7 +363,7 @@ const RecurringEditorScreen: React.FC = () => {
                           toAccountId === acc.id && styles.chipTextSelected,
                         ]}
                       >
-                        {acc.name || 'Account'}
+                        {acc.name || "Account"}
                       </Text>
                     </Pressable>
                   ))}
@@ -353,7 +378,7 @@ const RecurringEditorScreen: React.FC = () => {
               <Text style={styles.label}>Account</Text>
               {accounts.length === 0 ? (
                 <Text style={styles.helperText}>
-                  No accounts yet. Add an account from the Dashboard before creating recurring items.
+                  Add an account from the Dashboard before creating recurring items.
                 </Text>
               ) : (
                 <View style={styles.rowWrap}>
@@ -372,7 +397,7 @@ const RecurringEditorScreen: React.FC = () => {
                           singleAccountId === acc.id && styles.chipTextSelected,
                         ]}
                       >
-                        {acc.name || 'Account'}
+                        {acc.name || "Account"}
                       </Text>
                     </Pressable>
                   ))}
@@ -387,14 +412,14 @@ const RecurringEditorScreen: React.FC = () => {
                 <Pressable
                   style={[
                     styles.chip,
-                    type === 'expense' && styles.chipSelected,
+                    type === "expense" && styles.chipSelected,
                   ]}
-                  onPress={() => setType('expense')}
+                  onPress={() => setType("expense")}
                 >
                   <Text
                     style={[
                       styles.chipText,
-                      type === 'expense' && styles.chipTextSelected,
+                      type === "expense" && styles.chipTextSelected,
                     ]}
                   >
                     Expense
@@ -403,14 +428,14 @@ const RecurringEditorScreen: React.FC = () => {
                 <Pressable
                   style={[
                     styles.chip,
-                    type === 'income' && styles.chipSelected,
+                    type === "income" && styles.chipSelected,
                   ]}
-                  onPress={() => setType('income')}
+                  onPress={() => setType("income")}
                 >
                   <Text
                     style={[
                       styles.chipText,
-                      type === 'income' && styles.chipTextSelected,
+                      type === "income" && styles.chipTextSelected,
                     ]}
                   >
                     Income
@@ -449,12 +474,12 @@ const RecurringEditorScreen: React.FC = () => {
 
         {/* Next due date */}
         <View style={styles.field}>
-          <Text style={styles.label}>Next due date</Text>
+          <Text style={styles.label}>Next due date (DD/MM/YYYY)</Text>
           <TextInput
             style={styles.input}
             value={nextDueDateInput}
             onChangeText={setNextDueDateInput}
-            placeholder="DD-MM-YYYY (leave blank for today)"
+            placeholder="DD/MM/YYYY (leave blank for today)"
             placeholderTextColor="#6b7280"
           />
         </View>
@@ -508,7 +533,7 @@ const RecurringEditorScreen: React.FC = () => {
 
           <Pressable style={styles.saveBtn} onPress={onSave}>
             <Text style={styles.saveBtnText}>
-              {existing ? 'Save Changes' : 'Add Recurring'}
+              {existing ? "Save Changes" : "Add Recurring"}
             </Text>
           </Pressable>
         </View>
@@ -520,43 +545,43 @@ const RecurringEditorScreen: React.FC = () => {
 const styles = StyleSheet.create({
   wrap: {
     flexGrow: 1,
-    backgroundColor: '#050816',
+    backgroundColor: "#050816",
     paddingHorizontal: 16,
     paddingTop: 24,
     paddingBottom: 32,
   },
   h1: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 20,
   },
   field: {
     marginBottom: 20,
   },
   label: {
-    color: '#e5e7eb',
+    color: "#e5e7eb",
     marginBottom: 6,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   helperText: {
-    color: '#9ca3af',
+    color: "#9ca3af",
     fontSize: 13,
   },
   input: {
-    backgroundColor: '#111827',
-    color: '#f9fafb',
+    backgroundColor: "#111827",
+    color: "#f9fafb",
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     columnGap: 8,
   },
   rowWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     rowGap: 8,
     columnGap: 8,
   },
@@ -565,49 +590,49 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#4b5563',
-    backgroundColor: 'transparent',
+    borderColor: "#4b5563",
+    backgroundColor: "transparent",
   },
   chipSelected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
   },
   chipText: {
-    color: '#e5e7eb',
+    color: "#e5e7eb",
     fontSize: 14,
   },
   chipTextSelected: {
-    color: '#f9fafb',
-    fontWeight: '600',
+    color: "#f9fafb",
+    fontWeight: "600",
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     columnGap: 12,
     marginTop: 8,
   },
   saveBtn: {
     flex: 1,
-    backgroundColor: '#2563eb',
+    backgroundColor: "#2563eb",
     borderRadius: 999,
     paddingVertical: 14,
-    alignItems: 'center',
+    alignItems: "center",
   },
   saveBtnText: {
-    color: '#f9fafb',
-    fontWeight: '600',
+    color: "#f9fafb",
+    fontWeight: "600",
     fontSize: 16,
   },
   deleteBtn: {
-    backgroundColor: '#111827',
+    backgroundColor: "#111827",
     borderRadius: 999,
     paddingVertical: 14,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: '#f87171',
+    borderColor: "#f87171",
   },
   deleteBtnText: {
-    color: '#f87171',
-    fontWeight: '500',
+    color: "#f87171",
+    fontWeight: "500",
   },
 });
 
