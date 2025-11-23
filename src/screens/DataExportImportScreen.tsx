@@ -14,6 +14,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp, type Account, type Transaction, type RecurringItem, type Budget } from '../state/AppProvider';
+import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Data'>;
 
@@ -42,6 +43,75 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
     }),
     [state.accounts, state.transactions, state.budgets, state.recurring]
   );
+
+  const accountNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    (state.accounts as Account[] | undefined)?.forEach((a) => {
+      if (a.id) {
+        map.set(a.id, a.name || 'Account');
+      }
+    });
+    return map;
+  }, [state.accounts]);
+
+  const csvEscape = (value: unknown): string => {
+    if (value === null || value === undefined) return '';
+    const s = String(value).replace(/"/g, '""');
+    // wrap in quotes if contains comma, quote, or newline
+    if (/[",\n\r]/.test(s)) {
+      return `"${s}"`;
+    }
+    return s;
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const txs = (state.transactions as Transaction[] | undefined) ?? [];
+      if (txs.length === 0) {
+        Alert.alert('No transactions', 'There are no transactions to export yet.');
+        return;
+      }
+
+      const headers = ['Date', 'Type', 'Account', 'Category', 'Amount', 'Note'];
+      const rows: string[] = [];
+      rows.push(headers.join(','));
+
+      txs.forEach((t) => {
+        const date = t.date ? formatDateDDMMYYYY(t.date) : '';
+        const typeLabel = t.type === 'income' ? 'Income' : 'Expense';
+        const accountName = t.accountId
+          ? accountNameById.get(t.accountId) ?? ''
+          : '';
+        const category = t.category ?? '';
+        const amount = Number(t.amount) || 0;
+        const note = t.note ?? '';
+
+        const line = [
+          csvEscape(date),
+          csvEscape(typeLabel),
+          csvEscape(accountName),
+          csvEscape(category),
+          csvEscape(amount.toFixed(2)),
+          csvEscape(note),
+        ].join(',');
+
+        rows.push(line);
+      });
+
+      const csv = rows.join('\n');
+
+      await Share.share({
+        title: 'Debit Lens – transactions.csv',
+        message: csv,
+      });
+
+      setLastStatus('Exported transactions as CSV.');
+    } catch (err) {
+      console.error('CSV export error', err);
+      Alert.alert('Export failed', 'Something went wrong while exporting CSV.');
+    }
+  };
+
 
   const handleExportJSON = async () => {
     try {
@@ -169,17 +239,25 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {/* Export */}
-      <Text style={styles.sectionTitle}>Export</Text>
-      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Export</Text>
+        <View style={styles.card}>
         <Text style={styles.bodyText}>
-          This will create a JSON export containing accounts, transactions,
-          budgets, categories and recurring items. You can save it in a notes
-          app, cloud storage, or send it to yourself.
+            Export your data as JSON (for full backup/restore) or as a CSV list of
+            transactions that you can open in Excel or Google Sheets.
         </Text>
+
         <Pressable style={styles.primaryBtn} onPress={handleExportJSON}>
-          <Text style={styles.primaryBtnText}>Export JSON</Text>
+            <Text style={styles.primaryBtnText}>Export JSON (full backup)</Text>
         </Pressable>
-      </View>
+
+        <Pressable
+            style={[styles.secondaryBtn, { marginTop: 8 }]}
+            onPress={handleExportCSV}
+        >
+            <Text style={styles.secondaryBtnText}>Export CSV (transactions)</Text>
+        </Pressable>
+        </View>
+
 
       {/* Import */}
       <Text style={styles.sectionTitle}>Import</Text>
