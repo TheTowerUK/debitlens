@@ -104,6 +104,8 @@ export type AppActions = {
   updateBudget: (id: string, patch: Partial<Budget>) => void;
   deleteBudget: (id: string) => void;
 
+  // --- Import / Export ---
+  importData: (payload: Partial<AppState>) => void;
 };
 
 export type AppContextValue = {
@@ -273,6 +275,18 @@ export function AppProvider({ children }: Props) {
     }));
   }, []);
 
+  // --- Import data (merge/replace collections) ---
+
+  const importData = useCallback((data: Partial<AppState>) => {
+    setState(prev => ({
+      ...prev,
+      accounts: data.accounts ?? prev.accounts,
+      transactions: data.transactions ?? prev.transactions,
+      budgets: data.budgets ?? prev.budgets,
+      categories: data.categories ?? prev.categories,
+      recurring: data.recurring ?? prev.recurring,
+    }));
+  }, []);
 
   // --- PIN management ---
 
@@ -308,6 +322,8 @@ export function AppProvider({ children }: Props) {
       addBudget,
       updateBudget,
       deleteBudget,
+
+      importData,
     },
     getPin,
     setPin,

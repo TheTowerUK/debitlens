@@ -29,6 +29,7 @@ import AddAccountScreen from './src/screens/AddAccountScreen';
 import TransferScreen from './src/screens/TransferScreen';
 import RecentActivityScreen from './src/screens/RecentActivityScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
+import DataExportImportScreen from './src/screens/DataExportImportScreen';
 
 
 
@@ -64,6 +65,7 @@ export default function App() {
           <Stack.Screen name="Transfer" component={TransferScreen} />
           <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+          <Stack.Screen name="Data" component={DataExportImportScreen} />
 
 
         </Stack.Navigator>

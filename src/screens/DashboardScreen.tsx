@@ -168,7 +168,12 @@ const monthlyRecurringIncome = recurring
         <Pressable style={styles.secondaryButton} onPress={() => go('Notifications')}>
           <Text style={styles.secondaryText}>Notifications</Text>
         </Pressable>
-
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('Data')}
+        >
+          <Text style={styles.secondaryText}>Export / Import</Text>
+        </Pressable>
       </View>
 
       <View style={styles.quickRow}>

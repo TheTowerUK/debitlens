@@ -45,4 +45,5 @@ export type RootStackParamList = {
 
   // 🔹 NEW
   RecentActivity: undefined;
+  Data: undefined;
 };
