@@ -30,9 +30,12 @@ type ExportPayload = {
 
 const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
   const { state, actions } = useApp();
+  const accounts = (state.accounts as Account[] | undefined) ?? [];
 
   const [importText, setImportText] = useState('');
   const [lastStatus, setLastStatus] = useState<string>('');
+  const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
+
 
   const summary = useMemo(
     () => ({
@@ -72,11 +75,25 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
+      // Filter by selected account if not "all"
+      const filteredTxs =
+        selectedAccountId === 'all'
+          ? txs
+          : txs.filter((t) => t.accountId === selectedAccountId);
+
+      if (filteredTxs.length === 0) {
+        Alert.alert(
+          'No transactions',
+          'There are no transactions for the selected account.'
+        );
+        return;
+      }
+
       const headers = ['Date', 'Type', 'Account', 'Category', 'Amount', 'Note'];
       const rows: string[] = [];
       rows.push(headers.join(','));
 
-      txs.forEach((t) => {
+      filteredTxs.forEach((t) => {
         const date = t.date ? formatDateDDMMYYYY(t.date) : '';
         const typeLabel = t.type === 'income' ? 'Income' : 'Expense';
         const accountName = t.accountId
@@ -105,7 +122,11 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
         message: csv,
       });
 
-      setLastStatus('Exported transactions as CSV.');
+      setLastStatus(
+        selectedAccountId === 'all'
+          ? 'Exported all transactions as CSV.'
+          : 'Exported CSV for selected account.'
+      );
     } catch (err) {
       console.error('CSV export error', err);
       Alert.alert('Export failed', 'Something went wrong while exporting CSV.');
@@ -239,24 +260,71 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {/* Export */}
-        <Text style={styles.sectionTitle}>Export</Text>
-        <View style={styles.card}>
-        <Text style={styles.bodyText}>
-            Export your data as JSON (for full backup/restore) or as a CSV list of
-            transactions that you can open in Excel or Google Sheets.
-        </Text>
+<Text style={styles.sectionTitle}>Export</Text>
+<View style={styles.card}>
+  <Text style={styles.bodyText}>
+    Export your data as JSON (for full backup/restore) or as a CSV list of
+    transactions that you can open in Excel or Google Sheets.
+  </Text>
 
-        <Pressable style={styles.primaryBtn} onPress={handleExportJSON}>
-            <Text style={styles.primaryBtnText}>Export JSON (full backup)</Text>
-        </Pressable>
-
+  {accounts.length > 0 && (
+    <View style={styles.accountSelector}>
+      <Text style={styles.selectorLabel}>Account for CSV export</Text>
+      <View style={styles.accountChipRow}>
         <Pressable
-            style={[styles.secondaryBtn, { marginTop: 8 }]}
-            onPress={handleExportCSV}
+          style={[
+            styles.accountChip,
+            selectedAccountId === 'all' && styles.accountChipSelected,
+          ]}
+          onPress={() => setSelectedAccountId('all')}
         >
-            <Text style={styles.secondaryBtnText}>Export CSV (transactions)</Text>
+          <Text
+            style={[
+              styles.accountChipText,
+              selectedAccountId === 'all' && styles.accountChipTextSelected,
+            ]}
+          >
+            All accounts
+          </Text>
         </Pressable>
-        </View>
+
+        {accounts.map((acc) => (
+          <Pressable
+            key={acc.id}
+            style={[
+              styles.accountChip,
+              selectedAccountId === acc.id && styles.accountChipSelected,
+            ]}
+            onPress={() => setSelectedAccountId(acc.id)}
+          >
+            <Text
+              style={[
+                styles.accountChipText,
+                selectedAccountId === acc.id && styles.accountChipTextSelected,
+              ]}
+            >
+              {acc.name || 'Account'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  )}
+
+  <Pressable style={styles.primaryBtn} onPress={handleExportJSON}>
+    <Text style={styles.primaryBtnText}>Export JSON (full backup)</Text>
+  </Pressable>
+
+  <Pressable
+    style={[styles.secondaryBtn, { marginTop: 8 }]}
+    onPress={handleExportCSV}
+  >
+    <Text style={styles.secondaryBtnText}>
+      Export CSV (transactions{selectedAccountId === 'all' ? '' : ' – selected account'})
+    </Text>
+  </Pressable>
+</View>
+
 
 
       {/* Import */}
@@ -414,6 +482,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 8,
   },
+    accountSelector: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  selectorLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  accountChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  accountChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#020617',
+  },
+  accountChipSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#111827',
+  },
+  accountChipText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  accountChipTextSelected: {
+    color: '#BFDBFE',
+    fontWeight: '600',
+  },
+
 });
 
 export default DataExportImportScreen;
