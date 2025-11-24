@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useApp } from '../state/AppContext';
 
+
 type Props = {
   navigation: any; // you can replace 'any' with your stack param type later
 };

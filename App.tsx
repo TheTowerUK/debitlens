@@ -29,6 +29,7 @@ import TransferScreen from './src/screens/TransferScreen';
 import RecentActivityScreen from './src/screens/RecentActivityScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import DataExportImportScreen from './src/screens/DataExportImportScreen';
+import RootNavigator from './src/navigations/AppNavigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -36,6 +37,7 @@ export default function App() {
   return (
     <AppProvider>
       <NavigationContainer>
+        <RootNavigator/>
         <Stack.Navigator
           initialRouteName="Login"
           screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#020617' } }}
@@ -63,10 +65,9 @@ export default function App() {
           <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
           <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
           <Stack.Screen name="Data" component={DataExportImportScreen} />
-
-
         </Stack.Navigator>
       </NavigationContainer>
     </AppProvider>
   );
 }
+
