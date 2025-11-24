@@ -3,7 +3,6 @@ import 'react-native-gesture-handler';
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-
 import AppProvider from './src/state/AppProvider';
 import type { RootStackParamList } from './src/navigations/types';
 
@@ -30,8 +29,6 @@ import TransferScreen from './src/screens/TransferScreen';
 import RecentActivityScreen from './src/screens/RecentActivityScreen';
 import ReportDetailScreen from './src/screens/ReportDetailScreen';
 import DataExportImportScreen from './src/screens/DataExportImportScreen';
-
-
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
