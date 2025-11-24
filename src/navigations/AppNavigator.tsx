@@ -57,8 +57,9 @@ export default function AppNavigator() {
 
       {/* Accounts */}
       <Screen name="Account" component={AccountScreen} />
-      <Screen name="AddAccount" component={AccountScreen} /> 
-      <Screen name="Transfer" component={TransferScreen} /> 
+      <Screen name="AddAccount" component={AddAccountScreen} />
+      <Screen name="Transfer" component={TransferScreen} />
+      <Screen name="RecentActivity" component={RecentActivityScreen} />
 
       {/* Editor */}
       <Screen name="TxnEditor" component={TxnEditorScreen} />
@@ -69,13 +70,10 @@ export default function AppNavigator() {
       <Screen name="Budgets" component={BudgetsScreen} />
       <Screen name="Notifications" component={NotificationsScreen} />
       <Screen name="RecurringEditor" component={RecurringEditorScreen} />
+
       {/* Other */}
       <Screen name="Settings" component={SettingsScreen} />
       <Screen name="Reports" component={ReportsScreen} />
-      {/* Accounts */}
-      <Screen name="Account" component={AccountScreen} />
-      <Screen name="AddAccount" component={AddAccountScreen} /> 
-      <Screen name="RecentActivity" component={RecentActivityScreen} />
 
     </Navigator>
   );
