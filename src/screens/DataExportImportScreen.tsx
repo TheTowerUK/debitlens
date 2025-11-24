@@ -36,6 +36,11 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
   const [lastStatus, setLastStatus] = useState<string>('');
   const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
 
+  type CsvPeriod = 'thisMonth' | 'lastMonth' | 'allTime';
+  type CsvTxFilter = 'all' | 'income' | 'expense';
+
+  const [csvPeriod, setCsvPeriod] = useState<CsvPeriod>('thisMonth');
+  const [csvTxFilter, setCsvTxFilter] = useState<CsvTxFilter>('all');
 
   const summary = useMemo(
     () => ({
@@ -75,16 +80,59 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
         return;
       }
 
-      // Filter by selected account if not "all"
-      const filteredTxs =
-        selectedAccountId === 'all'
-          ? txs
-          : txs.filter((t) => t.accountId === selectedAccountId);
+      // date boundaries for period filters
+      const now = new Date();
+      const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastMonthEnd = thisMonthStart;
+
+      const filteredTxs = txs.filter((t) => {
+        // period filter
+        if (t.date) {
+          const d = new Date(t.date);
+          if (!isNaN(d.getTime())) {
+            let inPeriod = false;
+            switch (csvPeriod) {
+              case 'thisMonth':
+                inPeriod = d >= thisMonthStart && d < nextMonthStart;
+                break;
+              case 'lastMonth':
+                inPeriod = d >= lastMonthStart && d < lastMonthEnd;
+                break;
+              case 'allTime':
+              default:
+                inPeriod = true;
+                break;
+            }
+            if (!inPeriod) return false;
+          }
+        } else if (csvPeriod !== 'allTime') {
+          // no date + not "all time" => exclude
+          return false;
+        }
+
+        // account filter
+        if (selectedAccountId !== 'all') {
+          if (!t.accountId || t.accountId !== selectedAccountId) {
+            return false;
+          }
+        }
+
+        // type filter
+        if (csvTxFilter !== 'all') {
+          if (t.type !== csvTxFilter) {
+            return false;
+          }
+        }
+
+        return true;
+      });
 
       if (filteredTxs.length === 0) {
         Alert.alert(
           'No transactions',
-          'There are no transactions for the selected account.'
+          'No transactions match the selected period, account, and type filters.'
         );
         return;
       }
@@ -123,9 +171,9 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
       });
 
       setLastStatus(
-        selectedAccountId === 'all'
-          ? 'Exported all transactions as CSV.'
-          : 'Exported CSV for selected account.'
+        `Exported CSV (${csvPeriod}, ${csvTxFilter}, ${
+          selectedAccountId === 'all' ? 'all accounts' : 'one account'
+        }).`
       );
     } catch (err) {
       console.error('CSV export error', err);
@@ -264,11 +312,123 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
 <View style={styles.card}>
   <Text style={styles.bodyText}>
     Export your data as JSON (for full backup/restore) or as a CSV list of
-    transactions that you can open in Excel or Google Sheets.
+    transactions that you can open in Excel or Google Sheets. Use the filters
+    below to control which transactions go into the CSV.
   </Text>
 
+  {/* Period selector */}
+  <View style={styles.selectorBlock}>
+    <Text style={styles.selectorLabel}>Period for CSV export</Text>
+    <View style={styles.chipRow}>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvPeriod === 'thisMonth' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvPeriod('thisMonth')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvPeriod === 'thisMonth' && styles.filterChipTextSelected,
+          ]}
+        >
+          This month
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvPeriod === 'lastMonth' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvPeriod('lastMonth')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvPeriod === 'lastMonth' && styles.filterChipTextSelected,
+          ]}
+        >
+          Last month
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvPeriod === 'allTime' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvPeriod('allTime')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvPeriod === 'allTime' && styles.filterChipTextSelected,
+          ]}
+        >
+          All time
+        </Text>
+      </Pressable>
+    </View>
+  </View>
+
+  {/* Type filter */}
+  <View style={styles.selectorBlock}>
+    <Text style={styles.selectorLabel}>Type filter</Text>
+    <View style={styles.chipRow}>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvTxFilter === 'all' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvTxFilter('all')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvTxFilter === 'all' && styles.filterChipTextSelected,
+          ]}
+        >
+          All
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvTxFilter === 'income' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvTxFilter('income')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvTxFilter === 'income' && styles.filterChipTextSelected,
+          ]}
+        >
+          Income only
+        </Text>
+      </Pressable>
+      <Pressable
+        style={[
+          styles.filterChip,
+          csvTxFilter === 'expense' && styles.filterChipSelected,
+        ]}
+        onPress={() => setCsvTxFilter('expense')}
+      >
+        <Text
+          style={[
+            styles.filterChipText,
+            csvTxFilter === 'expense' && styles.filterChipTextSelected,
+          ]}
+        >
+          Expenses only
+        </Text>
+      </Pressable>
+    </View>
+  </View>
+
+  {/* Account filter for CSV */}
   {accounts.length > 0 && (
-    <View style={styles.accountSelector}>
+    <View style={styles.selectorBlock}>
       <Text style={styles.selectorLabel}>Account for CSV export</Text>
       <View style={styles.accountChipRow}>
         <Pressable
@@ -320,10 +480,11 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
     onPress={handleExportCSV}
   >
     <Text style={styles.secondaryBtnText}>
-      Export CSV (transactions{selectedAccountId === 'all' ? '' : ' – selected account'})
+      Export CSV (transactions with filters)
     </Text>
   </Pressable>
 </View>
+
 
 
 
@@ -513,6 +674,36 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   accountChipTextSelected: {
+    color: '#BFDBFE',
+    fontWeight: '600',
+  },
+  selectorBlock: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#020617',
+  },
+  filterChipSelected: {
+    borderColor: '#2563EB',
+    backgroundColor: '#111827',
+  },
+  filterChipText: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  filterChipTextSelected: {
     color: '#BFDBFE',
     fontWeight: '600',
   },
