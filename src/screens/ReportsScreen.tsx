@@ -8,7 +8,7 @@ import {
   Platform,
   Pressable,
 } from 'react-native';
-import { useApp, type Transaction } from '../state/AppProvider';
+import { useApp, type Transaction } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';

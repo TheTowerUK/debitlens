@@ -2,16 +2,18 @@
 import React, {
   createContext,
   useContext,
-  useState,
   useMemo,
+  useState,
   ReactNode,
 } from 'react';
+
+/** DOMAIN TYPES **/
 
 export interface Account {
   id: string;
   name?: string;
   label?: string;
-  // extend with any other fields you use
+  // add more fields if you already use them elsewhere
 }
 
 export type TransactionType = 'income' | 'expense';
@@ -19,40 +21,45 @@ export type TransactionType = 'income' | 'expense';
 export interface Transaction {
   id: string;
   accountId: string;
-  date: string; // ISO date string
+  date: string;           // ISO date string, e.g. "2025-11-26"
+  type: TransactionType;
+  amount: number;
+  description?: string;
+  category?: string;
+  note?: string;          // 👈 ADD THIS
+}
+
+
+export interface RecurringItem {
+  id: string;
+  accountId: string;
+  schedule: string;       // e.g. "monthly", "weekly"
   type: TransactionType;
   amount: number;
   description?: string;
   category?: string;
 }
 
-export interface RecurringItem {
-  id: string;
-  accountId: string;
-  schedule: string; // e.g. 'monthly', cron-like, etc.
-  amount: number;
-  type: TransactionType;
-  description?: string;
-  category?: string;
-  // add more fields as needed
-}
+/** STATE & ACTION TYPES **/
 
 export interface AppState {
   accounts: Account[];
   transactions: Transaction[];
   recurring: RecurringItem[];
-  // add more slices later if needed (budgets, reports, settings, etc.)
 }
 
 export interface AppActions {
+  // Accounts
   addAccount: (account: Partial<Account>) => void;
   updateAccount: (id: string, updates: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
 
+  // Transactions
   addTransaction: (tx: Partial<Transaction>) => void;
   updateTransaction: (id: string, updates: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
 
+  // Recurring
   addRecurring: (item: Partial<RecurringItem>) => void;
   updateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
   deleteRecurring: (id: string) => void;
@@ -63,13 +70,17 @@ export interface AppContextValue {
   actions: AppActions;
 }
 
-const AppContext = createContext<AppContextValue | undefined>(undefined);
+/** INITIAL STATE **/
 
 const initialState: AppState = {
   accounts: [],
   transactions: [],
   recurring: [],
 };
+
+/** IMPLEMENTATION **/
+
+const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 function generateId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -80,13 +91,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const actions = useMemo<AppActions>(
     () => ({
-      // -------- ACCOUNTS --------
+      // ------- ACCOUNTS -------
+
       addAccount(account) {
         setState((prev) => {
           const id = account.id ?? generateId('acct');
+          const newAccount: Account = {
+            id,
+            name: account.name ?? '',
+            label: account.label ?? account.name ?? '',
+          };
           return {
             ...prev,
-            accounts: [...prev.accounts, { ...account, id } as Account],
+            accounts: [...prev.accounts, newAccount],
           };
         });
       },
@@ -109,20 +126,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // -------- TRANSACTIONS --------
+      // ------- TRANSACTIONS -------
+
       addTransaction(tx) {
         setState((prev) => {
           const id = tx.id ?? generateId('tx');
+
           const accountId =
             tx.accountId ??
             prev.accounts[0]?.id ??
             generateId('missingAccount');
 
-          const amount = typeof tx.amount === 'number'
-            ? tx.amount
-            : Number(tx.amount ?? 0);
+          const amount =
+            typeof tx.amount === 'number'
+              ? tx.amount
+              : Number(tx.amount ?? 0);
 
-          const item: Transaction = {
+            const newTx: Transaction = {
             id,
             accountId,
             date: tx.date ?? new Date().toISOString().slice(0, 10),
@@ -130,11 +150,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             amount,
             description: tx.description ?? '',
             category: tx.category ?? '',
-          };
+            note: tx.note ?? '',     // 👈 ADD THIS
+            };
+
 
           return {
             ...prev,
-            transactions: [...prev.transactions, item],
+            transactions: [...prev.transactions, newTx],
           };
         });
       },
@@ -155,7 +177,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // -------- RECURRING --------
+      // ------- RECURRING -------
+
       addRecurring(item) {
         setState((prev) => {
           const id = item.id ?? generateId('rec');
@@ -164,9 +187,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             prev.accounts[0]?.id ??
             generateId('missingAccount');
 
-          const amount = typeof item.amount === 'number'
-            ? item.amount
-            : Number(item.amount ?? 0);
+          const amount =
+            typeof item.amount === 'number'
+              ? item.amount
+              : Number(item.amount ?? 0);
 
           const rec: RecurringItem = {
             id,
@@ -204,12 +228,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     []
   );
 
-  const value = useMemo<AppContextValue>(
+  const value: AppContextValue = useMemo(
     () => ({ state, actions }),
     [state, actions]
   );
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  return (
+    <AppContext.Provider value={value}>
+      {children}
+    </AppContext.Provider>
+  );
 };
 
 export function useApp(): AppContextValue {
