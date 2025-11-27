@@ -7,6 +7,26 @@ import React, {
   ReactNode,
 } from 'react';
 
+
+export interface NotificationPrefs {
+  enabled?: boolean;
+  dailyTime?: string; // "HH:MM"
+}
+
+export interface PrefsState {
+  notifications?: NotificationPrefs;
+}
+
+export interface AppState {
+  accounts: Account[];
+  transactions: Transaction[];
+  recurring: RecurringItem[];
+  budgets: Budget[];
+  pin?: string | null;
+
+  prefs?: PrefsState;    // 👈 add this
+}
+
 /** DOMAIN TYPES **/
 
 export interface Account {
@@ -122,7 +142,14 @@ const initialState: AppState = {
   recurring: [],
   budgets: [],
   pin: null,
+  prefs: {
+    notifications: {
+      enabled: false,
+      dailyTime: '09:00',
+    },
+  },
 };
+
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 

@@ -1,5 +1,5 @@
 // src/notifications/bootstrapper.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { useApp } from '../state/AppContext';
@@ -15,7 +15,9 @@ Notifications.setNotificationHandler({
 
 async function scheduleDailyLocal(timeHHMM) {
   try {
-    const [hh, mm] = String(timeHHMM || '09:00').split(':').map(x => parseInt(x, 10) || 0);
+    const [hh, mm] = String(timeHHMM || '09:00')
+      .split(':')
+      .map((x) => parseInt(x, 10) || 0);
 
     // Cancel previous schedules we manage
     const all = await Notifications.getAllScheduledNotificationsAsync();
@@ -36,7 +38,8 @@ async function scheduleDailyLocal(timeHHMM) {
         hour: hh,
         minute: mm,
         repeats: true,
-        channelId: Platform.OS === 'android' ? 'DebitLens-default' : undefined,
+        channelId:
+          Platform.OS === 'android' ? 'DebitLens-default' : undefined,
       },
     });
   } catch (e) {
@@ -45,40 +48,50 @@ async function scheduleDailyLocal(timeHHMM) {
 }
 
 export default function NotificationBootstrapper() {
-  const { state } = useApp?.() || { state: {} }; // extra guard if useApp changes
+  // useApp MUST be called unconditionally, inside AppProvider
+  const { state } = useApp();
 
-  React.useEffect(() => {
+  const enabled = !!state?.prefs?.notifications?.enabled;
+  const dailyTime =
+    state?.prefs?.notifications?.dailyTime || '09:00';
+
+  useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
         // Create Android channel (no-op on iOS)
         if (Platform.OS === 'android') {
           try {
-            await Notifications.setNotificationChannelAsync('DebitLens-default', {
-              name: 'DebitLens',
-              importance: Notifications.AndroidImportance.DEFAULT,
-            });
+            await Notifications.setNotificationChannelAsync(
+              'DebitLens-default',
+              {
+                name: 'DebitLens',
+                importance: Notifications.AndroidImportance.DEFAULT,
+              }
+            );
           } catch (e) {
             console.warn('[notifications] set channel failed', e);
           }
         }
 
-        const enabled = !!state?.prefs?.notifications?.enabled;
         if (!enabled || !mounted) return;
 
         // Ask for permission (idempotent)
-        const { status } = await Notifications.requestPermissionsAsync();
+        const { status } =
+          await Notifications.requestPermissionsAsync();
         if (status !== 'granted' || !mounted) return;
 
-        const t = state?.prefs?.notifications?.dailyTime || '09:00';
-        await scheduleDailyLocal(t);
+        await scheduleDailyLocal(dailyTime);
       } catch (e) {
         console.warn('[notifications] bootstrap error', e);
       }
     })();
 
-    return () => { mounted = false; };
-  }, [state?.prefs?.notifications?.enabled, state?.prefs?.notifications?.dailyTime]);
+    return () => {
+      mounted = false;
+    };
+  }, [enabled, dailyTime]);
 
   return null;
 }
