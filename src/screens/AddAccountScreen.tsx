@@ -4,132 +4,94 @@ import {
   View,
   Text,
   TextInput,
-  Pressable,
+  Button,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
+  ScrollView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useApp } from '../state/AppProvider';
+import { useApp } from '../state/AppContext';
 
-const AddAccountScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+type Props = {
+  navigation: any; // you can tighten this later with your stack types
+};
+
+const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
   const { actions } = useApp();
-  const [name, setName] = useState('');
+
+  const [name, setName] = useState<string>('');
+  const [label, setLabel] = useState<string>('');
 
   const handleSave = () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      Alert.alert('Account name required', 'Please enter an account name.');
+    const trimmedName = name.trim();
+    const trimmedLabel = label.trim();
+
+    if (!trimmedName) {
+      // you could use Alert here if you like
       return;
     }
 
-    actions.addAccount(trimmed);
-    navigation.goBack();
-  };
+    actions.addAccount({
+      name: trimmedName,
+      label: trimmedLabel || trimmedName,
+    });
 
-  const handleCancel = () => {
     navigation.goBack();
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <View style={styles.wrap}>
-        <Text style={styles.h1}>Add Account</Text>
-        <Text style={styles.subtle}>
-          Create a new account to track its balance and transactions.
-        </Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.heading}>Add Account</Text>
 
-        <View style={styles.field}>
-          <Text style={styles.label}>Account name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Monzo, Rent Account, Savings"
-            placeholderTextColor="#6b7280"
-          />
-        </View>
+      <Text style={styles.label}>Name</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Main Current Account"
+      />
 
-        <View style={styles.buttonRow}>
-          <Pressable style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-          <Pressable style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveText}>Save</Text>
-          </Pressable>
-        </View>
+      <Text style={styles.label}>Label (optional)</Text>
+      <TextInput
+        style={styles.input}
+        value={label}
+        onChangeText={setLabel}
+        placeholder="Short label to show in lists"
+      />
+
+      <View style={styles.buttonRow}>
+        <Button title="Save account" onPress={handleSave} />
       </View>
-    </KeyboardAvoidingView>
+
+      <View style={styles.buttonRow}>
+        <Button title="Cancel" onPress={() => navigation.goBack()} />
+      </View>
+    </ScrollView>
   );
 };
 
+export default AddAccountScreen;
+
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    backgroundColor: '#020617',
-    paddingHorizontal: 16,
-    paddingTop: 56,
+  container: {
+    padding: 16,
   },
-  h1: {
-    color: '#ffffff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  subtle: {
-    color: '#9CA3AF',
-    marginBottom: 24,
-  },
-  field: {
-    marginBottom: 20,
+  heading: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 16,
   },
   label: {
-    color: '#e5e7eb',
-    marginBottom: 6,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   input: {
-    backgroundColor: '#111827',
-    color: '#f9fafb',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 12,
   },
   buttonRow: {
-    flexDirection: 'row',
-    columnGap: 12,
     marginTop: 8,
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#111827',
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#4b5563',
-  },
-  cancelText: {
-    color: '#e5e7eb',
-    fontWeight: '500',
-  },
-  saveBtn: {
-    flex: 1,
-    backgroundColor: '#2563eb',
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  saveText: {
-    color: '#f9fafb',
-    fontWeight: '600',
-    fontSize: 16,
+    marginBottom: 8,
   },
 });
-
-export default AddAccountScreen;

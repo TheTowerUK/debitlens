@@ -10,7 +10,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useApp, type Budget, type Transaction } from '../state/AppProvider';
+import { useApp, type Budget, type Transaction } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type EditingState =

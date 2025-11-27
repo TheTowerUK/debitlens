@@ -13,7 +13,7 @@ import {
   useApp,
   type RecurringItem,
   type RecurringFrequency,
-} from '../state/AppProvider';
+} from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {

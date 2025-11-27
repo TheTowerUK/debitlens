@@ -1,83 +1,130 @@
-// src/screens/AccountEditorScreen.js
-import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, Alert } from 'react-native';
-import { useApp } from '../state/AppProvider';
-import AccountForm from '../components/AccountForm';
+// src/screens/AccountEditorScreen.tsx
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
+import { useApp, Account } from '../state/AppContext';
 
-export default function AccountEditorScreen({ navigation, route }) {
+type Props = {
+  navigation: any;
+  route: {
+    params?: {
+      accountId?: string;
+    };
+  };
+};
+
+const AccountEditorScreen: React.FC<Props> = ({ navigation, route }) => {
   const { state, actions } = useApp();
-  const { accountId } = route.params ?? {};
-  const isEditing = !!accountId;
+  const accountId = route.params?.accountId;
 
-  const [name, setName] = useState('');
-  const [type, setType] = useState(''); // kept for AccountForm compatibility
-  const [busy, setBusy] = useState(false);
+  const account: Account | undefined = useMemo(
+    () => state.accounts.find((a) => a.id === accountId),
+    [state.accounts, accountId]
+  );
 
-  // Set header title
-  React.useLayoutEffect(() => {
-    navigation.setOptions({ title: isEditing ? 'Edit Account' : 'New Account' });
-  }, [navigation, isEditing]);
+  const [name, setName] = useState<string>(account?.name ?? '');
+  const [label, setLabel] = useState<string>(account?.label ?? account?.name ?? '');
 
-  // Load existing account when editing
-  useEffect(() => {
-    if (!isEditing) return;
-
-    const acct = (state.accounts || []).find(a => a.id === accountId);
-    if (acct) {
-      setName(acct.name || '');
-      // We don't store "type" in AppState; leave it blank or derive later if needed
-      setType('');
-    }
-  }, [isEditing, accountId, state.accounts]);
-
-  const onSave = async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      Alert.alert('Name required', 'Please enter an account name.');
+  const handleSave = () => {
+    if (!accountId) {
       return;
     }
 
-    setBusy(true);
-    try {
-      if (isEditing && accountId) {
-        // Rename existing account
-        actions.updateAccount(accountId, { name: trimmed });
-        navigation.replace('Account', { accountId });
-      } else {
-        // Create new account
-        const account = actions.addAccount(trimmed);
-        navigation.replace('Account', { accountId: account.id });
-      }
-    } catch (e) {
-      console.warn('save account error', e);
-      Alert.alert('Error', String(e?.message || e));
-    } finally {
-      setBusy(false);
+    const trimmedName = name.trim();
+    const trimmedLabel = label.trim();
+
+    if (!trimmedName) {
+      return;
     }
+
+    actions.updateAccount(accountId, {
+      name: trimmedName,
+      label: trimmedLabel || trimmedName,
+    });
+
+    navigation.goBack();
   };
 
+  const handleDelete = () => {
+    if (!accountId) {
+      return;
+    }
+    actions.deleteAccount(accountId);
+    navigation.goBack();
+  };
+
+  if (!accountId || !account) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.heading}>Account not found</Text>
+        <View style={styles.buttonRow}>
+          <Button title="Back" onPress={() => navigation.goBack()} />
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>
-        {isEditing ? 'Edit Account' : 'Create Account'}
-      </Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.heading}>Edit Account</Text>
 
-      {busy && (
-        <ActivityIndicator
-          size="small"
-          color="#93C5FD"
-          style={{ marginBottom: 12 }}
-        />
-      )}
-
-      <AccountForm
-        name={name}
-        type={type}
-        setName={setName}
-        setType={setType}
-        onSave={onSave}
-        onCancel={() => navigation.goBack()}
+      <Text style={styles.label}>Name</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Main Current Account"
       />
-    </View>
+
+      <Text style={styles.label}>Label (optional)</Text>
+      <TextInput
+        style={styles.input}
+        value={label}
+        onChangeText={setLabel}
+        placeholder="Short label to show in lists"
+      />
+
+      <View style={styles.buttonRow}>
+        <Button title="Save changes" onPress={handleSave} />
+      </View>
+
+      <View style={styles.buttonRow}>
+        <Button title="Delete account" color="red" onPress={handleDelete} />
+      </View>
+    </ScrollView>
   );
-}
+};
+
+export default AccountEditorScreen;
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 16,
+  },
+  heading: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 6,
+    padding: 8,
+    marginBottom: 12,
+  },
+  buttonRow: {
+    marginTop: 8,
+    marginBottom: 8,
+  },
+});

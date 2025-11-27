@@ -13,7 +13,7 @@ export interface Account {
   id: string;
   name?: string;
   label?: string;
-  // add more fields if you already use them elsewhere
+  // extend as needed
 }
 
 export type TransactionType = 'income' | 'expense';
@@ -26,18 +26,51 @@ export interface Transaction {
   amount: number;
   description?: string;
   category?: string;
-  note?: string;          // 👈 ADD THIS
+  note?: string;          // used in ReportsScreen
 }
 
+/** Budgets **/
+
+export type BudgetPeriod = 'monthly' | 'weekly' | 'yearly' | 'oneoff';
+
+export interface Budget {
+  id: string;
+  name: string;
+  amount: number;
+  category?: string;
+  accountId?: string | null;
+  period?: BudgetPeriod;
+  note?: string;
+  title?: string;         // BudgetsScreen uses budget.title
+}
+
+/** Recurring **/
+
+export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export interface RecurringItem {
   id: string;
-  accountId: string;
-  schedule: string;       // e.g. "monthly", "weekly"
-  type: TransactionType;
+
+  // For simple recurring items
+  accountId?: string;           // optional so callers can omit and let addRecurring fill it
+
+  // For transfers
+  fromAccountId?: string;
+  toAccountId?: string;
+
+  type?: TransactionType;       // optional for same reason
   amount: number;
+
+  title?: string;               // display title
   description?: string;
   category?: string;
+
+  frequency?: RecurringFrequency; // e.g. 'monthly' – used in RecurringScreen
+  schedule?: string;              // legacy/fallback
+
+  nextDueDate?: string;           // ISO date string for next run
+  active?: boolean;               // enabled/disabled
+  isTransfer?: boolean;           // true if transfer
 }
 
 /** STATE & ACTION TYPES **/
@@ -46,6 +79,10 @@ export interface AppState {
   accounts: Account[];
   transactions: Transaction[];
   recurring: RecurringItem[];
+  budgets: Budget[];
+
+  // simple in-memory PIN (for SplashAuthScreen)
+  pin?: string | null;
 }
 
 export interface AppActions {
@@ -63,11 +100,23 @@ export interface AppActions {
   addRecurring: (item: Partial<RecurringItem>) => void;
   updateRecurring: (id: string, updates: Partial<RecurringItem>) => void;
   deleteRecurring: (id: string) => void;
+
+  // Budgets
+  addBudget: (budget: Partial<Budget>) => void;
+  updateBudget: (id: string, updates: Partial<Budget>) => void;
+  deleteBudget: (id: string) => void;
+
+  // PIN
+  setPin: (pin: string | null) => void;
 }
 
 export interface AppContextValue {
   state: AppState;
   actions: AppActions;
+
+  // convenience for SplashAuthScreen
+  getPin: () => string | null;
+  setPin: (pin: string | null) => void;
 }
 
 /** INITIAL STATE **/
@@ -76,6 +125,8 @@ const initialState: AppState = {
   accounts: [],
   transactions: [],
   recurring: [],
+  budgets: [],
+  pin: null,
 };
 
 /** IMPLEMENTATION **/
@@ -89,7 +140,7 @@ function generateId(prefix: string): string {
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AppState>(initialState);
 
-  const actions = useMemo<AppActions>(
+  const actions: AppActions = useMemo(
     () => ({
       // ------- ACCOUNTS -------
 
@@ -122,7 +173,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ...prev,
           accounts: prev.accounts.filter((a) => a.id !== id),
           transactions: prev.transactions.filter((t) => t.accountId !== id),
-          recurring: prev.recurring.filter((r) => r.accountId !== id),
+          recurring: prev.recurring.filter(
+            (r) =>
+              r.accountId !== id &&
+              r.fromAccountId !== id &&
+              r.toAccountId !== id
+          ),
+          budgets: prev.budgets.filter((b) => b.accountId !== id),
         }));
       },
 
@@ -142,7 +199,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               ? tx.amount
               : Number(tx.amount ?? 0);
 
-            const newTx: Transaction = {
+          const newTx: Transaction = {
             id,
             accountId,
             date: tx.date ?? new Date().toISOString().slice(0, 10),
@@ -150,9 +207,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             amount,
             description: tx.description ?? '',
             category: tx.category ?? '',
-            note: tx.note ?? '',     // 👈 ADD THIS
-            };
-
+            note: tx.note ?? '',
+          };
 
           return {
             ...prev,
@@ -182,8 +238,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addRecurring(item) {
         setState((prev) => {
           const id = item.id ?? generateId('rec');
+
           const accountId =
             item.accountId ??
+            item.fromAccountId ??
             prev.accounts[0]?.id ??
             generateId('missingAccount');
 
@@ -195,11 +253,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const rec: RecurringItem = {
             id,
             accountId,
-            schedule: item.schedule ?? 'monthly',
+            fromAccountId: item.fromAccountId,
+            toAccountId: item.toAccountId,
             type: item.type === 'income' ? 'income' : 'expense',
             amount,
+            title: item.title ?? '',
             description: item.description ?? '',
             category: item.category ?? '',
+            frequency: item.frequency ?? 'monthly',
+            schedule: item.schedule ?? undefined,
+            nextDueDate:
+              item.nextDueDate ?? new Date().toISOString().slice(0, 10),
+            active: item.active ?? true,
+            isTransfer: item.isTransfer ?? false,
           };
 
           return {
@@ -224,12 +290,70 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           recurring: prev.recurring.filter((r) => r.id !== id),
         }));
       },
+
+      // ------- BUDGETS -------
+
+      addBudget(budget) {
+        setState((prev) => {
+          const id = budget.id ?? generateId('bud');
+          const newBudget: Budget = {
+            id,
+            name: budget.name ?? 'Untitled budget',
+            amount:
+              typeof budget.amount === 'number'
+                ? budget.amount
+                : Number(budget.amount ?? 0),
+            category: budget.category,
+            accountId: budget.accountId ?? null,
+            period: budget.period ?? 'monthly',
+            note: budget.note ?? '',
+            title: budget.title ?? budget.name ?? 'Untitled budget',
+          };
+
+          return {
+            ...prev,
+            budgets: [...prev.budgets, newBudget],
+          };
+        });
+      },
+
+      updateBudget(id, updates) {
+        setState((prev) => ({
+          ...prev,
+          budgets: prev.budgets.map((b) =>
+            b.id === id ? { ...b, ...updates } : b
+          ),
+        }));
+      },
+
+      deleteBudget(id) {
+        setState((prev) => ({
+          ...prev,
+          budgets: prev.budgets.filter((b) => b.id !== id),
+        }));
+      },
+
+      // ------- PIN -------
+
+      setPin(pin) {
+        setState((prev) => ({
+          ...prev,
+          pin,
+        }));
+      },
     }),
     []
   );
 
+  const getPin = () => state.pin ?? null;
+
   const value: AppContextValue = useMemo(
-    () => ({ state, actions }),
+    () => ({
+      state,
+      actions,
+      getPin,
+      setPin: actions.setPin,
+    }),
     [state, actions]
   );
 
@@ -240,10 +364,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   );
 };
 
-export function useApp(): AppContextValue {
+export const useApp = (): AppContextValue => {
   const ctx = useContext(AppContext);
   if (!ctx) {
     throw new Error('useApp must be used within AppProvider');
   }
   return ctx;
-}
+};

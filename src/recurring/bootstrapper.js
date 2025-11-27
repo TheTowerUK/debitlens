@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useApp } from '../state/AppProvider';
+import { useApp } from '../state/AppContext';
 
 // Show local notifications as alerts by default
 Notifications.setNotificationHandler({

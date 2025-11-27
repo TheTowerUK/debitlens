@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp, type Transaction } from '../state/AppProvider';
+import { useApp, type Transaction } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;

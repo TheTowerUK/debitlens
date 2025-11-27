@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp } from '../state/AppProvider';
+import { useApp } from '../state/AppContext';
 
 // Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
