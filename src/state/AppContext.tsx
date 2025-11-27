@@ -13,7 +13,6 @@ export interface Account {
   id: string;
   name?: string;
   label?: string;
-  // extend as needed
 }
 
 export type TransactionType = 'income' | 'expense';
@@ -21,12 +20,12 @@ export type TransactionType = 'income' | 'expense';
 export interface Transaction {
   id: string;
   accountId: string;
-  date: string;           // ISO date string, e.g. "2025-11-26"
+  date: string;           // ISO date string
   type: TransactionType;
   amount: number;
   description?: string;
   category?: string;
-  note?: string;          // used in ReportsScreen
+  note?: string;
 }
 
 /** Budgets **/
@@ -41,7 +40,7 @@ export interface Budget {
   accountId?: string | null;
   period?: BudgetPeriod;
   note?: string;
-  title?: string;         // BudgetsScreen uses budget.title
+  title?: string;         // used by BudgetsScreen
 }
 
 /** Recurring **/
@@ -52,25 +51,25 @@ export interface RecurringItem {
   id: string;
 
   // For simple recurring items
-  accountId?: string;           // optional so callers can omit and let addRecurring fill it
+  accountId?: string;           // optional: we can infer in addRecurring
 
   // For transfers
   fromAccountId?: string;
   toAccountId?: string;
 
-  type?: TransactionType;       // optional for same reason
+  type?: TransactionType;
   amount: number;
 
-  title?: string;               // display title
+  title?: string;
   description?: string;
   category?: string;
 
-  frequency?: RecurringFrequency; // e.g. 'monthly' – used in RecurringScreen
-  schedule?: string;              // legacy/fallback
+  frequency?: RecurringFrequency;
+  schedule?: string;
 
-  nextDueDate?: string;           // ISO date string for next run
-  active?: boolean;               // enabled/disabled
-  isTransfer?: boolean;           // true if transfer
+  nextDueDate?: string;         // ISO date
+  active?: boolean;
+  isTransfer?: boolean;
 }
 
 /** STATE & ACTION TYPES **/
@@ -80,8 +79,6 @@ export interface AppState {
   transactions: Transaction[];
   recurring: RecurringItem[];
   budgets: Budget[];
-
-  // simple in-memory PIN (for SplashAuthScreen)
   pin?: string | null;
 }
 
@@ -113,8 +110,6 @@ export interface AppActions {
 export interface AppContextValue {
   state: AppState;
   actions: AppActions;
-
-  // convenience for SplashAuthScreen
   getPin: () => string | null;
   setPin: (pin: string | null) => void;
 }
@@ -129,8 +124,6 @@ const initialState: AppState = {
   pin: null,
 };
 
-/** IMPLEMENTATION **/
-
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 function generateId(prefix: string): string {
@@ -142,8 +135,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const actions: AppActions = useMemo(
     () => ({
-      // ------- ACCOUNTS -------
-
+      // ----- ACCOUNTS -----
       addAccount(account) {
         setState((prev) => {
           const id = account.id ?? generateId('acct');
@@ -183,8 +175,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // ------- TRANSACTIONS -------
-
+      // ----- TRANSACTIONS -----
       addTransaction(tx) {
         setState((prev) => {
           const id = tx.id ?? generateId('tx');
@@ -233,8 +224,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // ------- RECURRING -------
-
+      // ----- RECURRING -----
       addRecurring(item) {
         setState((prev) => {
           const id = item.id ?? generateId('rec');
@@ -291,8 +281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // ------- BUDGETS -------
-
+      // ----- BUDGETS -----
       addBudget(budget) {
         setState((prev) => {
           const id = budget.id ?? generateId('bud');
@@ -333,8 +322,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }));
       },
 
-      // ------- PIN -------
-
+      // ----- PIN -----
       setPin(pin) {
         setState((prev) => ({
           ...prev,
