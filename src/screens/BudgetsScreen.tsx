@@ -212,7 +212,7 @@ const BudgetsScreen: React.FC = () => {
 
       {/* Editor panel */}
       <View style={styles.editorContainer}>
-        <Text>{editing.mode === 'none' ? (
+        {editing.mode === 'none' ? (
           <Pressable style={styles.addButton} onPress={openNewBudget}>
             <Text style={styles.addButtonText}>Add budget</Text>
           </Pressable>
@@ -283,7 +283,7 @@ const BudgetsScreen: React.FC = () => {
               </Pressable>
             </View>
           </>
-        )}</Text>
+        )}
       </View>
     </ScrollView>
   );
