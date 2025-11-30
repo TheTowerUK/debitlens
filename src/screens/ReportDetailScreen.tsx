@@ -144,8 +144,8 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           {sortedTxs.map((t) => {
             const amt = Number(t.amount) || 0;
             const accountName = t.accountId
-              ? accountNameById.get(t.accountId) ?? 'Account'
-              : 'Account';
+              ? accountNameById.get(t.accountId)
+              : undefined;
             const note = t.note || '';
             const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : '';
 
@@ -157,8 +157,12 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   </Text>
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
                   <Text style={styles.txMeta}>
-                    {accountName}
-                    {dateLabel ? ` • ${dateLabel}` : ''}
+                    {accountName ? (
+                      <Text style={styles.txMeta}>{accountName}</Text>
+                    ) : (
+                      <Text style={styles.txMeta}>Account</Text>
+                    )}
+                    {dateLabel ? <Text style={styles.txMeta}> • {dateLabel}</Text> : null}
                   </Text>
                 </View>
               </View>

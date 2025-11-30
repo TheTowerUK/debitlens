@@ -11,7 +11,6 @@ import {
   Alert,
 } from 'react-native';
 import { useApp, type Budget, type Transaction } from '../state/AppContext';
-import { formatDateDDMMYYYY } from '../utils/formatDate';
 
 type EditingState =
   | { mode: 'none' }
@@ -32,7 +31,7 @@ const BudgetsScreen: React.FC = () => {
   // Derive distinct categories from transactions
   const categories = useMemo(() => {
     const set = new Set<string>();
-    txs.forEach(t => {
+    txs.forEach((t) => {
       if (t.category) {
         set.add(t.category);
       }
@@ -66,11 +65,13 @@ const BudgetsScreen: React.FC = () => {
 
   const enrichedBudgets = useMemo(
     () =>
-      budgets.map(b => {
+      budgets.map((b) => {
         const spent = getMonthlySpent(b);
         const remaining = b.amount - spent;
         const pct =
-          b.amount > 0 ? Math.min(100, Math.max(0, (spent / b.amount) * 100)) : 0;
+          b.amount > 0
+            ? Math.min(100, Math.max(0, (spent / b.amount) * 100))
+            : 0;
 
         return {
           ...b,
@@ -113,7 +114,10 @@ const BudgetsScreen: React.FC = () => {
     }
 
     if (!numericAmount || isNaN(numericAmount) || numericAmount <= 0) {
-      Alert.alert('Invalid amount', 'Please enter a budget amount greater than 0.');
+      Alert.alert(
+        'Invalid amount',
+        'Please enter a budget amount greater than 0.'
+      );
       return;
     }
 
@@ -139,24 +143,30 @@ const BudgetsScreen: React.FC = () => {
   };
 
   const handleDelete = (b: Budget) => {
-    Alert.alert(
-      'Delete budget',
-      `Are you sure you want to delete "${b.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => actions.deleteBudget(b.id),
-        },
-      ]
-    );
+    Alert.alert('Delete budget', `Delete "${b.title}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => actions.deleteBudget(b.id),
+      },
+    ]);
   };
 
   const monthLabel = (() => {
     const monthNames = [
-      'January','February','March','April','May','June',
-      'July','August','September','October','November','December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
   })();
@@ -180,7 +190,7 @@ const BudgetsScreen: React.FC = () => {
         </View>
       )}
 
-      {enrichedBudgets.map(b => (
+      {enrichedBudgets.map((b) => (
         <View key={b.id} style={styles.card}>
           <Pressable onPress={() => openEditBudget(b)}>
             <Text style={styles.cardTitle}>{b.title}</Text>
@@ -188,7 +198,8 @@ const BudgetsScreen: React.FC = () => {
               {b.category ? `Category: ${b.category}` : 'All expenses'}
             </Text>
             <Text style={styles.cardSubtitle}>
-              Budget: £{b.amount.toFixed(2)} · Spent: £{b.spent.toFixed(2)} · Remaining: £
+              Budget: £{b.amount.toFixed(2)} · Spent: £
+              {b.spent.toFixed(2)} · Remaining: £
               {b.remaining.toFixed(2)}
             </Text>
 
@@ -196,7 +207,9 @@ const BudgetsScreen: React.FC = () => {
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${b.pct}%` }]} />
             </View>
-            <Text style={styles.progressLabel}>{Math.round(b.pct)}% of budget used</Text>
+            <Text style={styles.progressLabel}>
+              {Math.round(b.pct)}% of budget used
+            </Text>
           </Pressable>
 
           <View style={styles.cardActions}>
@@ -204,7 +217,9 @@ const BudgetsScreen: React.FC = () => {
               <Text style={styles.actionText}>Edit</Text>
             </Pressable>
             <Pressable onPress={() => handleDelete(b)}>
-              <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
+              <Text style={[styles.actionText, styles.deleteText]}>
+                Delete
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -258,7 +273,7 @@ const BudgetsScreen: React.FC = () => {
                 <View style={styles.categoryHint}>
                   <Text style={styles.hintLabel}>Existing categories:</Text>
                   <View style={styles.categoryChipRow}>
-                    {categories.map(c => (
+                    {categories.map((c) => (
                       <Pressable
                         key={c}
                         style={styles.categoryChip}
