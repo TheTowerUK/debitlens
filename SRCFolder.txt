@@ -1,0 +1,156 @@
+Directory of D:\AppDev\base44-app\src\components
+
+28/10/2025  19:49    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+27/10/2025  11:27             1,489 AccountForm.tsx
+29/10/2025  07:56             4,069 ActionFab.tsx
+29/10/2025  07:56               592 BalanceCard.tsx
+26/10/2025  21:59               290 Center.tsx
+11/11/2025  04:57               798 ErrorBoundary.tsx
+19/10/2025  04:25             1,986 LineChart.tsx
+29/10/2025  07:56               764 PaymentCard.tsx
+29/10/2025  07:56             1,806 PaymentForm.tsx
+29/10/2025  07:56               725 RecurringPayment.tsx
+27/10/2025  11:28             1,635 ReportChart.tsx
+29/10/2025  07:56             1,046 UpcomingTimeline.tsx
+              11 File(s)         15,200 bytes
+
+ Directory of D:\AppDev\base44-app\src\db
+
+28/10/2025  17:14    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+02/11/2025  20:17               998 db.ts
+27/10/2025  14:23             1,464 migrate.ts
+28/10/2025  17:14    <DIR>          migrations
+               2 File(s)          2,462 bytes
+
+ Directory of D:\AppDev\base44-app\src\db\migrations
+
+28/10/2025  17:14    <DIR>          .
+28/10/2025  17:14    <DIR>          ..
+28/10/2025  17:16               437 003_reports.ts
+28/10/2025  17:16               909 004_accounts.ts
+               2 File(s)          1,346 bytes
+
+ Directory of D:\AppDev\base44-app\src\debug
+
+28/10/2025  19:50    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+29/10/2025  12:11             1,696 installGlobalHandlers.tsx
+               1 File(s)          1,696 bytes
+
+ Directory of D:\AppDev\base44-app\src\dev
+
+28/10/2025  17:30    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+29/10/2025  12:24               570 resetDb.ts
+               1 File(s)            570 bytes
+
+ Directory of D:\AppDev\base44-app\src\hooks
+
+27/10/2025  19:19    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+03/11/2025  17:39               484 useAppReady.ts
+               1 File(s)            484 bytes
+
+ Directory of D:\AppDev\base44-app\src\layout
+
+06/10/2025  18:46    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+07/10/2025  15:27               281 Layout.js
+               1 File(s)            281 bytes
+
+ Directory of D:\AppDev\base44-app\src\navigations
+
+25/11/2025  08:27    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+26/11/2025  16:23             3,159 RootNavigator.tsx
+13/11/2025  20:59               362 screens.ts
+24/11/2025  18:34               866 types.ts
+               3 File(s)          4,387 bytes
+
+ Directory of D:\AppDev\base44-app\src\notifications
+
+28/11/2025  11:22    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+28/11/2025  11:33             1,131 bootstrapper.old
+28/11/2025  11:33             2,909 NotificationBootstrapper.tsx
+               2 File(s)          4,040 bytes
+
+ Directory of D:\AppDev\base44-app\src\recurring
+
+10/10/2025  06:18    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+28/11/2025  11:33             2,801 bootstrapper.js
+               1 File(s)          2,801 bytes
+
+ Directory of D:\AppDev\base44-app\src\screens
+
+25/11/2025  08:29    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+27/11/2025  20:33             2,949 AccountEditorScreen.tsx
+27/11/2025  20:15             7,544 AccountScreen.tsx
+27/11/2025  20:33             2,164 AddAccountScreen.tsx
+29/11/2025  17:06            12,616 BudgetsScreen.tsx
+27/11/2025  20:15            14,486 DashboardScreen.tsx
+27/11/2025  20:33             6,517 DataExportImportScreen.tsx
+24/11/2025  21:55             1,981 HealthCheckScreen.tsx
+27/11/2025  20:15             8,003 HistoryScreen.tsx
+16/11/2025  17:35               213 HomeScreen.tsx
+27/11/2025  20:15             2,186 ImportCsvScreen.tsx
+13/11/2025  08:00               426 LoginScreen.tsx
+16/11/2025  16:11             1,470 NavigationsScreen.tsx
+27/11/2025  20:14             3,555 NotificationsScreen.tsx
+26/11/2025  16:23             3,891 PaymentsScreen.tsx
+27/11/2025  20:14             3,951 RecentActivityScreen.tsx
+27/11/2025  20:14            18,401 RecurringEditorScreen.tsx
+28/11/2025  16:37             8,826 RecurringScreen.tsx
+27/11/2025  20:14             7,616 ReportDetailScreen.tsx
+02/11/2025  19:30             4,836 ReportEditorScreen.tsx
+02/11/2025  20:17               513 ReportListScreen.tsx
+28/11/2025  16:34            13,246 ReportsScreen.tsx
+04/11/2025  11:12             3,690 SettingsScreen.tsx
+27/11/2025  20:14             6,285 SplashAuthScreen.tsx
+27/11/2025  20:14            10,381 TransferScreen.tsx
+27/11/2025  20:14            11,550 TxnEditorScreen.tsx
+              25 File(s)        157,296 bytes
+
+ Directory of D:\AppDev\base44-app\src\services
+
+28/10/2025  09:24    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+27/10/2025  10:23             1,341 accounts.ts
+22/11/2025  18:18             7,917 reporting.ts
+               2 File(s)          9,258 bytes
+
+ Directory of D:\AppDev\base44-app\src\state
+
+25/11/2025  19:32    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+28/11/2025  16:37             9,784 AppContext.tsx
+               1 File(s)          9,784 bytes
+
+ Directory of D:\AppDev\base44-app\src\types
+
+28/10/2025  22:01    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+29/10/2025  07:55               273 expo-file-system.d.ts
+27/10/2025  10:23               382 finance.ts
+29/10/2025  10:55               595 global.d.ts
+22/11/2025  18:18               530 report.ts
+               4 File(s)          1,780 bytes
+
+ Directory of D:\AppDev\base44-app\src\utils
+
+22/11/2025  08:58    <DIR>          .
+29/11/2025  17:16    <DIR>          ..
+27/10/2025  10:31               300 csvTemplate.ts
+22/11/2025  18:19             2,453 csvUtils.ts
+27/10/2025  11:28             2,771 dateUtils.ts
+22/11/2025  14:27               509 formatDate.ts
+27/10/2025  11:28             1,968 moneyUtils.ts
+02/11/2025  20:17             5,285 notifications.ts
+27/10/2025  11:28             3,942 reportUtils.ts
+27/10/2025  20:53               174 typedEntries.ts
+               8 File(s)         17,402 bytes
+
