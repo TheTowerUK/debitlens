@@ -1,5 +1,6 @@
 // src/navigation/RootNavigator.tsx
 import React from 'react';
+import { Text, Pressable } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Screens
@@ -48,21 +49,51 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => {
-  // Work around the odd type that requires an 'id' prop of type undefined
+  // Keep the original workaround so TS is happy about the mysterious `id` prop
   const navigatorProps = {
-    id: undefined,
-    screenOptions: { headerShown: false },
-  } as const;
+    id: undefined as undefined,
+    initialRouteName: 'Dashboard' as const,
+    // We'll override `screenOptions` below via spread while keeping `id`
+  };
 
   return (
-    <Stack.Navigator {...(navigatorProps as any)}>
+    <Stack.Navigator
+      {...(navigatorProps as any)}
+      screenOptions={({ navigation, route }) => ({
+        // Show header on all screens EXCEPT Dashboard
+        headerShown: route.name !== 'Dashboard',
+
+        headerStyle: { backgroundColor: '#020617' },
+        headerTintColor: '#F9FAFB',
+        headerTitleStyle: { fontWeight: '700' },
+
+        // Global "Dashboard" button on non-dashboard screens
+        headerRight: () => {
+          if (route.name === 'Dashboard') return null;
+
+          return (
+            <Pressable
+              onPress={() => navigation.navigate('Dashboard')}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Text style={{ color: '#93C5FD', fontSize: 14 }}>
+                Dashboard
+              </Text>
+            </Pressable>
+          );
+        },
+      })}
+    >
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
 
       {/* Accounts */}
       <Stack.Screen name="Account" component={AccountScreen} />
       <Stack.Screen name="AddAccount" component={AddAccountScreen} />
       <Stack.Screen name="Transfer" component={TransferScreen} />
-      <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
+      <Stack.Screen
+        name="RecentActivity"
+        component={RecentActivityScreen}
+      />
 
       {/* Editor */}
       <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
@@ -71,7 +102,10 @@ const RootNavigator: React.FC = () => {
       <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="Recurring" component={RecurringScreen} />
       <Stack.Screen name="Budgets" component={BudgetsScreen} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+      />
       <Stack.Screen
         name="RecurringEditor"
         component={RecurringEditorScreen}
