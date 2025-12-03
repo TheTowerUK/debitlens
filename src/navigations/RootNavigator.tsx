@@ -41,7 +41,7 @@ export type RootStackParamList = {
   Settings: undefined;
   Reports: undefined;
   DataExportImport: undefined;
-  ImportCsv: undefined; // <-- add this
+  ImportCSV: undefined; // <-- add this
 };
 
 
@@ -118,7 +118,7 @@ const RootNavigator: React.FC = () => {
         component={DataExportImportScreen}
       />
       <Stack.Screen
-        name="ImportCsv"
+        name="ImportCSV"
         component={ImportCsvScreen}
       />
     </Stack.Navigator>
