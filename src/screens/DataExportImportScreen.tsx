@@ -184,7 +184,15 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
         <Button title="Import CSV" onPress={handleImport} />
       </View>
 
+      <View style={styles.buttonRow}>
+        <Button
+          title="Open file-based CSV import"
+          onPress={() => navigation.navigate('ImportCsv')}
+        />
+      </View>
+
       {!!lastStatus && <Text style={styles.status}>{lastStatus}</Text>}
+
     </ScrollView>
   );
 };

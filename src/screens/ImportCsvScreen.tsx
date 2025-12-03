@@ -7,12 +7,12 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'ImportCSV'>;
+type Props = {
+  navigation: any;
+};
 
-export default function ImportCsvScreen({ navigation }: Props) {
+const ImportCsvScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Import from CSV</Text>
@@ -41,7 +41,9 @@ export default function ImportCsvScreen({ navigation }: Props) {
       </Pressable>
     </View>
   );
-}
+};
+
+export default ImportCsvScreen;
 
 const styles = StyleSheet.create({
   wrap: {

@@ -18,15 +18,14 @@ import RecurringEditorScreen from '../screens/RecurringEditorScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import DataExportImportScreen from '../screens/DataExportImportScreen';
+import ImportCsvScreen from '../screens/ImportCsvScreen';
 
 export type RootStackParamList = {
   Dashboard: undefined;
-
   Account: { accountId?: string } | undefined;
   AddAccount: undefined;
   Transfer: undefined;
   RecentActivity: undefined;
-
   TxnEditor:
     | {
         id?: string;
@@ -34,17 +33,17 @@ export type RootStackParamList = {
         type?: 'income' | 'expense';
       }
     | undefined;
-
   Payments: undefined;
   Recurring: undefined;
   Budgets: undefined;
   Notifications: undefined;
   RecurringEditor: { id?: string } | undefined;
-
   Settings: undefined;
   Reports: undefined;
   DataExportImport: undefined;
+  ImportCsv: undefined; // <-- add this
 };
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -117,6 +116,10 @@ const RootNavigator: React.FC = () => {
       <Stack.Screen
         name="DataExportImport"
         component={DataExportImportScreen}
+      />
+      <Stack.Screen
+        name="ImportCsv"
+        component={ImportCsvScreen}
       />
     </Stack.Navigator>
   );
