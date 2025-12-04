@@ -19,14 +19,24 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
   const accounts = state.accounts ?? [];
   const transactions: Transaction[] = state.transactions ?? [];
 
-  // Total balance (very simple: sum of account.balance if present)
-  const totalBalance = useMemo(() => {
-    return accounts.reduce((sum: number, acc: any) => {
-      const bal = Number(acc.balance ?? 0);
-      if (Number.isNaN(bal)) return sum;
-      return sum + bal;
-    }, 0);
-  }, [accounts]);
+  // Build a balance map per account from transactions (income +, expense -)
+  const { accountBalances, totalBalance } = useMemo(() => {
+    const balances = new Map<string, number>();
+
+    transactions.forEach((t) => {
+      if (!t.accountId) return;
+      const amount = Number(t.amount) || 0;
+      const delta = t.type === 'income' ? amount : -amount;
+      balances.set(t.accountId, (balances.get(t.accountId) || 0) + delta);
+    });
+
+    const total = Array.from(balances.values()).reduce(
+      (sum, b) => sum + b,
+      0
+    );
+
+    return { accountBalances: balances, totalBalance: total };
+  }, [transactions]);
 
   // Recent transactions (last 5 by date desc)
   const recentTxs = useMemo(() => {
@@ -54,11 +64,64 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
       {/* Balance summary */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Total balance</Text>
-        <Text style={styles.balanceValue}>£{totalBalance.toFixed(2)}</Text>
+        <Text style={styles.balanceValue}>
+          £{totalBalance.toFixed(2)}
+        </Text>
         <Text style={styles.cardSubtitle}>
-          Across {accounts.length} account{accounts.length === 1 ? '' : 's'}
+          Across {accounts.length} account
+          {accounts.length === 1 ? '' : 's'}
         </Text>
       </View>
+
+      {/* Accounts strip */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Accounts</Text>
+        {accounts.length > 0 && (
+          <Pressable onPress={() => navigation.navigate('RecentActivity')}>
+            <Text style={styles.linkText}>View activity</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {accounts.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>No accounts yet</Text>
+          <Text style={styles.emptyText}>
+            Add an account to start tracking balances and activity.
+          </Text>
+        </View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.accountRow}
+        >
+          {accounts.map((acc: any) => {
+            const bal = accountBalances.get(acc.id) || 0;
+            return (
+              <Pressable
+                key={acc.id}
+                style={styles.accountCard}
+                onPress={() =>
+                  navigation.navigate('Account', { accountId: acc.id })
+                }
+              >
+                <Text style={styles.accountName}>
+                  {acc.name || acc.label || 'Account'}
+                </Text>
+                <Text
+                  style={[
+                    styles.accountBalance,
+                    bal >= 0 ? styles.incomeText : styles.expenseText,
+                  ]}
+                >
+                  £{bal.toFixed(2)}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      )}
 
       {/* Quick navigation buttons */}
       <View style={styles.sectionHeader}>
@@ -96,11 +159,12 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         />
       </View>
 
-
       {/* Recent activity */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Recent activity</Text>
-        <Pressable onPress={() => navigation.navigate('RecentActivity')}>
+        <Pressable
+          onPress={() => navigation.navigate('RecentActivity')}
+        >
           <Text style={styles.linkText}>View all</Text>
         </Pressable>
       </View>
@@ -119,7 +183,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
             const sign = isIncome ? '+' : '-';
             const amount = Number(t.amount) || 0;
             const label = t.category || 'Uncategorised';
-            const note = t.note || t.description || '';
+            const note = t.note || (t as any).description || '';
             const dateLabel = t.date
               ? new Date(t.date).toLocaleDateString()
               : '';
@@ -128,7 +192,9 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
               <View key={t.id} style={styles.txRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txLabel}>{label}</Text>
-                  {note ? <Text style={styles.txNote}>{note}</Text> : null}
+                  {note ? (
+                    <Text style={styles.txNote}>{note}</Text>
+                  ) : null}
                   {dateLabel ? (
                     <Text style={styles.txMeta}>{dateLabel}</Text>
                   ) : null}
@@ -221,6 +287,29 @@ const styles = StyleSheet.create({
     color: '#93C5FD',
     fontSize: 13,
   },
+  // Accounts strip
+  accountRow: {
+    paddingVertical: 4,
+  },
+  accountCard: {
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginRight: 8,
+    minWidth: 140,
+  },
+  accountName: {
+    color: '#E5E7EB',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  accountBalance: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Quick actions
   buttonGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -242,6 +331,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
+
+  // Empty / recent tx
   emptyBox: {
     marginTop: 4,
     marginBottom: 12,
