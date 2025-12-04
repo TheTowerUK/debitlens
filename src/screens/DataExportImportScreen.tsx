@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Share,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -21,18 +22,43 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
 
-  const handleExportPress = () => {
-    const totalAccounts = accounts.length;
-    const totalTxs = txs.length;
+  const handleExportPress = async () => {
+    try {
+      // 🔹 Build an export payload. Extend this later with more state if needed.
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        accounts,
+        transactions: txs,
+      };
 
-    setLastStatus(
-      `Export ready: ${totalAccounts} account(s) and ${totalTxs} transaction(s) will be included.`,
-    );
+      const json = JSON.stringify(payload, null, 2); // pretty-printed for readability
+
+      const result = await Share.share({
+        title: 'Base44 data export',
+        message: json,
+      });
+
+      if (result.action === Share.sharedAction) {
+        setLastStatus(
+          `Export shared. ${accounts.length} account(s) and ${txs.length} transaction(s) included.`,
+        );
+      } else if (result.action === Share.dismissedAction) {
+        setLastStatus('Export cancelled before sharing.');
+      } else {
+        setLastStatus('Export finished with unknown status.');
+      }
+    } catch (err: any) {
+      console.error('Export error', err);
+      setLastStatus(
+        `Export failed: ${err?.message ?? 'Unknown error occurred.'}`,
+      );
+    }
   };
 
   const handleImportPress = () => {
     setLastStatus(
-      'Import flow not wired yet. Paste or select a file in a future step.',
+      'Import flow not wired yet. In future, you will paste or select a JSON export file here.',
     );
   };
 
@@ -48,9 +74,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Export data</Text>
         <Text style={styles.body}>
-          This will prepare a snapshot of your current data so you can save or
-          share it outside the app. For now, this is a simple placeholder – you
-          can later plug in CSV/JSON file export.
+          This will create a JSON snapshot of your current data and open the
+          share dialog so you can send it via email, notes, or messaging apps.
         </Text>
 
         <Text style={styles.meta}>
@@ -67,13 +92,13 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
-          In the future, this will allow you to restore from a backup file (for
-          example, a JSON or CSV exported from this app).
+          In the future, this will allow you to restore from a backup JSON
+          created by the Export function above.
         </Text>
 
         <Pressable style={styles.btnSecondary} onPress={handleImportPress}>
           <Text style={styles.btnSecondaryText}>
-            Import from file (placeholder)
+            Import from JSON (placeholder)
           </Text>
         </Pressable>
       </View>
