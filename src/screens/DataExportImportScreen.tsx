@@ -11,7 +11,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
@@ -25,9 +25,6 @@ function escapeCsv(value: string): string {
   return needsQuotes ? `"${v}"` : v;
 }
 
-// Alias to bypass TS typing issues for older/newer expo-file-system versions
-const FS: any = FileSystem;
-
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state } = useApp();
 
@@ -36,7 +33,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
 
-  // Expo always provides documentDirectory; fall back to '' just in case.
+  // Expo provides documentDirectory; fall back to '' just in case.
   const exportDir = (FileSystem.documentDirectory ?? '') as string;
 
   const handleExportJsonPress = async () => {
@@ -53,8 +50,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       const filename = `base44-export-${Date.now()}.json`;
       const fileUri = exportDir + filename;
 
-      // Use FS alias with 'utf8' to avoid TS errors on EncodingType / writeAsStringAsync
-      await FS.writeAsStringAsync(fileUri, json, {
+      await FileSystem.writeAsStringAsync(fileUri, json, {
         encoding: 'utf8',
       });
 
@@ -111,7 +107,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       const filename = `base44-transactions-${Date.now()}.csv`;
       const fileUri = exportDir + filename;
 
-      await FS.writeAsStringAsync(fileUri, csv, {
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
         encoding: 'utf8',
       });
 
