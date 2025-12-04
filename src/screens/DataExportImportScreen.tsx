@@ -14,6 +14,15 @@ import { useApp } from '../state/AppContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
+// Simple CSV escaping: wraps in quotes if needed, doubles any existing quotes
+function escapeCsv(value: string): string {
+  const needsQuotes =
+    value.includes(',') || value.includes('"') || value.includes('\n');
+
+  let v = value.replace(/"/g, '""');
+  return needsQuotes ? `"${v}"` : v;
+}
+
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state } = useApp();
 
@@ -22,9 +31,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
 
-  const handleExportPress = async () => {
+  const handleExportJsonPress = async () => {
     try {
-      // 🔹 Build an export payload. Extend this later with more state if needed.
       const payload = {
         version: 1,
         exportedAt: new Date().toISOString(),
@@ -32,33 +40,82 @@ const DataExportImportScreen: React.FC<Props> = () => {
         transactions: txs,
       };
 
-      const json = JSON.stringify(payload, null, 2); // pretty-printed for readability
+      const json = JSON.stringify(payload, null, 2);
 
       const result = await Share.share({
-        title: 'Base44 data export',
+        title: 'Base44 data export (JSON)',
         message: json,
       });
 
       if (result.action === Share.sharedAction) {
         setLastStatus(
-          `Export shared. ${accounts.length} account(s) and ${txs.length} transaction(s) included.`,
+          `JSON export shared. ${accounts.length} account(s) and ${txs.length} transaction(s) included.`,
         );
       } else if (result.action === Share.dismissedAction) {
-        setLastStatus('Export cancelled before sharing.');
+        setLastStatus('JSON export cancelled before sharing.');
       } else {
-        setLastStatus('Export finished with unknown status.');
+        setLastStatus('JSON export finished with unknown status.');
       }
     } catch (err: any) {
-      console.error('Export error', err);
+      console.error('JSON export error', err);
       setLastStatus(
-        `Export failed: ${err?.message ?? 'Unknown error occurred.'}`,
+        `JSON export failed: ${err?.message ?? 'Unknown error occurred.'}`,
+      );
+    }
+  };
+
+  const handleExportCsvPress = async () => {
+    try {
+      const txsForCsv = txs as any[];
+
+      if (!txsForCsv.length) {
+        setLastStatus('No transactions available to export as CSV.');
+        return;
+      }
+
+      // Use the keys from the first transaction as the CSV header
+      const headers: string[] = Object.keys(txsForCsv[0]);
+
+      const headerLine = headers.map((h) => escapeCsv(h)).join(',');
+
+      const rows = txsForCsv.map((tx) =>
+        headers
+          .map((h) => {
+            const v = tx[h];
+            return escapeCsv(
+              v === null || v === undefined ? '' : String(v),
+            );
+          })
+          .join(','),
+      );
+
+      const csv = [headerLine, ...rows].join('\n');
+
+      const result = await Share.share({
+        title: 'Base44 transactions export (CSV)',
+        message: csv,
+      });
+
+      if (result.action === Share.sharedAction) {
+        setLastStatus(
+          `CSV export shared. ${txs.length} transaction(s) included.`,
+        );
+      } else if (result.action === Share.dismissedAction) {
+        setLastStatus('CSV export cancelled before sharing.');
+      } else {
+        setLastStatus('CSV export finished with unknown status.');
+      }
+    } catch (err: any) {
+      console.error('CSV export error', err);
+      setLastStatus(
+        `CSV export failed: ${err?.message ?? 'Unknown error occurred.'}`,
       );
     }
   };
 
   const handleImportPress = () => {
     setLastStatus(
-      'Import flow not wired yet. In future, you will paste or select a JSON export file here.',
+      'Import flow not wired yet. In future, you will paste or select a JSON/CSV export file here.',
     );
   };
 
@@ -74,8 +131,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Export data</Text>
         <Text style={styles.body}>
-          This will create a JSON snapshot of your current data and open the
-          share dialog so you can send it via email, notes, or messaging apps.
+          You can export all data as JSON (full backup) or export just
+          transactions as CSV for spreadsheets.
         </Text>
 
         <Text style={styles.meta}>
@@ -83,8 +140,16 @@ const DataExportImportScreen: React.FC<Props> = () => {
           transaction(s).
         </Text>
 
-        <Pressable style={styles.btnPrimary} onPress={handleExportPress}>
-          <Text style={styles.btnPrimaryText}>Export data</Text>
+        {/* JSON export */}
+        <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
+          <Text style={styles.btnPrimaryText}>Export as JSON (full backup)</Text>
+        </Pressable>
+
+        {/* CSV export */}
+        <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
+          <Text style={styles.btnSecondaryText}>
+            Export transactions as CSV
+          </Text>
         </Pressable>
       </View>
 
@@ -92,13 +157,13 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
-          In the future, this will allow you to restore from a backup JSON
-          created by the Export function above.
+          In the future, this will allow you to restore from a backup JSON or
+          CSV created by the Export functions above.
         </Text>
 
         <Pressable style={styles.btnSecondary} onPress={handleImportPress}>
           <Text style={styles.btnSecondaryText}>
-            Import from JSON (placeholder)
+            Import from backup (placeholder)
           </Text>
         </Pressable>
       </View>
@@ -165,6 +230,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 10,
   },
   btnPrimaryText: {
     color: '#FFFFFF',
@@ -180,6 +246,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#4B5563',
+    marginTop: 4,
   },
   btnSecondaryText: {
     color: '#E5E7EB',
