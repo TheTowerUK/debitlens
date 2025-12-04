@@ -6,11 +6,13 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Share,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -23,6 +25,9 @@ function escapeCsv(value: string): string {
   return needsQuotes ? `"${v}"` : v;
 }
 
+// Alias to bypass TS typing issues for older/newer expo-file-system versions
+const FS: any = FileSystem;
+
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state } = useApp();
 
@@ -30,6 +35,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const txs = state.transactions || [];
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
+
+  // Expo always provides documentDirectory; fall back to '' just in case.
+  const exportDir = (FileSystem.documentDirectory ?? '') as string;
 
   const handleExportJsonPress = async () => {
     try {
@@ -42,19 +50,28 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const json = JSON.stringify(payload, null, 2);
 
-      const result = await Share.share({
-        title: 'Base44 data export (JSON)',
-        message: json,
+      const filename = `base44-export-${Date.now()}.json`;
+      const fileUri = exportDir + filename;
+
+      // Use FS alias with 'utf8' to avoid TS errors on EncodingType / writeAsStringAsync
+      await FS.writeAsStringAsync(fileUri, json, {
+        encoding: 'utf8',
       });
 
-      if (result.action === Share.sharedAction) {
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Share Base44 JSON export',
+        });
         setLastStatus(
-          `JSON export shared. ${accounts.length} account(s) and ${txs.length} transaction(s) included.`,
+          `JSON export created as file (${filename}) and sharing dialog shown.`,
         );
-      } else if (result.action === Share.dismissedAction) {
-        setLastStatus('JSON export cancelled before sharing.');
       } else {
-        setLastStatus('JSON export finished with unknown status.');
+        setLastStatus(
+          `JSON export file created at: ${fileUri} — but file sharing is not available on this device.`,
+        );
       }
     } catch (err: any) {
       console.error('JSON export error', err);
@@ -91,19 +108,27 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const csv = [headerLine, ...rows].join('\n');
 
-      const result = await Share.share({
-        title: 'Base44 transactions export (CSV)',
-        message: csv,
+      const filename = `base44-transactions-${Date.now()}.csv`;
+      const fileUri = exportDir + filename;
+
+      await FS.writeAsStringAsync(fileUri, csv, {
+        encoding: 'utf8',
       });
 
-      if (result.action === Share.sharedAction) {
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Share Base44 CSV export',
+        });
         setLastStatus(
-          `CSV export shared. ${txs.length} transaction(s) included.`,
+          `CSV export created as file (${filename}) and sharing dialog shown.`,
         );
-      } else if (result.action === Share.dismissedAction) {
-        setLastStatus('CSV export cancelled before sharing.');
       } else {
-        setLastStatus('CSV export finished with unknown status.');
+        setLastStatus(
+          `CSV export file created at: ${fileUri} — but file sharing is not available on this device.`,
+        );
       }
     } catch (err: any) {
       console.error('CSV export error', err);
@@ -115,7 +140,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const handleImportPress = () => {
     setLastStatus(
-      'Import flow not wired yet. In future, you will paste or select a JSON/CSV export file here.',
+      'Import flow not wired yet. Later you will be able to import from a JSON/CSV file created by the export options.',
     );
   };
 
@@ -131,8 +156,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Export data</Text>
         <Text style={styles.body}>
-          You can export all data as JSON (full backup) or export just
-          transactions as CSV for spreadsheets.
+          Export a full JSON backup or a CSV of your transactions as actual
+          files you can save or send elsewhere.
         </Text>
 
         <Text style={styles.meta}>
@@ -142,13 +167,13 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
         {/* JSON export */}
         <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
-          <Text style={styles.btnPrimaryText}>Export as JSON (full backup)</Text>
+          <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
         </Pressable>
 
         {/* CSV export */}
         <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
           <Text style={styles.btnSecondaryText}>
-            Export transactions as CSV
+            Export transactions as CSV (file)
           </Text>
         </Pressable>
       </View>
@@ -157,8 +182,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
-          In the future, this will allow you to restore from a backup JSON or
-          CSV created by the Export functions above.
+          In the future, this will allow you to restore from a JSON or CSV file
+          generated by the export options above.
         </Text>
 
         <Pressable style={styles.btnSecondary} onPress={handleImportPress}>
