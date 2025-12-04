@@ -67,6 +67,10 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
 
       <View style={styles.buttonGrid}>
         <DashboardButton
+          label="Add account"
+          onPress={() => navigation.navigate('AddAccount')}
+        />
+        <DashboardButton
           label="Add transaction"
           onPress={() => navigation.navigate('TxnEditor')}
         />
@@ -91,6 +95,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           onPress={() => navigation.navigate('DataExportImport')}
         />
       </View>
+
 
       {/* Recent activity */}
       <View style={styles.sectionHeader}>
