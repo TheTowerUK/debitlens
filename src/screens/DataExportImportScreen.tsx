@@ -1,198 +1,89 @@
 // src/screens/DataExportImportScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  Button,
-  ScrollView,
   StyleSheet,
-  Alert,
+  Pressable,
+  ScrollView,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 
+type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
-type Props = {
-  navigation: any; // you can replace 'any' with your stack param type later
-};
+const DataExportImportScreen: React.FC<Props> = () => {
+  const { state } = useApp();
 
-const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
-  const { state, actions } = useApp();
-  const accounts = state.accounts ?? [];
-  const transactions = state.transactions ?? [];
+  const accounts = state.accounts || [];
+  const txs = state.transactions || [];
 
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [importText, setImportText] = useState<string>('');
-  const [lastStatus, setLastStatus] = useState<string>('');
+  const [lastStatus, setLastStatus] = useState<string | null>(null);
 
-  // Filter transactions by selected account (or show all if none selected)
-  const filteredTxs = useMemo(() => {
-    if (!selectedAccountId) return transactions;
-    return transactions.filter((t) => t.accountId === selectedAccountId);
-  }, [transactions, selectedAccountId]);
+  const handleExportPress = () => {
+    const totalAccounts = accounts.length;
+    const totalTxs = txs.length;
 
-  // --- CSV EXPORT -----------------------------------------------------------
-
-  const sanitiseCsv = (value: unknown): string => {
-    if (value == null) return '';
-    const s = String(value);
-    if (s.includes(',') || s.includes('"') || s.includes('\n')) {
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-  };
-
-  const exportText = useMemo(() => {
-    if (!filteredTxs.length) return '';
-
-    const header = 'id,accountId,date,type,amount,description,category';
-
-    const rows = filteredTxs.map((t) =>
-      [
-        t.id,
-        t.accountId,
-        t.date,
-        t.type,
-        t.amount,
-        sanitiseCsv(t.description),
-        sanitiseCsv(t.category),
-      ].join(',')
+    setLastStatus(
+      `Export ready: ${totalAccounts} account(s) and ${totalTxs} transaction(s) will be included.`,
     );
-
-    return [header, ...rows].join('\n');
-  }, [filteredTxs]);
-
-  // --- CSV IMPORT -----------------------------------------------------------
-
-  const parseCsv = (text: string): Record<string, string>[] => {
-    const lines = text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    if (!lines.length) return [];
-
-    const [headerLine, ...dataLines] = lines;
-    const headers = headerLine.split(',').map((h) => h.trim());
-
-    return dataLines.map((line) => {
-      const cols = line.split(',');
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => {
-        obj[h] = cols[i] ?? '';
-      });
-      return obj;
-    });
   };
 
-  const handleImport = () => {
-    try {
-      const rows = parseCsv(importText);
-      let imported = 0;
-
-      rows.forEach((row) => {
-        if (!row.amount) return;
-
-        const amount = Number(row.amount);
-        if (!amount || Number.isNaN(amount)) return;
-
-        actions.addTransaction({
-          id: row.id || undefined,
-          accountId:
-            row.accountId ||
-            selectedAccountId ||
-            (accounts[0] && accounts[0].id),
-          date: row.date || new Date().toISOString().slice(0, 10),
-          type: row.type === 'income' ? 'income' : 'expense',
-          amount,
-          description: row.description || '',
-          category: row.category || '',
-        });
-
-        imported += 1;
-      });
-
-      const msg = `Imported ${imported} transactions.`;
-      setLastStatus(msg);
-      Alert.alert('CSV Import', msg);
-    } catch (err) {
-      console.error(err);
-      setLastStatus('Import failed');
-      Alert.alert(
-        'CSV Import',
-        'Import failed – please check the CSV format and try again.'
-      );
-    }
+  const handleImportPress = () => {
+    setLastStatus(
+      'Import flow not wired yet. Paste or select a file in a future step.',
+    );
   };
-
-  // --- RENDER ---------------------------------------------------------------
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>Export / Import Data (CSV)</Text>
+    <ScrollView contentContainerStyle={styles.wrap}>
+      <Text style={styles.h1}>Data export & import</Text>
+      <Text style={styles.subtle}>
+        Use this screen to take a backup of your data (export) or restore it
+        from a file (import).
+      </Text>
 
-      {/* Account filter row */}
-      <Text style={styles.label}>Filter by account (optional)</Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.accountRow}
-      >
-        <View style={styles.accountButton}>
-          <Button title="All" onPress={() => setSelectedAccountId(null)} />
+      {/* EXPORT CARD */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Export data</Text>
+        <Text style={styles.body}>
+          This will prepare a snapshot of your current data so you can save or
+          share it outside the app. For now, this is a simple placeholder – you
+          can later plug in CSV/JSON file export.
+        </Text>
+
+        <Text style={styles.meta}>
+          Currently loaded: {accounts.length} account(s), {txs.length}{' '}
+          transaction(s).
+        </Text>
+
+        <Pressable style={styles.btnPrimary} onPress={handleExportPress}>
+          <Text style={styles.btnPrimaryText}>Export data</Text>
+        </Pressable>
+      </View>
+
+      {/* IMPORT CARD */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Import data</Text>
+        <Text style={styles.body}>
+          In the future, this will allow you to restore from a backup file (for
+          example, a JSON or CSV exported from this app).
+        </Text>
+
+        <Pressable style={styles.btnSecondary} onPress={handleImportPress}>
+          <Text style={styles.btnSecondaryText}>
+            Import from file (placeholder)
+          </Text>
+        </Pressable>
+      </View>
+
+      {lastStatus ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusLabel}>Status</Text>
+          <Text style={styles.statusText}>{lastStatus}</Text>
         </View>
-        {accounts.map((a) => (
-          <View key={a.id} style={styles.accountButton}>
-            <Button
-              title={a.name || a.label || 'Account'}
-              onPress={() => setSelectedAccountId(a.id)}
-            />
-          </View>
-        ))}
-      </ScrollView>
-
-      {/* EXPORT */}
-      <Text style={styles.subHeading}>Export</Text>
-      <Text style={styles.help}>
-        Copy the text below and paste it into a CSV file or spreadsheet.
-      </Text>
-      <TextInput
-        style={[styles.textArea, styles.mono]}
-        value={exportText}
-        multiline
-        editable={false}
-      />
-
-      {/* IMPORT */}
-      <Text style={styles.subHeading}>Import</Text>
-      <Text style={styles.help}>
-        Paste CSV data here. Expected columns: id, accountId, date, type, amount,
-        description, category.
-      </Text>
-      <TextInput
-        style={[styles.textArea, styles.mono]}
-        value={importText}
-        onChangeText={setImportText}
-        multiline
-        placeholder={
-          'id,accountId,date,type,amount,description,category\n' +
-          '123,acc1,2025-01-01,income,1000,Salary,Job'
-        }
-      />
-
-      <View style={styles.buttonRow}>
-        <Button title="Import CSV" onPress={handleImport} />
-      </View>
-
-      <View style={styles.buttonRow}>
-        <Button
-          title="Open file-based CSV import"
-          onPress={() => navigation.navigate('ImportCSV')}
-        />
-      </View>
-
-      {!!lastStatus && <Text style={styles.status}>{lastStatus}</Text>}
-
+      ) : null}
     </ScrollView>
   );
 };
@@ -200,50 +91,92 @@ const DataExportImportScreen: React.FC<Props> = ({ navigation }) => {
 export default DataExportImportScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 16,
+  wrap: {
+    flexGrow: 1,
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 32,
+    backgroundColor: '#0B1018',
   },
-  heading: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  label: {
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  accountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  accountButton: {
-    marginRight: 8,
-  },
-  subHeading: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  help: {
+  h1: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
     marginBottom: 8,
   },
-  textArea: {
-    minHeight: 150,
+  subtle: {
+    color: '#9CA3AF',
+    marginBottom: 16,
+    fontSize: 14,
+  },
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 8,
+    borderColor: '#1F2933',
+  },
+  sectionTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  body: {
+    color: '#D1D5DB',
+    fontSize: 14,
     marginBottom: 12,
   },
-  mono: {
-    fontFamily: 'monospace',
-  },
-  buttonRow: {
+  meta: {
+    color: '#9CA3AF',
+    fontSize: 12,
     marginBottom: 12,
   },
-  status: {
-    marginTop: 4,
-    fontStyle: 'italic',
+  btnPrimary: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  btnSecondary: {
+    backgroundColor: '#111827',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
+  btnSecondaryText: {
+    color: '#E5E7EB',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  statusBox: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2933',
+  },
+  statusLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  statusText: {
+    color: '#E5E7EB',
+    fontSize: 13,
   },
 });

@@ -7,13 +7,8 @@ export type RootStackParamList = {
   Budgets: undefined;
   Settings: undefined;
   ImportCSV: undefined;
-
-  Account:
-    | {
-        accountId?: string;
-      }
-    | undefined;
-
+  Account: { accountId: string };
+  DataExportImport: undefined;
   AddAccount: undefined;
 
   History: undefined;

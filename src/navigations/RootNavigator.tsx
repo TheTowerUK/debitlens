@@ -116,11 +116,9 @@ const RootNavigator: React.FC = () => {
       <Stack.Screen
         name="DataExportImport"
         component={DataExportImportScreen}
+        options={{ title: 'Export / Import' }}
       />
-      <Stack.Screen
-        name="ImportCSV"
-        component={ImportCsvScreen}
-      />
+      <Stack.Screen name="ImportCSV" component={ImportCsvScreen}/>
     </Stack.Navigator>
   );
 };
