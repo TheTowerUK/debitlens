@@ -17,7 +17,7 @@ export default function NotificationsScreen() {
     <View style={styles.wrap}>
       <Text style={styles.h1}>Notifications</Text>
       <Text style={styles.subtle}>
-        Control how Base44 keeps you in the loop.
+        Control how DebitLens keeps you in the loop.
       </Text>
 
       <View style={styles.card}>

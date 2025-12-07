@@ -47,7 +47,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const json = JSON.stringify(payload, null, 2);
 
-      const filename = `base44-export-${Date.now()}.json`;
+      const filename = `DebitLens-export-${Date.now()}.json`;
       const fileUri = exportDir + filename;
 
       await FileSystem.writeAsStringAsync(fileUri, json, {
@@ -59,7 +59,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       if (canShare) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/json',
-          dialogTitle: 'Share Base44 JSON export',
+          dialogTitle: 'Share DebitLens JSON export',
         });
         setLastStatus(
           `JSON export created as file (${filename}) and sharing dialog shown.`,
@@ -104,7 +104,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const csv = [headerLine, ...rows].join('\n');
 
-      const filename = `base44-transactions-${Date.now()}.csv`;
+      const filename = `DebitLens-transactions-${Date.now()}.csv`;
       const fileUri = exportDir + filename;
 
       await FileSystem.writeAsStringAsync(fileUri, csv, {
@@ -116,7 +116,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       if (canShare) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'text/csv',
-          dialogTitle: 'Share Base44 CSV export',
+          dialogTitle: 'Share DebitLens CSV export',
         });
         setLastStatus(
           `CSV export created as file (${filename}) and sharing dialog shown.`,
