@@ -37,13 +37,19 @@ function formatMaybeDate(value: unknown, fieldName: string): string {
   const looksIso = /^\d{4}-\d{2}-\d{2}T/.test(value);
 
   if (looksIso || lowerField.includes('date')) {
-    // If it's at least "YYYY-MM-DD", just take first 10 chars
     if (value.length >= 10) {
       return value.slice(0, 10);
     }
   }
 
   return value;
+}
+
+// Look up account name from accountId
+function getAccountName(accountId: unknown, accounts: any[]): string {
+  if (!accountId) return '';
+  const acc = accounts.find((a) => a.id === accountId);
+  return acc?.name ?? '';
 }
 
 const DataExportImportScreen: React.FC<Props> = () => {
@@ -107,18 +113,33 @@ const DataExportImportScreen: React.FC<Props> = () => {
         return;
       }
 
-      // Use the keys from the first transaction as the CSV header,
-      // but exclude internal IDs that are not useful for imports/analysis
+      // Use keys from the first transaction, but we:
+      // - exclude internal IDs
+      // - replace accountId with a friendly "account" column
       const rawHeaders: string[] = Object.keys(txsForCsv[0]);
 
-      const excluded = ['id']; // add 'accountId' here too if you want to hide it
-      const headers = rawHeaders.filter((h) => !excluded.includes(h));
+      const excluded = ['id', 'accountId'];
+
+      const hasDate = rawHeaders.includes('date');
+      const otherHeaders = rawHeaders.filter(
+        (h) => !excluded.includes(h) && h !== 'date',
+      );
+
+      const headers: string[] = [];
+      if (hasDate) headers.push('date');
+      headers.push('account'); // human-readable account name
+      headers.push(...otherHeaders);
 
       const headerLine = headers.map((h) => escapeCsv(h)).join(',');
 
       const rows = txsForCsv.map((tx) =>
         headers
           .map((h) => {
+            if (h === 'account') {
+              const name = getAccountName(tx.accountId, accounts);
+              return escapeCsv(name);
+            }
+
             const formatted = formatMaybeDate(tx[h], h);
             return escapeCsv(formatted);
           })
