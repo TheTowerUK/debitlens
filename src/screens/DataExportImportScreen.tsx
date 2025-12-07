@@ -1,4 +1,3 @@
-// src/screens/DataExportImportScreen.tsx
 import React, { useState } from 'react';
 import {
   View,
@@ -16,6 +15,8 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
+
+// ---------- Helpers ----------
 
 // Simple CSV escaping: wraps in quotes if needed, doubles any existing quotes
 function escapeCsv(value: string): string {
@@ -62,10 +63,23 @@ function findExistingAccountIdByName(
   accounts: any[],
 ): string | null {
   if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
   const acc = accounts.find(
-    (a) => typeof a.name === 'string' && a.name.trim() === name.trim(),
+    (a) => typeof a.name === 'string' && a.name.trim() === trimmed,
   );
   return acc?.id ?? null;
+}
+
+// Generate a simple id for newly created accounts
+function makeId(prefix: string): string {
+  return (
+    prefix +
+    '_' +
+    Date.now().toString(36) +
+    '_' +
+    Math.random().toString(36).slice(2, 8)
+  );
 }
 
 // Very simple CSV parser that supports quoted values and commas
@@ -169,6 +183,44 @@ function buildTransactionFromData(
   };
 }
 
+// Ensure we have an accountId for a given account name:
+// - if already in existing accounts → use that id
+// - else if already created in this import → reuse id
+// - else create a new account via actions.addAccount and cache the id
+function ensureAccountIdForName(
+  name: string,
+  existingAccounts: any[],
+  createdByName: Record<string, string>,
+  actions: any,
+): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  // Existing?
+  const existingId = findExistingAccountIdByName(trimmed, existingAccounts);
+  if (existingId) return existingId;
+
+  // Already created in this import?
+  if (createdByName[trimmed]) {
+    return createdByName[trimmed];
+  }
+
+  // Create a new account
+  const newId = makeId('acc_import');
+  try {
+    // Assume addAccount accepts at least { id?, name }
+    actions.addAccount({
+      id: newId,
+      name: trimmed,
+    });
+    createdByName[trimmed] = newId;
+    return newId;
+  } catch (e) {
+    console.warn('Failed to auto-create account for import', trimmed, e);
+    return null;
+  }
+}
+
 // ---------- Pending import preview types ----------
 
 type JsonPendingImport = {
@@ -179,8 +231,9 @@ type JsonPendingImport = {
   stats: {
     total: number;
     withAccountName: number;
-    matchable: number;
-    missingAccount: number;
+    existingAccountMatch: number;
+    willCreateAccount: number;
+    missingAccountName: number;
   };
 };
 
@@ -190,12 +243,15 @@ type CsvPendingImport = {
   rows: Record<string, any>[];
   stats: {
     total: number;
-    matchable: number;
-    missingAccount: number;
+    existingAccountMatch: number;
+    willCreateAccount: number;
+    missingAccountName: number;
   };
 };
 
 type PendingImport = JsonPendingImport | CsvPendingImport | null;
+
+// ---------- Component ----------
 
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state, actions } = useApp();
@@ -395,8 +451,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
       }
 
       let withAccountName = 0;
-      let matchable = 0;
-      let missingAccount = 0;
+      let existingAccountMatch = 0;
+      let willCreateAccount = 0;
+      let missingAccountName = 0;
 
       for (const tx of importedTxs) {
         const accountNameFromImported =
@@ -405,27 +462,31 @@ const DataExportImportScreen: React.FC<Props> = () => {
           tx.accountName ||
           '';
 
-        if (accountNameFromImported) {
-          withAccountName++;
+        if (!accountNameFromImported.trim()) {
+          missingAccountName++;
+          continue;
         }
 
-        const targetAccountId = findExistingAccountIdByName(
+        withAccountName++;
+
+        const existingId = findExistingAccountIdByName(
           accountNameFromImported,
           accounts,
         );
 
-        if (targetAccountId) {
-          matchable++;
+        if (existingId) {
+          existingAccountMatch++;
         } else {
-          missingAccount++;
+          willCreateAccount++;
         }
       }
 
       const stats = {
         total: importedTxs.length,
         withAccountName,
-        matchable,
-        missingAccount,
+        existingAccountMatch,
+        willCreateAccount,
+        missingAccountName,
       };
 
       setPendingImport({
@@ -437,7 +498,10 @@ const DataExportImportScreen: React.FC<Props> = () => {
       });
 
       setLastStatus(
-        `JSON file parsed. Preview ready below: ${stats.matchable} transaction(s) can be merged, ${stats.missingAccount} will be skipped.`,
+        `JSON file parsed. Preview ready below: ` +
+          `${stats.existingAccountMatch} transaction(s) will go to existing accounts, ` +
+          `${stats.willCreateAccount} will create new accounts, ` +
+          `${stats.missingAccountName} have no account name and will be skipped.`,
       );
     } catch (err: any) {
       console.error('JSON import preview error', err);
@@ -506,8 +570,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
       }
 
       const rowObjs: Record<string, any>[] = [];
-      let matchable = 0;
-      let missingAccount = 0;
+      let existingAccountMatch = 0;
+      let willCreateAccount = 0;
+      let missingAccountName = 0;
 
       for (const row of rows) {
         const get = (idx: number): string =>
@@ -526,21 +591,28 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
         rowObjs.push(rawObj);
 
-        const targetAccountId = findExistingAccountIdByName(
-          accountName,
+        const trimmedName = (accountName || '').trim();
+        if (!trimmedName) {
+          missingAccountName++;
+          continue;
+        }
+
+        const existingId = findExistingAccountIdByName(
+          trimmedName,
           accounts,
         );
-        if (targetAccountId) {
-          matchable++;
+        if (existingId) {
+          existingAccountMatch++;
         } else {
-          missingAccount++;
+          willCreateAccount++;
         }
       }
 
       const stats = {
         total: rowObjs.length,
-        matchable,
-        missingAccount,
+        existingAccountMatch,
+        willCreateAccount,
+        missingAccountName,
       };
 
       setPendingImport({
@@ -551,7 +623,10 @@ const DataExportImportScreen: React.FC<Props> = () => {
       });
 
       setLastStatus(
-        `CSV file parsed. Preview ready below: ${stats.matchable} row(s) can be merged, ${stats.missingAccount} will be skipped.`,
+        `CSV file parsed. Preview ready below: ` +
+          `${stats.existingAccountMatch} row(s) will go to existing accounts, ` +
+          `${stats.willCreateAccount} will create new accounts, ` +
+          `${stats.missingAccountName} have no account name and will be skipped.`,
       );
     } catch (err: any) {
       console.error('CSV import preview error', err);
@@ -567,10 +642,13 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const handleApplyImport = () => {
     if (!pendingImport) return;
 
+    // Map to remember which new accounts we've created in this one import run
+    const createdByName: Record<string, string> = {};
+
     if (pendingImport.source === 'json') {
       const { importedAccounts, importedTxs, stats } = pendingImport;
       let added = 0;
-      let skippedNoAccount = 0;
+      let skippedNoAccountName = 0;
 
       for (const tx of importedTxs) {
         const accountNameFromImported =
@@ -582,17 +660,26 @@ const DataExportImportScreen: React.FC<Props> = () => {
           tx.accountName ||
           '';
 
-        const targetAccountId = findExistingAccountIdByName(
-          accountNameFromImported,
-          accounts,
-        );
+        const trimmedName = (accountNameFromImported || '').trim();
 
-        if (!targetAccountId) {
-          skippedNoAccount++;
+        if (!trimmedName) {
+          skippedNoAccountName++;
           continue;
         }
 
-        const txForAdd = buildTransactionFromData(tx, targetAccountId);
+        const accountId = ensureAccountIdForName(
+          trimmedName,
+          accounts,
+          createdByName,
+          actions,
+        );
+
+        if (!accountId) {
+          skippedNoAccountName++;
+          continue;
+        }
+
+        const txForAdd = buildTransactionFromData(tx, accountId);
 
         try {
           actions.addTransaction(txForAdd);
@@ -602,30 +689,45 @@ const DataExportImportScreen: React.FC<Props> = () => {
         }
       }
 
+      const createdCount = Object.keys(createdByName).length;
+
       setPendingImport(null);
       setLastStatus(
-        `JSON import applied: ${added} transaction(s) merged into existing accounts. ` +
-          (skippedNoAccount
-            ? `${skippedNoAccount} transaction(s) skipped because the account name was not found in current data.`
-            : `Preview had ${stats.missingAccount} unmatched, some may have been resolved if accounts changed.`),
+        `JSON import applied: ${added} transaction(s) merged. ` +
+          (createdCount
+            ? `${createdCount} new account(s) were created from the file. `
+            : '') +
+          (skippedNoAccountName
+            ? `${skippedNoAccountName} transaction(s) skipped because they had no valid account name.`
+            : `Preview had ${stats.missingAccountName} without account names; some may have been resolved if accounts changed.`),
       );
     } else if (pendingImport.source === 'csv') {
       const { rows, stats } = pendingImport;
       let added = 0;
-      let skippedNoAccount = 0;
+      let skippedNoAccountName = 0;
 
       for (const rawObj of rows) {
         const accountName = rawObj.account;
-        const targetAccountId = findExistingAccountIdByName(
-          accountName,
-          accounts,
-        );
-        if (!targetAccountId) {
-          skippedNoAccount++;
+        const trimmedName = (accountName || '').trim();
+
+        if (!trimmedName) {
+          skippedNoAccountName++;
           continue;
         }
 
-        const txForAdd = buildTransactionFromData(rawObj, targetAccountId);
+        const accountId = ensureAccountIdForName(
+          trimmedName,
+          accounts,
+          createdByName,
+          actions,
+        );
+
+        if (!accountId) {
+          skippedNoAccountName++;
+          continue;
+        }
+
+        const txForAdd = buildTransactionFromData(rawObj, accountId);
 
         try {
           actions.addTransaction(txForAdd);
@@ -635,12 +737,17 @@ const DataExportImportScreen: React.FC<Props> = () => {
         }
       }
 
+      const createdCount = Object.keys(createdByName).length;
+
       setPendingImport(null);
       setLastStatus(
-        `CSV import applied: ${added} transaction(s) merged into existing accounts. ` +
-          (skippedNoAccount
-            ? `${skippedNoAccount} row(s) skipped because the account name did not match any existing account.`
-            : `Preview had ${stats.missingAccount} unmatched, some may have been resolved if accounts changed.`),
+        `CSV import applied: ${added} transaction(s) merged. ` +
+          (createdCount
+            ? `${createdCount} new account(s) were created from the file. `
+            : '') +
+          (skippedNoAccountName
+            ? `${skippedNoAccountName} row(s) skipped because they had no valid account name.`
+            : `Preview had ${stats.missingAccountName} without account names; some may have been resolved if accounts changed.`),
       );
     }
   };
@@ -691,7 +798,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
           Choose a JSON backup (from DebitLens) or a CSV file. We&apos;ll parse
-          it and show a preview before anything is merged into your data.
+          it and show a preview. When you apply, transactions will be merged
+          into existing accounts, and any new account names in the file will
+          create new accounts automatically.
         </Text>
 
         <Pressable
@@ -743,12 +852,15 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 With account name: {pendingImport.stats.withAccountName}
               </Text>
               <Text style={styles.previewText}>
-                Can be merged (matching accounts):{' '}
-                {pendingImport.stats.matchable}
+                To existing accounts: {pendingImport.stats.existingAccountMatch}
               </Text>
               <Text style={styles.previewText}>
-                Will be skipped (unknown accounts):{' '}
-                {pendingImport.stats.missingAccount}
+                Will create new accounts:{' '}
+                {pendingImport.stats.willCreateAccount}
+              </Text>
+              <Text style={styles.previewText}>
+                Missing account name:{' '}
+                {pendingImport.stats.missingAccountName}
               </Text>
             </>
           ) : (
@@ -757,12 +869,15 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 Rows in file: {pendingImport.stats.total}
               </Text>
               <Text style={styles.previewText}>
-                Can be merged (matching accounts):{' '}
-                {pendingImport.stats.matchable}
+                To existing accounts: {pendingImport.stats.existingAccountMatch}
               </Text>
               <Text style={styles.previewText}>
-                Will be skipped (unknown accounts):{' '}
-                {pendingImport.stats.missingAccount}
+                Will create new accounts:{' '}
+                {pendingImport.stats.willCreateAccount}
+              </Text>
+              <Text style={styles.previewText}>
+                Missing account name:{' '}
+                {pendingImport.stats.missingAccountName}
               </Text>
             </>
           )}
