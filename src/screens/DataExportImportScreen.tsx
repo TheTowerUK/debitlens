@@ -331,6 +331,19 @@ type CsvPendingImport = {
 
 type PendingImport = JsonPendingImport | CsvPendingImport | null;
 
+// Full restore preview
+type PendingFullRestore = {
+  fileName?: string;
+  backupAccounts: any[];
+  backupTxs: any[];
+  stats: {
+    currentAccounts: number;
+    currentTxs: number;
+    backupAccounts: number;
+    backupTxs: number;
+  };
+};
+
 // ---------- Component ----------
 
 const DataExportImportScreen: React.FC<Props> = () => {
@@ -341,6 +354,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport>(null);
+  const [pendingFullRestore, setPendingFullRestore] =
+    useState<PendingFullRestore | null>(null);
 
   // CSV export customisation
   const [csvIncludeDescription, setCsvIncludeDescription] = useState(true);
@@ -494,7 +509,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  // ---------- IMPORT PREVIEW (JSON) ----------
+  // ---------- IMPORT PREVIEW (JSON MERGE) ----------
 
   const handleImportJsonPreview = async () => {
     try {
@@ -592,6 +607,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
         importedTxs,
         stats,
       });
+      setPendingFullRestore(null);
 
       setLastStatus(
         `JSON file parsed. Preview ready below: ` +
@@ -608,7 +624,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  // ---------- IMPORT PREVIEW (CSV) ----------
+  // ---------- IMPORT PREVIEW (CSV MERGE) ----------
 
   const handleImportCsvPreview = async () => {
     try {
@@ -728,6 +744,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
         rows: rowObjs,
         stats,
       });
+      setPendingFullRestore(null);
 
       setLastStatus(
         `CSV file parsed. Preview ready below: ` +
@@ -744,7 +761,133 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  // ---------- APPLY IMPORT (from preview) ----------
+  // ---------- FULL RESTORE PREVIEW (JSON ONLY) ----------
+
+  const handleFullRestoreJsonPreview = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/json',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setLastStatus('Full restore cancelled before file selection.');
+        return;
+      }
+
+      const asset = result.assets && result.assets[0];
+      if (!asset || !asset.uri) {
+        setLastStatus(
+          'Full restore failed: No file selected or invalid file.',
+        );
+        return;
+      }
+
+      const fileUri = asset.uri;
+
+      const content = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: 'utf8',
+      });
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch (parseErr: any) {
+        console.error('Full restore parse error', parseErr);
+        setLastStatus(
+          'Full restore failed: Selected file is not valid JSON or is corrupted.',
+        );
+        return;
+      }
+
+      const backupAccounts = Array.isArray(parsed.accounts)
+        ? parsed.accounts
+        : [];
+      const backupTxs = Array.isArray(parsed.transactions)
+        ? parsed.transactions
+        : [];
+
+      if (!backupAccounts.length && !backupTxs.length) {
+        setLastStatus(
+          'Full restore file parsed, but no accounts or transactions were found.',
+        );
+        setPendingFullRestore(null);
+        return;
+      }
+
+      const stats = {
+        currentAccounts: accounts.length,
+        currentTxs: txs.length,
+        backupAccounts: backupAccounts.length,
+        backupTxs: backupTxs.length,
+      };
+
+      setPendingFullRestore({
+        fileName: asset.name,
+        backupAccounts,
+        backupTxs,
+        stats,
+      });
+      setPendingImport(null);
+
+      setLastStatus(
+        `Full restore preview ready. Current data: ${stats.currentAccounts} account(s), ${stats.currentTxs} transaction(s). ` +
+          `Backup: ${stats.backupAccounts} account(s), ${stats.backupTxs} transaction(s).`,
+      );
+    } catch (err: any) {
+      console.error('Full restore preview error', err);
+      setLastStatus(
+        `Full restore failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
+      );
+      setPendingFullRestore(null);
+    }
+  };
+
+  const handleApplyFullRestore = () => {
+    if (!pendingFullRestore) return;
+
+    const { backupAccounts, backupTxs, stats } = pendingFullRestore;
+
+    const anyActions = actions as any;
+    const restoreFn = anyActions.fullRestoreFromBackup;
+
+    if (typeof restoreFn !== 'function') {
+      setLastStatus(
+        'Full restore is not wired into app state yet. ' +
+          'Please implement actions.fullRestoreFromBackup({ accounts, transactions }) in AppContext before using this feature.',
+      );
+      setPendingFullRestore(null);
+      return;
+    }
+
+    try {
+      restoreFn({
+        accounts: backupAccounts,
+        transactions: backupTxs,
+      });
+
+      setLastStatus(
+        `Full restore applied: replaced ${stats.currentAccounts} account(s) / ${stats.currentTxs} transaction(s) ` +
+          `with backup (${stats.backupAccounts} account(s), ${stats.backupTxs} transaction(s)).`,
+      );
+    } catch (err: any) {
+      console.error('Full restore apply error', err);
+      setLastStatus(
+        `Full restore failed while applying backup: ${err?.message ?? 'Unknown error.'}`,
+      );
+    } finally {
+      setPendingFullRestore(null);
+    }
+  };
+
+  const handleCancelFullRestore = () => {
+    setPendingFullRestore(null);
+    setLastStatus(
+      'Full restore preview discarded. No data has been changed.',
+    );
+  };
+
+  // ---------- APPLY IMPORT (MERGE) ----------
 
   const handleApplyImport = () => {
     if (!pendingImport) return;
@@ -974,7 +1117,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
           onPress={handleImportJsonPreview}
         >
           <Text style={styles.btnSecondaryText}>
-            Import from JSON backup (preview)
+            Import from JSON backup (preview / merge)
           </Text>
         </Pressable>
 
@@ -983,9 +1126,29 @@ const DataExportImportScreen: React.FC<Props> = () => {
           onPress={handleImportCsvPreview}
         >
           <Text style={styles.btnSecondaryText}>
-            Import from CSV (preview)
+            Import from CSV (preview / merge)
           </Text>
         </Pressable>
+
+        <View style={styles.fullRestoreBox}>
+          <Text style={styles.fullRestoreLabel}>
+            Full restore (danger – replaces all data)
+          </Text>
+          <Pressable
+            style={styles.btnDanger}
+            onPress={handleFullRestoreJsonPreview}
+          >
+            <Text style={styles.btnDangerText}>
+              Restore from JSON backup (full replace)
+            </Text>
+          </Pressable>
+          <Text style={styles.fullRestoreHint}>
+            Uses the JSON backup to completely replace your current accounts and
+            transactions. You&apos;ll see a summary before applying. This
+            requires actions.fullRestoreFromBackup(...) to be wired in
+            AppContext.
+          </Text>
+        </View>
       </View>
 
       {/* STATUS */}
@@ -996,10 +1159,10 @@ const DataExportImportScreen: React.FC<Props> = () => {
         </View>
       ) : null}
 
-      {/* IMPORT PREVIEW CARD */}
+      {/* IMPORT PREVIEW CARD (MERGE) */}
       {pendingImport && (
         <View style={styles.previewCard}>
-          <Text style={styles.previewTitle}>Import preview</Text>
+          <Text style={styles.previewTitle}>Import preview (merge)</Text>
           <Text style={styles.previewMeta}>
             Source: {pendingImport.source.toUpperCase()}
           </Text>
@@ -1015,7 +1178,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 Transactions in file: {pendingImport.stats.total}
               </Text>
               <Text style={styles.previewText}>
-                With account name: {pendingImport.stats.withAccountName}
+                With account name:{' '}
+                {(pendingImport as JsonPendingImport).stats.withAccountName}
               </Text>
               <Text style={styles.previewText}>
                 To existing accounts: {pendingImport.stats.existingAccountMatch}
@@ -1053,13 +1217,52 @@ const DataExportImportScreen: React.FC<Props> = () => {
               style={[styles.btnPrimary, styles.previewBtn]}
               onPress={handleApplyImport}
             >
-              <Text style={styles.btnPrimaryText}>Apply import</Text>
+              <Text style={styles.btnPrimaryText}>Apply merge</Text>
             </Pressable>
             <Pressable
               style={[styles.btnSecondary, styles.previewBtn]}
               onPress={handleDiscardPreview}
             >
               <Text style={styles.btnSecondaryText}>Discard</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* FULL RESTORE PREVIEW CARD */}
+      {pendingFullRestore && (
+        <View style={styles.previewCardDanger}>
+          <Text style={styles.previewTitleDanger}>Full restore preview</Text>
+          <Text style={styles.previewMeta}>
+            This will replace ALL current accounts and transactions.
+          </Text>
+          {pendingFullRestore.fileName ? (
+            <Text style={styles.previewMeta}>
+              File: {pendingFullRestore.fileName}
+            </Text>
+          ) : null}
+
+          <Text style={styles.previewText}>
+            Current data: {pendingFullRestore.stats.currentAccounts} account(s),{' '}
+            {pendingFullRestore.stats.currentTxs} transaction(s)
+          </Text>
+          <Text style={styles.previewText}>
+            Backup data: {pendingFullRestore.stats.backupAccounts} account(s),{' '}
+            {pendingFullRestore.stats.backupTxs} transaction(s)
+          </Text>
+
+          <View style={styles.previewButtonsRow}>
+            <Pressable
+              style={[styles.btnDanger, styles.previewBtn]}
+              onPress={handleApplyFullRestore}
+            >
+              <Text style={styles.btnDangerText}>Apply full restore</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.btnSecondary, styles.previewBtn]}
+              onPress={handleCancelFullRestore}
+            >
+              <Text style={styles.btnSecondaryText}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -1143,6 +1346,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontSize: 14,
   },
+  btnDanger: {
+    backgroundColor: '#B91C1C',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  btnDangerText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
   statusBox: {
     marginTop: 8,
     padding: 12,
@@ -1169,8 +1386,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#1F2933',
   },
+  previewCardDanger: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#1F2933',
+    borderWidth: 1,
+    borderColor: '#B91C1C',
+  },
   previewTitle: {
     color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  previewTitleDanger: {
+    color: '#FCA5A5',
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 4,
@@ -1242,5 +1473,22 @@ const styles = StyleSheet.create({
   dateFormatTextActive: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  fullRestoreBox: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1F2933',
+  },
+  fullRestoreLabel: {
+    color: '#FCA5A5',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  fullRestoreHint: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    marginTop: 4,
   },
 });

@@ -125,6 +125,8 @@ export interface AppActions {
 
   // PIN
   setPin: (pin: string | null) => void;
+
+  
 }
 
 export interface AppContextValue {
@@ -386,3 +388,4 @@ export const useApp = (): AppContextValue => {
   }
   return ctx;
 };
+
