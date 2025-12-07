@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
+  Switch,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -15,6 +16,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
+type DateFormatOption = 'iso' | 'uk';
 
 // ---------- Helpers ----------
 
@@ -47,8 +49,7 @@ function parseMixedNumber(raw: unknown): number {
   // Remove currency symbols and stray spaces
   s = s.replace(/[^0-9.,\-+]/g, '');
 
-  // Remove thousands separators (commas)
-  // We assume last dot or comma is decimal separator; remove all others.
+  // Remove thousands separators (commas / extra dots)
   const lastDot = s.lastIndexOf('.');
   const lastComma = s.lastIndexOf(',');
   const decimalPos = Math.max(lastDot, lastComma);
@@ -112,9 +113,20 @@ function formatMaybeDate(value: unknown, fieldName: string): string {
   if (lowerField.includes('date')) {
     return normaliseDate(value);
   }
-  // For fields not obviously dates, just return as string
   if (value == null) return '';
   return String(value);
+}
+
+// For CSV export: convert an ISO date to the chosen format
+function formatDateForCsv(dateStr: string, format: DateFormatOption): string {
+  const iso = normaliseDate(dateStr);
+  if (format === 'iso') return iso;
+
+  // uk: DD/MM/YYYY if we recognise ISO YYYY-MM-DD
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const [, yyyy, mm, dd] = m;
+  return `${dd}/${mm}/${yyyy}`;
 }
 
 // Look up account name from any accounts array (current or imported)
@@ -330,6 +342,11 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const [lastStatus, setLastStatus] = useState<string | null>(null);
   const [pendingImport, setPendingImport] = useState<PendingImport>(null);
 
+  // CSV export customisation
+  const [csvIncludeDescription, setCsvIncludeDescription] = useState(true);
+  const [csvIncludeCategory, setCsvIncludeCategory] = useState(true);
+  const [csvDateFormat, setCsvDateFormat] = useState<DateFormatOption>('iso');
+
   // Expo provides documentDirectory; fall back to '' just in case.
   const exportDir = (FileSystem.documentDirectory ?? '') as string;
 
@@ -395,13 +412,20 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const hasDate = rawHeaders.includes('date');
 
-      const otherHeaders = rawHeaders.filter(
+      let otherHeaders = rawHeaders.filter(
         (h) =>
           !excluded.includes(h) &&
           h !== 'date' &&
           h.toLowerCase() !== 'account' &&
           h !== 'type',
       );
+
+      // Apply column toggle rules
+      otherHeaders = otherHeaders.filter((h) => {
+        if (h === 'description' && !csvIncludeDescription) return false;
+        if (h === 'category' && !csvIncludeCategory) return false;
+        return true;
+      });
 
       const headers: string[] = [];
       if (hasDate) headers.push('date');
@@ -425,6 +449,11 @@ const DataExportImportScreen: React.FC<Props> = () => {
             if (h === 'type') {
               const type = resolveType(tx.type, tx.amount);
               return escapeCsv(type);
+            }
+
+            if (h === 'date') {
+              const formattedDate = formatDateForCsv(tx.date, csvDateFormat);
+              return escapeCsv(formattedDate);
             }
 
             const formatted = formatMaybeDate(tx[h], h);
@@ -869,6 +898,65 @@ const DataExportImportScreen: React.FC<Props> = () => {
             Export transactions as CSV (file)
           </Text>
         </Pressable>
+
+        {/* CSV export options */}
+        <View style={styles.optionsBox}>
+          <Text style={styles.optionsTitle}>CSV export options</Text>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Include description</Text>
+            <Switch
+              value={csvIncludeDescription}
+              onValueChange={setCsvIncludeDescription}
+            />
+          </View>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Include category</Text>
+            <Switch
+              value={csvIncludeCategory}
+              onValueChange={setCsvIncludeCategory}
+            />
+          </View>
+
+          <Text style={[styles.optionLabel, { marginTop: 8 }]}>
+            Date format
+          </Text>
+          <View style={styles.dateFormatRow}>
+            <Pressable
+              style={[
+                styles.dateFormatBtn,
+                csvDateFormat === 'iso' && styles.dateFormatBtnActive,
+              ]}
+              onPress={() => setCsvDateFormat('iso')}
+            >
+              <Text
+                style={[
+                  styles.dateFormatText,
+                  csvDateFormat === 'iso' && styles.dateFormatTextActive,
+                ]}
+              >
+                YYYY-MM-DD
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.dateFormatBtn,
+                csvDateFormat === 'uk' && styles.dateFormatBtnActive,
+              ]}
+              onPress={() => setCsvDateFormat('uk')}
+            >
+              <Text
+                style={[
+                  styles.dateFormatText,
+                  csvDateFormat === 'uk' && styles.dateFormatTextActive,
+                ]}
+              >
+                DD/MM/YYYY
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </View>
 
       {/* IMPORT CARD */}
@@ -1105,5 +1193,54 @@ const styles = StyleSheet.create({
   previewBtn: {
     flex: 1,
     marginHorizontal: 4,
+  },
+  optionsBox: {
+    marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1F2933',
+  },
+  optionsTitle: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  optionLabel: {
+    color: '#E5E7EB',
+    fontSize: 13,
+  },
+  dateFormatRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  dateFormatBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  dateFormatBtnActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  dateFormatText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  dateFormatTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });
