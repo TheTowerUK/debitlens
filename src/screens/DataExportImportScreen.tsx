@@ -25,6 +25,27 @@ function escapeCsv(value: string): string {
   return needsQuotes ? `"${v}"` : v;
 }
 
+// Format date-like strings to YYYY-MM-DD
+function formatMaybeDate(value: unknown, fieldName: string): string {
+  if (value == null) return '';
+
+  if (typeof value !== 'string') return String(value);
+
+  const lowerField = fieldName.toLowerCase();
+
+  // ISO-like date: "YYYY-MM-DDT..."
+  const looksIso = /^\d{4}-\d{2}-\d{2}T/.test(value);
+
+  if (looksIso || lowerField.includes('date')) {
+    // If it's at least "YYYY-MM-DD", just take first 10 chars
+    if (value.length >= 10) {
+      return value.slice(0, 10);
+    }
+  }
+
+  return value;
+}
+
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state } = useApp();
 
@@ -47,7 +68,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       const json = JSON.stringify(payload, null, 2);
 
-      const filename = `DebitLens-export-${Date.now()}.json`;
+      const filename = `debitlens-export-${Date.now()}.json`;
       const fileUri = exportDir + filename;
 
       await FileSystem.writeAsStringAsync(fileUri, json, {
@@ -86,25 +107,27 @@ const DataExportImportScreen: React.FC<Props> = () => {
         return;
       }
 
-      // Use the keys from the first transaction as the CSV header
-      const headers: string[] = Object.keys(txsForCsv[0]);
+      // Use the keys from the first transaction as the CSV header,
+      // but exclude internal IDs that are not useful for imports/analysis
+      const rawHeaders: string[] = Object.keys(txsForCsv[0]);
+
+      const excluded = ['id']; // add 'accountId' here too if you want to hide it
+      const headers = rawHeaders.filter((h) => !excluded.includes(h));
 
       const headerLine = headers.map((h) => escapeCsv(h)).join(',');
 
       const rows = txsForCsv.map((tx) =>
         headers
           .map((h) => {
-            const v = tx[h];
-            return escapeCsv(
-              v === null || v === undefined ? '' : String(v),
-            );
+            const formatted = formatMaybeDate(tx[h], h);
+            return escapeCsv(formatted);
           })
           .join(','),
       );
 
       const csv = [headerLine, ...rows].join('\n');
 
-      const filename = `DebitLens-transactions-${Date.now()}.csv`;
+      const filename = `debitlens-transactions-${Date.now()}.csv`;
       const fileUri = exportDir + filename;
 
       await FileSystem.writeAsStringAsync(fileUri, csv, {
