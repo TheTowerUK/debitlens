@@ -46,15 +46,124 @@ function formatMaybeDate(value: unknown, fieldName: string): string {
   return value;
 }
 
-// Look up account name from accountId
-function getAccountName(accountId: unknown, accounts: any[]): string {
+// Look up account name from accountId in imported JSON
+function getAccountNameFromImported(
+  accountId: unknown,
+  importedAccounts: any[],
+): string {
   if (!accountId) return '';
-  const acc = accounts.find((a) => a.id === accountId);
+  const acc = importedAccounts.find((a) => a.id === accountId);
   return acc?.name ?? '';
 }
 
+// Look up existing app account by name
+function findExistingAccountIdByName(
+  name: string | null | undefined,
+  accounts: any[],
+): string | null {
+  if (!name) return null;
+  const acc = accounts.find(
+    (a) => typeof a.name === 'string' && a.name.trim() === name.trim(),
+  );
+  return acc?.id ?? null;
+}
+
+// Very simple CSV parser that supports quoted values and commas
+function parseCsv(text: string): { headers: string[]; rows: string[][] } {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (!lines.length) {
+    return { headers: [], rows: [] };
+  }
+
+  const parseLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+
+    result.push(current);
+    return result;
+  };
+
+  const headers = parseLine(lines[0]).map((h) => h.trim());
+  const rows = lines.slice(1).map((l) => parseLine(l));
+
+  return { headers, rows };
+}
+
+// Build a transaction object for addTransaction(), best-effort mapping
+function buildTransactionFromData(
+  row: Record<string, any>,
+  accountId: string,
+): any {
+  // Date
+  const rawDate =
+    row.date ??
+    row.txnDate ??
+    row.transactionDate ??
+    row.createdAt ??
+    row.updatedAt ??
+    new Date().toISOString();
+  const date = formatMaybeDate(rawDate, 'date');
+
+  // Amount
+  const rawAmount = row.amount ?? row.value ?? row.total ?? 0;
+  const amountNum = Number(rawAmount);
+  const amount = Number.isFinite(amountNum) ? amountNum : 0;
+
+  // Type
+  const rawType = (row.type ?? '').toString().toLowerCase();
+  let type: 'income' | 'expense';
+  if (rawType === 'income' || rawType === 'expense') {
+    type = rawType;
+  } else {
+    type = amount >= 0 ? 'income' : 'expense';
+  }
+
+  // Description / notes
+  const description =
+    row.description ??
+    row.notes ??
+    row.memo ??
+    row.category ??
+    'Imported transaction';
+
+  // Category
+  const category =
+    row.category ??
+    row.cat ??
+    (amount < 0 ? 'Expense' : 'Income');
+
+  return {
+    accountId,
+    date,
+    amount,
+    type,
+    description,
+    category,
+  };
+}
+
 const DataExportImportScreen: React.FC<Props> = () => {
-  const { state } = useApp();
+  const { state, actions } = useApp();
 
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
@@ -137,7 +246,10 @@ const DataExportImportScreen: React.FC<Props> = () => {
         headers
           .map((h) => {
             if (h === 'account') {
-              const name = getAccountName(tx.accountId, accounts);
+              const accId = tx.accountId;
+              const name = accId
+                ? getAccountNameFromImported(accId, accounts)
+                : ''; // in export case, tx.accountId matches current accounts
               return escapeCsv(name);
             }
 
@@ -179,22 +291,21 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  const handleImportPress = async () => {
+  const handleImportJsonMerge = async () => {
     try {
-      // Pick a JSON backup file created by DebitLens
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/json',
         copyToCacheDirectory: true,
       });
 
       if (result.canceled) {
-        setLastStatus('Import cancelled before file selection.');
+        setLastStatus('JSON import cancelled before file selection.');
         return;
       }
 
       const asset = result.assets && result.assets[0];
       if (!asset || !asset.uri) {
-        setLastStatus('Import failed: No file selected or invalid file.');
+        setLastStatus('JSON import failed: No file selected or invalid file.');
         return;
       }
 
@@ -210,7 +321,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       } catch (parseErr: any) {
         console.error('Import parse error', parseErr);
         setLastStatus(
-          'Import failed: Selected file is not valid JSON or is corrupted.',
+          'JSON import failed: Selected file is not valid JSON or is corrupted.',
         );
         return;
       }
@@ -224,24 +335,156 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
       if (!importedAccounts.length && !importedTxs.length) {
         setLastStatus(
-          'Import file parsed, but no accounts or transactions were found.',
+          'JSON import file parsed, but no accounts or transactions were found.',
         );
         return;
       }
 
-      setLastStatus(
-        `Import preview: file contains ${importedAccounts.length} account(s) and ${importedTxs.length} transaction(s). Data has not been applied yet.`,
-      );
+      let added = 0;
+      let skippedNoAccount = 0;
 
-      // 🔒 NOTE:
-      // We are *only* previewing the contents here.
-      // Later we can add a confirmation step that actually:
-      // - merges or replaces current accounts/transactions
-      // - handles ID remapping, duplicates, etc.
-    } catch (err: any) {
-      console.error('Import error', err);
+      for (const tx of importedTxs) {
+        // Find account name in imported data
+        const accountNameFromImported =
+          getAccountNameFromImported(tx.accountId, importedAccounts) ||
+          tx.account ||
+          tx.accountName ||
+          '';
+
+        const targetAccountId = findExistingAccountIdByName(
+          accountNameFromImported,
+          accounts,
+        );
+
+        if (!targetAccountId) {
+          skippedNoAccount++;
+          continue;
+        }
+
+        const txForAdd = buildTransactionFromData(tx, targetAccountId);
+
+        try {
+          actions.addTransaction(txForAdd);
+          added++;
+        } catch (e) {
+          console.warn('Failed to add imported JSON transaction', e);
+        }
+      }
+
       setLastStatus(
-        `Import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
+        `JSON import complete: ${added} transaction(s) merged into existing accounts. ` +
+          (skippedNoAccount
+            ? `${skippedNoAccount} transaction(s) skipped because the account name was not found in current data.`
+            : ''),
+      );
+    } catch (err: any) {
+      console.error('JSON import error', err);
+      setLastStatus(
+        `JSON import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
+      );
+    }
+  };
+
+  const handleImportCsvMerge = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setLastStatus('CSV import cancelled before file selection.');
+        return;
+      }
+
+      const asset = result.assets && result.assets[0];
+      if (!asset || !asset.uri) {
+        setLastStatus('CSV import failed: No file selected or invalid file.');
+        return;
+      }
+
+      const fileUri = asset.uri;
+
+      const content = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: 'utf8',
+      });
+
+      const { headers, rows } = parseCsv(content);
+      if (!headers.length || !rows.length) {
+        setLastStatus('CSV import failed: File is empty or has no rows.');
+        return;
+      }
+
+      // Find key columns
+      const idxOf = (name: string): number =>
+        headers.findIndex(
+          (h) => h.toLowerCase() === name.toLowerCase(),
+        );
+
+      const dateIdx = idxOf('date');
+      const accountIdx = idxOf('account');
+      const amountIdx =
+        idxOf('amount') >= 0 ? idxOf('amount') : idxOf('value');
+      const typeIdx = idxOf('type');
+      const descIdx =
+        idxOf('description') >= 0
+          ? idxOf('description')
+          : idxOf('notes');
+      const categoryIdx = idxOf('category');
+
+      if (accountIdx < 0) {
+        setLastStatus(
+          'CSV import failed: Could not find an "account" column in the header row.',
+        );
+        return;
+      }
+
+      let added = 0;
+      let skippedNoAccount = 0;
+
+      for (const row of rows) {
+        const get = (idx: number): string =>
+          idx >= 0 && idx < row.length ? row[idx] : '';
+
+        const accountName = get(accountIdx);
+        const targetAccountId = findExistingAccountIdByName(
+          accountName,
+          accounts,
+        );
+        if (!targetAccountId) {
+          skippedNoAccount++;
+          continue;
+        }
+
+        const rawObj: Record<string, any> = {
+          date: dateIdx >= 0 ? get(dateIdx) : undefined,
+          account: accountName,
+          amount: amountIdx >= 0 ? get(amountIdx) : undefined,
+          type: typeIdx >= 0 ? get(typeIdx) : undefined,
+          description: descIdx >= 0 ? get(descIdx) : undefined,
+          category: categoryIdx >= 0 ? get(categoryIdx) : undefined,
+        };
+
+        const txForAdd = buildTransactionFromData(rawObj, targetAccountId);
+
+        try {
+          actions.addTransaction(txForAdd);
+          added++;
+        } catch (e) {
+          console.warn('Failed to add imported CSV transaction', e);
+        }
+      }
+
+      setLastStatus(
+        `CSV import complete: ${added} transaction(s) merged into existing accounts. ` +
+          (skippedNoAccount
+            ? `${skippedNoAccount} row(s) skipped because the account name did not match any existing account.`
+            : ''),
+      );
+    } catch (err: any) {
+      console.error('CSV import error', err);
+      setLastStatus(
+        `CSV import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
       );
     }
   };
@@ -284,14 +527,20 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
-          Select a JSON backup file previously exported from DebitLens. We&apos;ll
-          parse it and show what&apos;s inside before we add any apply / merge
-          options.
+          You can merge data from a JSON backup (exported by DebitLens) or from
+          a CSV file. Imported transactions are added to your existing accounts,
+          and rows with unknown account names are skipped.
         </Text>
 
-        <Pressable style={styles.btnSecondary} onPress={handleImportPress}>
+        <Pressable style={styles.btnSecondary} onPress={handleImportJsonMerge}>
           <Text style={styles.btnSecondaryText}>
-            Import from JSON backup (preview)
+            Import from JSON backup (merge)
+          </Text>
+        </Pressable>
+
+        <Pressable style={styles.btnSecondary} onPress={handleImportCsvMerge}>
+          <Text style={styles.btnSecondaryText}>
+            Import from CSV (merge transactions)
           </Text>
         </Pressable>
       </View>
