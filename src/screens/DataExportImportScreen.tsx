@@ -169,6 +169,34 @@ function buildTransactionFromData(
   };
 }
 
+// ---------- Pending import preview types ----------
+
+type JsonPendingImport = {
+  source: 'json';
+  fileName?: string;
+  importedAccounts: any[];
+  importedTxs: any[];
+  stats: {
+    total: number;
+    withAccountName: number;
+    matchable: number;
+    missingAccount: number;
+  };
+};
+
+type CsvPendingImport = {
+  source: 'csv';
+  fileName?: string;
+  rows: Record<string, any>[];
+  stats: {
+    total: number;
+    matchable: number;
+    missingAccount: number;
+  };
+};
+
+type PendingImport = JsonPendingImport | CsvPendingImport | null;
+
 const DataExportImportScreen: React.FC<Props> = () => {
   const { state, actions } = useApp();
 
@@ -176,9 +204,12 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const txs = state.transactions || [];
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport>(null);
 
   // Expo provides documentDirectory; fall back to '' just in case.
   const exportDir = (FileSystem.documentDirectory ?? '') as string;
+
+  // ---------- EXPORT HANDLERS ----------
 
   const handleExportJsonPress = async () => {
     try {
@@ -239,7 +270,6 @@ const DataExportImportScreen: React.FC<Props> = () => {
       const excluded = ['id', 'accountId'];
 
       const hasDate = rawHeaders.includes('date');
-      const hasType = rawHeaders.includes('type');
 
       const otherHeaders = rawHeaders.filter(
         (h) =>
@@ -312,7 +342,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  const handleImportJsonMerge = async () => {
+  // ---------- IMPORT PREVIEW (JSON) ----------
+
+  const handleImportJsonPreview = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: 'application/json',
@@ -358,55 +390,67 @@ const DataExportImportScreen: React.FC<Props> = () => {
         setLastStatus(
           'JSON import file parsed, but no accounts or transactions were found.',
         );
+        setPendingImport(null);
         return;
       }
 
-      let added = 0;
-      let skippedNoAccount = 0;
+      let withAccountName = 0;
+      let matchable = 0;
+      let missingAccount = 0;
 
       for (const tx of importedTxs) {
-        // Find account name in imported data
         const accountNameFromImported =
           getAccountNameFromAccounts(tx.accountId, importedAccounts) ||
           tx.account ||
           tx.accountName ||
           '';
 
+        if (accountNameFromImported) {
+          withAccountName++;
+        }
+
         const targetAccountId = findExistingAccountIdByName(
           accountNameFromImported,
           accounts,
         );
 
-        if (!targetAccountId) {
-          skippedNoAccount++;
-          continue;
-        }
-
-        const txForAdd = buildTransactionFromData(tx, targetAccountId);
-
-        try {
-          actions.addTransaction(txForAdd);
-          added++;
-        } catch (e) {
-          console.warn('Failed to add imported JSON transaction', e);
+        if (targetAccountId) {
+          matchable++;
+        } else {
+          missingAccount++;
         }
       }
 
+      const stats = {
+        total: importedTxs.length,
+        withAccountName,
+        matchable,
+        missingAccount,
+      };
+
+      setPendingImport({
+        source: 'json',
+        fileName: asset.name,
+        importedAccounts,
+        importedTxs,
+        stats,
+      });
+
       setLastStatus(
-        `JSON import complete: ${added} transaction(s) merged into existing accounts. ` +
-          (skippedNoAccount
-            ? `${skippedNoAccount} transaction(s) skipped because the account name was not found in current data.`
-            : ''),
+        `JSON file parsed. Preview ready below: ${stats.matchable} transaction(s) can be merged, ${stats.missingAccount} will be skipped.`,
       );
     } catch (err: any) {
-      console.error('JSON import error', err);
+      console.error('JSON import preview error', err);
       setLastStatus(
         `JSON import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
       );
+      setPendingImport(null);
     }
   };
 
-  const handleImportCsvMerge = async () => {
+  // ---------- IMPORT PREVIEW (CSV) ----------
+
+  const handleImportCsvPreview = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: 'text/*',
@@ -433,10 +477,10 @@ const DataExportImportScreen: React.FC<Props> = () => {
       const { headers, rows } = parseCsv(content);
       if (!headers.length || !rows.length) {
         setLastStatus('CSV import failed: File is empty or has no rows.');
+        setPendingImport(null);
         return;
       }
 
-      // Find key columns
       const idxOf = (name: string): number =>
         headers.findIndex(
           (h) => h.toLowerCase() === name.toLowerCase(),
@@ -457,25 +501,19 @@ const DataExportImportScreen: React.FC<Props> = () => {
         setLastStatus(
           'CSV import failed: Could not find an "account" column in the header row.',
         );
+        setPendingImport(null);
         return;
       }
 
-      let added = 0;
-      let skippedNoAccount = 0;
+      const rowObjs: Record<string, any>[] = [];
+      let matchable = 0;
+      let missingAccount = 0;
 
       for (const row of rows) {
         const get = (idx: number): string =>
           idx >= 0 && idx < row.length ? row[idx] : '';
 
         const accountName = get(accountIdx);
-        const targetAccountId = findExistingAccountIdByName(
-          accountName,
-          accounts,
-        );
-        if (!targetAccountId) {
-          skippedNoAccount++;
-          continue;
-        }
 
         const rawObj: Record<string, any> = {
           date: dateIdx >= 0 ? get(dateIdx) : undefined,
@@ -485,6 +523,107 @@ const DataExportImportScreen: React.FC<Props> = () => {
           description: descIdx >= 0 ? get(descIdx) : undefined,
           category: categoryIdx >= 0 ? get(categoryIdx) : undefined,
         };
+
+        rowObjs.push(rawObj);
+
+        const targetAccountId = findExistingAccountIdByName(
+          accountName,
+          accounts,
+        );
+        if (targetAccountId) {
+          matchable++;
+        } else {
+          missingAccount++;
+        }
+      }
+
+      const stats = {
+        total: rowObjs.length,
+        matchable,
+        missingAccount,
+      };
+
+      setPendingImport({
+        source: 'csv',
+        fileName: asset.name,
+        rows: rowObjs,
+        stats,
+      });
+
+      setLastStatus(
+        `CSV file parsed. Preview ready below: ${stats.matchable} row(s) can be merged, ${stats.missingAccount} will be skipped.`,
+      );
+    } catch (err: any) {
+      console.error('CSV import preview error', err);
+      setLastStatus(
+        `CSV import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
+      );
+      setPendingImport(null);
+    }
+  };
+
+  // ---------- APPLY IMPORT (from preview) ----------
+
+  const handleApplyImport = () => {
+    if (!pendingImport) return;
+
+    if (pendingImport.source === 'json') {
+      const { importedAccounts, importedTxs, stats } = pendingImport;
+      let added = 0;
+      let skippedNoAccount = 0;
+
+      for (const tx of importedTxs) {
+        const accountNameFromImported =
+          getAccountNameFromAccounts(
+            tx.accountId,
+            importedAccounts,
+          ) ||
+          tx.account ||
+          tx.accountName ||
+          '';
+
+        const targetAccountId = findExistingAccountIdByName(
+          accountNameFromImported,
+          accounts,
+        );
+
+        if (!targetAccountId) {
+          skippedNoAccount++;
+          continue;
+        }
+
+        const txForAdd = buildTransactionFromData(tx, targetAccountId);
+
+        try {
+          actions.addTransaction(txForAdd);
+          added++;
+        } catch (e) {
+          console.warn('Failed to add imported JSON transaction', e);
+        }
+      }
+
+      setPendingImport(null);
+      setLastStatus(
+        `JSON import applied: ${added} transaction(s) merged into existing accounts. ` +
+          (skippedNoAccount
+            ? `${skippedNoAccount} transaction(s) skipped because the account name was not found in current data.`
+            : `Preview had ${stats.missingAccount} unmatched, some may have been resolved if accounts changed.`),
+      );
+    } else if (pendingImport.source === 'csv') {
+      const { rows, stats } = pendingImport;
+      let added = 0;
+      let skippedNoAccount = 0;
+
+      for (const rawObj of rows) {
+        const accountName = rawObj.account;
+        const targetAccountId = findExistingAccountIdByName(
+          accountName,
+          accounts,
+        );
+        if (!targetAccountId) {
+          skippedNoAccount++;
+          continue;
+        }
 
         const txForAdd = buildTransactionFromData(rawObj, targetAccountId);
 
@@ -496,19 +635,22 @@ const DataExportImportScreen: React.FC<Props> = () => {
         }
       }
 
+      setPendingImport(null);
       setLastStatus(
-        `CSV import complete: ${added} transaction(s) merged into existing accounts. ` +
+        `CSV import applied: ${added} transaction(s) merged into existing accounts. ` +
           (skippedNoAccount
             ? `${skippedNoAccount} row(s) skipped because the account name did not match any existing account.`
-            : ''),
-      );
-    } catch (err: any) {
-      console.error('CSV import error', err);
-      setLastStatus(
-        `CSV import failed: ${err?.message ?? 'Unknown error occurred while reading the file.'}`,
+            : `Preview had ${stats.missingAccount} unmatched, some may have been resolved if accounts changed.`),
       );
     }
   };
+
+  const handleDiscardPreview = () => {
+    setPendingImport(null);
+    setLastStatus('Import preview discarded. No data has been changed.');
+  };
+
+  // ---------- RENDER ----------
 
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
@@ -548,30 +690,99 @@ const DataExportImportScreen: React.FC<Props> = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Import data</Text>
         <Text style={styles.body}>
-          You can merge data from a JSON backup (exported by DebitLens) or from
-          a CSV file. Imported transactions are added to your existing accounts,
-          and rows with unknown account names are skipped.
+          Choose a JSON backup (from DebitLens) or a CSV file. We&apos;ll parse
+          it and show a preview before anything is merged into your data.
         </Text>
 
-        <Pressable style={styles.btnSecondary} onPress={handleImportJsonMerge}>
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={handleImportJsonPreview}
+        >
           <Text style={styles.btnSecondaryText}>
-            Import from JSON backup (merge)
+            Import from JSON backup (preview)
           </Text>
         </Pressable>
 
-        <Pressable style={styles.btnSecondary} onPress={handleImportCsvMerge}>
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={handleImportCsvPreview}
+        >
           <Text style={styles.btnSecondaryText}>
-            Import from CSV (merge transactions)
+            Import from CSV (preview)
           </Text>
         </Pressable>
       </View>
 
+      {/* STATUS */}
       {lastStatus ? (
         <View style={styles.statusBox}>
           <Text style={styles.statusLabel}>Status</Text>
           <Text style={styles.statusText}>{lastStatus}</Text>
         </View>
       ) : null}
+
+      {/* IMPORT PREVIEW CARD */}
+      {pendingImport && (
+        <View style={styles.previewCard}>
+          <Text style={styles.previewTitle}>Import preview</Text>
+          <Text style={styles.previewMeta}>
+            Source: {pendingImport.source.toUpperCase()}
+          </Text>
+          {pendingImport.fileName ? (
+            <Text style={styles.previewMeta}>
+              File: {pendingImport.fileName}
+            </Text>
+          ) : null}
+
+          {pendingImport.source === 'json' ? (
+            <>
+              <Text style={styles.previewText}>
+                Transactions in file: {pendingImport.stats.total}
+              </Text>
+              <Text style={styles.previewText}>
+                With account name: {pendingImport.stats.withAccountName}
+              </Text>
+              <Text style={styles.previewText}>
+                Can be merged (matching accounts):{' '}
+                {pendingImport.stats.matchable}
+              </Text>
+              <Text style={styles.previewText}>
+                Will be skipped (unknown accounts):{' '}
+                {pendingImport.stats.missingAccount}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.previewText}>
+                Rows in file: {pendingImport.stats.total}
+              </Text>
+              <Text style={styles.previewText}>
+                Can be merged (matching accounts):{' '}
+                {pendingImport.stats.matchable}
+              </Text>
+              <Text style={styles.previewText}>
+                Will be skipped (unknown accounts):{' '}
+                {pendingImport.stats.missingAccount}
+              </Text>
+            </>
+          )}
+
+          <View style={styles.previewButtonsRow}>
+            <Pressable
+              style={[styles.btnPrimary, styles.previewBtn]}
+              onPress={handleApplyImport}
+            >
+              <Text style={styles.btnPrimaryText}>Apply import</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.btnSecondary, styles.previewBtn]}
+              onPress={handleDiscardPreview}
+            >
+              <Text style={styles.btnSecondaryText}>Discard</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 };
@@ -668,5 +879,38 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#E5E7EB',
     fontSize: 13,
+  },
+  previewCard: {
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2933',
+  },
+  previewTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  previewMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  previewText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    marginTop: 4,
+  },
+  previewButtonsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+  },
+  previewBtn: {
+    flex: 1,
+    marginHorizontal: 4,
   },
 });
