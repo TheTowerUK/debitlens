@@ -27,24 +27,94 @@ function escapeCsv(value: string): string {
   return needsQuotes ? `"${v}"` : v;
 }
 
-// Format date-like strings to YYYY-MM-DD
-function formatMaybeDate(value: unknown, fieldName: string): string {
-  if (value == null) return '';
-
-  if (typeof value !== 'string') return String(value);
-
-  const lowerField = fieldName.toLowerCase();
-
-  // ISO-like date: "YYYY-MM-DDT..."
-  const looksIso = /^\d{4}-\d{2}-\d{2}T/.test(value);
-
-  if (looksIso || lowerField.includes('date')) {
-    if (value.length >= 10) {
-      return value.slice(0, 10);
-    }
+// Parse mixed numeric strings like "£1,234.56", "$-45.67", "(123.45)"
+function parseMixedNumber(raw: unknown): number {
+  if (raw == null) return 0;
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? raw : 0;
   }
 
-  return value;
+  let s = String(raw).trim();
+  if (!s) return 0;
+
+  // Handle parentheses as negatives: (123.45) -> -123.45
+  let negative = false;
+  if (s.startsWith('(') && s.endsWith(')')) {
+    negative = true;
+    s = s.slice(1, -1);
+  }
+
+  // Remove currency symbols and stray spaces
+  s = s.replace(/[^0-9.,\-+]/g, '');
+
+  // Remove thousands separators (commas)
+  // We assume last dot or comma is decimal separator; remove all others.
+  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(',');
+  const decimalPos = Math.max(lastDot, lastComma);
+
+  if (decimalPos !== -1) {
+    const intPart = s.slice(0, decimalPos).replace(/[.,]/g, '');
+    const decPart = s.slice(decimalPos + 1).replace(/[.,]/g, '');
+    s = intPart + '.' + decPart;
+  } else {
+    // No clear decimal separator: just remove commas
+    s = s.replace(/,/g, '');
+  }
+
+  let n = Number(s);
+  if (!Number.isFinite(n)) n = 0;
+  if (negative) n = -Math.abs(n);
+  return n;
+}
+
+// Try to normalise dates like "2025-12-07T..." or "07/12/2025" to YYYY-MM-DD
+function normaliseDate(raw: unknown): string {
+  if (raw == null) return '';
+
+  const s = String(raw).trim();
+  if (!s) return '';
+
+  // If we already have ISO-like 2025-12-07T..., keep first 10 chars
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {
+    return s.slice(0, 10);
+  }
+
+  // If string already looks like YYYY-MM-DD, keep it
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return s;
+  }
+
+  // Handle DD/MM/YYYY or DD-MM-YYYY
+  const m = /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/.exec(s);
+  if (m) {
+    let [_, dd, mm, yyyy] = m;
+    if (yyyy.length === 2) {
+      // naive 20xx assumption
+      yyyy = '20' + yyyy;
+    }
+    const day = dd.padStart(2, '0');
+    const month = mm.padStart(2, '0');
+    return `${yyyy}-${month}-${day}`;
+  }
+
+  // Fallback: if at least 10 chars, assume YYYY-MM-DD in front
+  if (s.length >= 10) {
+    return s.slice(0, 10);
+  }
+
+  return s;
+}
+
+// Format date-like strings to YYYY-MM-DD using normaliseDate
+function formatMaybeDate(value: unknown, fieldName: string): string {
+  const lowerField = fieldName.toLowerCase();
+  if (lowerField.includes('date')) {
+    return normaliseDate(value);
+  }
+  // For fields not obviously dates, just return as string
+  if (value == null) return '';
+  return String(value);
 }
 
 // Look up account name from any accounts array (current or imported)
@@ -128,7 +198,7 @@ function resolveType(rawType: unknown, rawAmount: unknown): 'income' | 'expense'
   const t = (rawType ?? '').toString().toLowerCase();
   if (t === 'income' || t === 'expense') return t;
 
-  const n = Number(rawAmount);
+  const n = parseMixedNumber(rawAmount);
   if (Number.isFinite(n)) {
     return n >= 0 ? 'income' : 'expense';
   }
@@ -149,23 +219,22 @@ function buildTransactionFromData(
     row.createdAt ??
     row.updatedAt ??
     new Date().toISOString();
-  const date = formatMaybeDate(rawDate, 'date');
+  const date = normaliseDate(rawDate);
 
-  // Amount
+  // Amount (robust parsing)
   const rawAmount = row.amount ?? row.value ?? row.total ?? 0;
-  const amountNum = Number(rawAmount);
-  const amount = Number.isFinite(amountNum) ? amountNum : 0;
+  const amount = parseMixedNumber(rawAmount);
 
   // Type (use explicit value if present, otherwise infer from amount)
-  const type = resolveType(row.type, amount);
+  const type = resolveType(row.type, rawAmount);
 
   // Description / notes
   const description =
-    row.description ??
-    row.notes ??
-    row.memo ??
-    row.category ??
-    'Imported transaction';
+    (row.description ??
+      row.notes ??
+      row.memo ??
+      row.category ??
+      'Imported transaction') || 'Imported transaction';
 
   // Category
   const category =
@@ -208,7 +277,6 @@ function ensureAccountIdForName(
   // Create a new account
   const newId = makeId('acc_import');
   try {
-    // Assume addAccount accepts at least { id?, name }
     actions.addAccount({
       id: newId,
       name: trimmed,
@@ -347,7 +415,6 @@ const DataExportImportScreen: React.FC<Props> = () => {
         headers
           .map((h) => {
             if (h === 'account') {
-              // Current app accounts: tx.accountId is already using these
               const accId = tx.accountId;
               const name = accId
                 ? getAccountNameFromAccounts(accId, accounts)
@@ -578,7 +645,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
         const get = (idx: number): string =>
           idx >= 0 && idx < row.length ? row[idx] : '';
 
-        const accountName = get(accountIdx);
+        const accountNameRaw = get(accountIdx);
+        const accountName = accountNameRaw ? accountNameRaw.trim() : '';
 
         const rawObj: Record<string, any> = {
           date: dateIdx >= 0 ? get(dateIdx) : undefined,
@@ -589,16 +657,26 @@ const DataExportImportScreen: React.FC<Props> = () => {
           category: categoryIdx >= 0 ? get(categoryIdx) : undefined,
         };
 
+        // Skip completely empty/junk rows:
+        const descStr = (rawObj.description || '').toString().trim();
+        const amountNum = parseMixedNumber(rawObj.amount);
+        const hasAnyContent =
+          accountName ||
+          descStr ||
+          (amountNum !== 0 && !Number.isNaN(amountNum));
+        if (!hasAnyContent) {
+          continue;
+        }
+
         rowObjs.push(rawObj);
 
-        const trimmedName = (accountName || '').trim();
-        if (!trimmedName) {
+        if (!accountName) {
           missingAccountName++;
           continue;
         }
 
         const existingId = findExistingAccountIdByName(
-          trimmedName,
+          accountName,
           accounts,
         );
         if (existingId) {
