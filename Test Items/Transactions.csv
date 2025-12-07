@@ -1,33 +1,33 @@
-id,accountId,date,type,amount,description,category,note
-tx_1765121855430_1crsvb,acct_1765121840284_a07kp3,2025-12-07T00:00:00.000Z,Income,2500,Transfer In,Opening Balance,
-,First Direct,2025-12-05,Income,1404.98,STERLING SOLUTIONSSOLP5926671,Salary,
-,First Direct,2025-12-04,Outgoing,-5.5,MARKS&SPENCER PLC ST ALBANS,Food Shopping,
-,First Direct,2025-12-04,Outgoing,-39.32,AMZNMktplace*Z19AHLONDON,General,
-,First Direct,2025-12-04,Outgoing,-18.99,Netflix.com       Los Gatos,Direct Debit,
-,First Direct,2025-12-04,Outgoing,-28.51,HOMESERVE GB LIMIT,General,
-,First Direct,2025-12-02,Outgoing,-11.25,MARKS&SPENCER PLC ST ALBANS,Food Shopping,
-,First Direct,2025-12-02,Outgoing,-5.65,MARKS&SPENCER PLC ST ALBANS,Food Shopping,
-,First Direct,2025-12-02,Income,75.68,AMZNMktplace      LONDON,General,
-,First Direct,2025-12-01,Outgoing,-1.6,B & Q 1322        STEVENAGE,DIY,
-,First Direct,2025-12-01,Outgoing,-1.6,B & Q 1322        STEVENAGE,DIY,
-,First Direct,2025-12-01,Outgoing,-19.65,MARKS&SPENCER PLC HERTFORDSHIRE,Food Shopping,
-,First Direct,2025-12-01,Outgoing,-11.5,AMZNMktplace*ZX5E0LONDON,General,
-,First Direct,2025-12-01,Outgoing,-24.99,AMZNMktplace*ZR5STLONDON,General,
-,First Direct,2025-12-01,Outgoing,-147.11,SAINSBURYS.CO.UK  0800 328 1700,Food Shopping,
-,First Direct,2025-12-01,Income,17,KERR M            M&S,Food Shopping,
-,First Direct,2025-12-01,Outgoing,-8.79,BG SERVICES,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-70,AFFINITY WATER,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-12,EYEPLAN,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-47.46,BEAGLE ST,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-37.62,DVLA-LT16GKP,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-16.62,DVLA-WO21TKZ,Direct Debit,
-,First Direct,2025-12-01,Outgoing,-3.06,DVLA-KN59BWK,Direct Debit,
-,First Direct,2025-11-30,Outgoing,-100,VIRGIN MONEY CARD VM0000******0,Payment,
-,First Direct,2025-11-28,Outgoing,-39.32,AMZNMktplace*ZR7ZMLONDON,General,
-,First Direct,2025-11-28,Outgoing,-86.67,AMZNMktplace*ZR8EZLONDON,General,
-,First Direct,2025-11-28,Income,52.91,AMZNMktplace      LONDON,General,
-,First Direct,2025-11-28,Outgoing,-133,JENNY KERR        4751300150609904,Transfer,
-,First Direct,2025-11-28,Income,1404.98,STERLING SOLUTIONSSOLP5924033,Salary,
-,First Direct,2025-11-28,Outgoing,-1233.38,NATWEST BANK,Transfer,
-,First Direct,2025-11-28,Outgoing,-409.82,MBNA LOANS,Payment,
-,First Direct,2025-11-27,Income,300,KERR J H          FIRST DIRECT,Transfer,
+date,account,amount,category,note
+2025-12-05,First Direct,2500,Opening Balance,Transfer In
+2025-12-05,First Direct,1404.98,Salary,STERLING SOLUTIONSSOLP5926671
+2025-12-04,First Direct,-5.5,Food Shopping,MARKS&SPENCER PLC ST ALBANS
+2025-12-04,First Direct,-39.32,General,AMZNMktplace*Z19AHLONDON
+2025-12-04,First Direct,-18.99,Direct Debit,Netflix.com       Los Gatos
+2025-12-04,First Direct,-28.51,General,HOMESERVE GB LIMIT
+2025-12-02,First Direct,-11.25,Food Shopping,MARKS&SPENCER PLC ST ALBANS
+2025-12-02,First Direct,-5.65,Food Shopping,MARKS&SPENCER PLC ST ALBANS
+2025-12-02,First Direct,75.68,General,AMZNMktplace      LONDON
+2025-12-01,First Direct,-1.6,DIY,B & Q 1322        STEVENAGE
+2025-12-01,First Direct,-1.6,DIY,B & Q 1322        STEVENAGE
+2025-12-01,First Direct,-19.65,Food Shopping,MARKS&SPENCER PLC HERTFORDSHIRE
+2025-12-01,First Direct,-11.5,General,AMZNMktplace*ZX5E0LONDON
+2025-12-01,First Direct,-24.99,General,AMZNMktplace*ZR5STLONDON
+2025-12-01,First Direct,-147.11,Food Shopping,SAINSBURYS.CO.UK  0800 328 1700
+2025-12-01,First Direct,17,Food Shopping,KERR M            M&S
+2025-12-01,First Direct,-8.79,Direct Debit,BG SERVICES
+2025-12-01,First Direct,-70,Direct Debit,AFFINITY WATER
+2025-12-01,First Direct,-12,Direct Debit,EYEPLAN
+2025-12-01,First Direct,-47.46,Direct Debit,BEAGLE ST
+2025-12-01,First Direct,-37.62,Direct Debit,DVLA-LT16GKP
+2025-12-01,First Direct,-16.62,Direct Debit,DVLA-WO21TKZ
+2025-12-01,First Direct,-3.06,Direct Debit,DVLA-KN59BWK
+2025-11-30,First Direct,-100,Payment,VIRGIN MONEY CARD VM0000******0
+2025-11-28,First Direct,-39.32,General,AMZNMktplace*ZR7ZMLONDON
+2025-11-28,First Direct,-86.67,General,AMZNMktplace*ZR8EZLONDON
+2025-11-28,First Direct,52.91,General,AMZNMktplace      LONDON
+2025-11-28,First Direct,-133,Transfer,JENNY KERR        4751300150609904
+2025-11-28,First Direct,1404.98,Salary,STERLING SOLUTIONSSOLP5924033
+2025-11-28,First Direct,-1233.38,Transfer,NATWEST BANK
+2025-11-28,First Direct,-409.82,Payment,MBNA LOANS
+2025-11-27,First Direct,300,Transfer,KERR J H          FIRST DIRECT

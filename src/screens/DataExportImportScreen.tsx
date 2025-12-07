@@ -46,13 +46,13 @@ function formatMaybeDate(value: unknown, fieldName: string): string {
   return value;
 }
 
-// Look up account name from accountId in imported JSON
-function getAccountNameFromImported(
+// Look up account name from any accounts array (current or imported)
+function getAccountNameFromAccounts(
   accountId: unknown,
-  importedAccounts: any[],
+  sourceAccounts: any[],
 ): string {
   if (!accountId) return '';
-  const acc = importedAccounts.find((a) => a.id === accountId);
+  const acc = sourceAccounts.find((a) => a.id === accountId);
   return acc?.name ?? '';
 }
 
@@ -109,6 +109,19 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
+// Compute transaction type from a row/tx + amount fallback
+function resolveType(rawType: unknown, rawAmount: unknown): 'income' | 'expense' {
+  const t = (rawType ?? '').toString().toLowerCase();
+  if (t === 'income' || t === 'expense') return t;
+
+  const n = Number(rawAmount);
+  if (Number.isFinite(n)) {
+    return n >= 0 ? 'income' : 'expense';
+  }
+  // Default fallback
+  return 'expense';
+}
+
 // Build a transaction object for addTransaction(), best-effort mapping
 function buildTransactionFromData(
   row: Record<string, any>,
@@ -129,14 +142,8 @@ function buildTransactionFromData(
   const amountNum = Number(rawAmount);
   const amount = Number.isFinite(amountNum) ? amountNum : 0;
 
-  // Type
-  const rawType = (row.type ?? '').toString().toLowerCase();
-  let type: 'income' | 'expense';
-  if (rawType === 'income' || rawType === 'expense') {
-    type = rawType;
-  } else {
-    type = amount >= 0 ? 'income' : 'expense';
-  }
+  // Type (use explicit value if present, otherwise infer from amount)
+  const type = resolveType(row.type, amount);
 
   // Description / notes
   const description =
@@ -226,18 +233,26 @@ const DataExportImportScreen: React.FC<Props> = () => {
       // Use keys from the first transaction, but we:
       // - exclude internal IDs
       // - replace accountId with a friendly "account" column
+      // - force a "type" column
       const rawHeaders: string[] = Object.keys(txsForCsv[0]);
 
       const excluded = ['id', 'accountId'];
 
       const hasDate = rawHeaders.includes('date');
+      const hasType = rawHeaders.includes('type');
+
       const otherHeaders = rawHeaders.filter(
-        (h) => !excluded.includes(h) && h !== 'date',
+        (h) =>
+          !excluded.includes(h) &&
+          h !== 'date' &&
+          h.toLowerCase() !== 'account' &&
+          h !== 'type',
       );
 
       const headers: string[] = [];
       if (hasDate) headers.push('date');
       headers.push('account'); // human-readable account name
+      headers.push('type'); // ensure type column is always present
       headers.push(...otherHeaders);
 
       const headerLine = headers.map((h) => escapeCsv(h)).join(',');
@@ -246,11 +261,17 @@ const DataExportImportScreen: React.FC<Props> = () => {
         headers
           .map((h) => {
             if (h === 'account') {
+              // Current app accounts: tx.accountId is already using these
               const accId = tx.accountId;
               const name = accId
-                ? getAccountNameFromImported(accId, accounts)
-                : ''; // in export case, tx.accountId matches current accounts
+                ? getAccountNameFromAccounts(accId, accounts)
+                : '';
               return escapeCsv(name);
+            }
+
+            if (h === 'type') {
+              const type = resolveType(tx.type, tx.amount);
+              return escapeCsv(type);
             }
 
             const formatted = formatMaybeDate(tx[h], h);
@@ -346,7 +367,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       for (const tx of importedTxs) {
         // Find account name in imported data
         const accountNameFromImported =
-          getAccountNameFromImported(tx.accountId, importedAccounts) ||
+          getAccountNameFromAccounts(tx.accountId, importedAccounts) ||
           tx.account ||
           tx.accountName ||
           '';
