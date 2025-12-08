@@ -17,9 +17,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
-
-
-
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 type DateFormatOption = 'iso' | 'uk';
 type ExportDateRange = 'all' | '12m' | '90d';
@@ -1251,6 +1248,100 @@ const handleExportBackupPress = React.useCallback(async () => {
     pendingImport.issues &&
     pendingImport.issues.some((i) => i.level === 'error');
 
+const handleImportBackupPress = React.useCallback(async () => {
+  try {
+    // 1) Let user pick a JSON backup file
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/json',
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) {
+      return;
+    }
+
+    const file = result.assets?.[0];
+    if (!file) {
+      Alert.alert('No file selected', 'Please choose a backup file to restore.');
+      return;
+    }
+
+    // 2) Read the file contents
+    const content = await FileSystem.readAsStringAsync(file.uri, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    // 3) Parse JSON
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      console.error('Failed to parse backup JSON', err);
+      Alert.alert(
+        'Invalid backup file',
+        'The selected file is not valid JSON. Please choose a valid backup file.'
+      );
+      return;
+    }
+
+    // 4) Basic shape validation
+    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
+      Alert.alert(
+        'Invalid backup format',
+        'This file does not look like a Base44 backup (missing "state" property).'
+      );
+      return;
+    }
+
+    const backupState: any = parsed.state;
+
+    const accountsCount = Array.isArray(backupState.accounts)
+      ? backupState.accounts.length
+      : 0;
+    const txCount = Array.isArray(backupState.transactions)
+      ? backupState.transactions.length
+      : 0;
+
+    const version = parsed.version ?? 'n/a';
+    const exportedAt = parsed.exportedAt ?? 'n/a';
+
+    // 5) Confirm with the user before applying
+    Alert.alert(
+      'Restore from backup?',
+      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply backup',
+          style: 'destructive',
+          onPress: () => {
+            // 🔴 IMPORTANT: Wire this into your app state.
+            // If you already have an action like actions.loadBackup(...)
+            // you can call it here. For now we just log it:
+
+            console.log('Backup ready to apply', backupState);
+
+            // Example (once you add such an action in AppProvider):
+            // actions.loadBackup(backupState);
+
+            Alert.alert(
+              'Backup parsed',
+              'Backup file was read successfully. Wire the apply step to your AppContext actions where indicated in code.'
+            );
+          },
+        },
+      ]
+    );
+  } catch (err) {
+    console.error('Backup import failed', err);
+    Alert.alert(
+      'Import failed',
+      'There was a problem reading the backup file. Please try again.'
+    );
+  }
+}, []);
+
+
 
   // ---------- RENDER ----------
 
@@ -1294,6 +1385,16 @@ const handleExportBackupPress = React.useCallback(async () => {
         >
           <Text style={styles.btnSecondaryText}>
             Export full backup (JSON)
+          </Text>
+        </Pressable>
+        
+        {/* Restore from backup */}
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={handleImportBackupPress}
+        >
+          <Text style={styles.btnSecondaryText}>
+            Restore from backup (JSON)
           </Text>
         </Pressable>
 
