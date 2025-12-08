@@ -654,18 +654,22 @@ const applyParsedBackup = React.useCallback(
           text: 'Apply backup',
           style: 'destructive',
           onPress: () => {
-            // 🔴 TODO: wire into your real AppContext logic
-            // e.g. actions.loadBackup(backupState);
+            // 👉 This is where you actually apply the backup.
+            // Example once wired:
+            // actions.loadBackup(backupState);
 
             console.log('Backup ready to apply', backupState);
-            setLastStatus('Backup parsed. Wire actions.loadBackup(...) to apply it.');
+
+            // Use a non-blocking status message instead of a second Alert.
+            setLastStatus('Backup parsed and ready. Wire actions.loadBackup(...) to complete restore.');
           },
         },
       ]
     );
   },
-  [setLastStatus] // add `actions` here once you wire actions.loadBackup(...)
+  [setLastStatus] // add actions here once you wire loadBackup
 );
+
 
 
   // ---------- IMPORT PREVIEW (JSON MERGE) ----------
