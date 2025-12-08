@@ -579,6 +579,52 @@ const handleExportCsvPress = React.useCallback(async () => {
   }
 }, [state.transactions, csvIncludeDescription]);
 
+  // Opens the native share dialog to share the file 
+const handleExportBackupPress = React.useCallback(async () => {
+  try {
+    // If your state has any obviously non-serialisable properties (like functions),
+    // you can pick only the slices you care about here instead of the whole state.
+    const backupPayload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state, // export full app state
+    };
+
+    const jsonString = JSON.stringify(backupPayload, null, 2);
+
+    // Safe timestamp for filenames (no colons)
+    const iso = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `base44-backup-${iso}.json`;
+    const fileUri = FileSystem.documentDirectory + fileName;
+
+    // Save JSON backup
+    await FileSystem.writeAsStringAsync(fileUri, jsonString, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      Alert.alert(
+        'Backup created',
+        `Your backup file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
+      );
+      return;
+    }
+
+    // Share via Files / iCloud / Drive / Mail etc.
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'application/json',
+      dialogTitle: 'Share full app backup',
+      UTI: 'public.json',
+    });
+  } catch (err) {
+    console.error('Backup export/share failed', err);
+    Alert.alert(
+      'Backup failed',
+      'There was a problem creating or sharing the backup. Please try again.'
+    );
+  }
+}, [state]);
 
   // ---------- IMPORT PREVIEW (JSON MERGE) ----------
 
@@ -1241,6 +1287,17 @@ const handleExportCsvPress = React.useCallback(async () => {
           </Text>
         </Pressable>
 
+        {/* Backup to Cloud export */}
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={handleExportBackupPress}
+        >
+          <Text style={styles.btnSecondaryText}>
+            Export full backup (JSON)
+          </Text>
+        </Pressable>
+
+
       {/* Export filters + CSV options */}
       <View style={styles.optionsBox}>
         <Text style={styles.optionsTitle}>Export filters</Text>
@@ -1412,8 +1469,7 @@ const handleExportCsvPress = React.useCallback(async () => {
           </Pressable>
         </View>
       </View>
-
-      </View>
+     </View>
 
       {/* IMPORT CARD */}
       <View style={styles.card}>
