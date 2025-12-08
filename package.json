@@ -37,7 +37,8 @@
     "react-native-svg": "15.12.1",
     "react-native-web": "^0.21.0",
     "victory": "^37.3.6",
-    "victory-native": "^41.20.1"
+    "victory-native": "^41.20.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

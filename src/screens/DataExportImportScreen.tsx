@@ -14,6 +14,8 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useApp } from '../state/AppContext';
+import * as XLSX from 'xlsx';
+
 
 // --- Work around expo-file-system typing quirks in this project ---
 const FS: any = FileSystem;
@@ -180,6 +182,102 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setLastStatus('CSV export failed.');
     }
   }, [state.transactions, csvIncludeDescription, setLastStatus]);
+
+const handleExportXlsxPress = React.useCallback(async () => {
+  try {
+    const txs = state.transactions || [];
+
+    if (!txs.length) {
+      Alert.alert(
+        'No transactions',
+        'There are no transactions to export yet.'
+      );
+      return;
+    }
+
+    const includeDesc = csvIncludeDescription;
+
+    // Header row
+    const header = [
+      'id',
+      'date',
+      'accountId',
+      'type',
+      'category',
+      'amount',
+    ];
+    if (includeDesc) {
+      header.push('description');
+    }
+
+    // Data rows
+    const data = [
+      header,
+      ...txs.map((t: any) => {
+        const row: (string | number)[] = [
+          t.id ?? '',
+          t.date ?? '',
+          t.accountId ?? '',
+          t.type ?? '',
+          t.category ?? '',
+          t.amount ?? 0,
+        ];
+
+        if (includeDesc) {
+          row.push(t.description ?? '');
+        }
+
+        return row;
+      }),
+    ];
+
+    // Build worksheet + workbook
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+
+    // Write as base64 so we can save via expo-file-system/legacy
+    const wbout = XLSX.write(wb, {
+      type: 'base64',
+      bookType: 'xlsx',
+    });
+
+    const today = new Date().toISOString().slice(0, 10);
+    const fileName = `debitlens-transactions-${today}.xlsx`;
+    const fileUri = FS.documentDirectory + fileName;
+
+    // Save file (base64 encoded)
+    await writeFileAsync(fileUri, wbout, {
+      encoding: 'base64',
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      Alert.alert(
+        'Exported to file',
+        `Your Excel file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
+      );
+      setLastStatus(`XLSX exported to file: ${fileUri}`);
+      return;
+    }
+
+    await Sharing.shareAsync(fileUri, {
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      dialogTitle: 'Share transactions Excel file',
+      UTI: 'org.openxmlformats.spreadsheetml.sheet',
+    });
+
+    setLastStatus('XLSX exported and shared.');
+  } catch (err) {
+    console.error('XLSX export/share failed', err);
+    Alert.alert(
+      'Export failed',
+      'There was a problem exporting your Excel file. Please try again.'
+    );
+    setLastStatus('XLSX export failed.');
+  }
+}, [state.transactions, csvIncludeDescription, setLastStatus]);
 
   // ====== CSV IMPORT (transactions) WITH PREVIEW ======
 
@@ -596,12 +694,22 @@ const applyParsedBackup = React.useCallback(
 
         <Pressable
           style={styles.btnSecondary}
+          onPress={handleExportXlsxPress}
+        >
+          <Text style={styles.btnSecondaryText}>
+            Export transactions as Excel (XLSX)
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.btnSecondary}
           onPress={handleImportCsvPress}
         >
           <Text style={styles.btnSecondaryText}>
             Load CSV and preview import
           </Text>
         </Pressable>
+
 
         {/* CSV PREVIEW PANEL */}
         {csvPreview && csvPreview.length > 0 && (
