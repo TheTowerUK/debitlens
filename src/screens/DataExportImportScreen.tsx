@@ -623,6 +623,51 @@ const handleExportBackupPress = React.useCallback(async () => {
   }
 }, [state]);
 
+const applyParsedBackup = React.useCallback(
+  (parsed: any) => {
+    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
+      Alert.alert(
+        'Invalid backup format',
+        'This JSON does not look like a DebitLens backup (missing "state" property).'
+      );
+      return;
+    }
+
+    const backupState: any = parsed.state;
+
+    const accountsCount = Array.isArray(backupState.accounts)
+      ? backupState.accounts.length
+      : 0;
+    const txCount = Array.isArray(backupState.transactions)
+      ? backupState.transactions.length
+      : 0;
+
+    const version = parsed.version ?? 'n/a';
+    const exportedAt = parsed.exportedAt ?? 'n/a';
+
+    Alert.alert(
+      'Restore from backup?',
+      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply backup',
+          style: 'destructive',
+          onPress: () => {
+            // 🔴 TODO: wire into your real AppContext logic
+            // e.g. actions.loadBackup(backupState);
+
+            console.log('Backup ready to apply', backupState);
+            setLastStatus('Backup parsed. Wire actions.loadBackup(...) to apply it.');
+          },
+        },
+      ]
+    );
+  },
+  [setLastStatus] // add `actions` here once you wire actions.loadBackup(...)
+);
+
+
   // ---------- IMPORT PREVIEW (JSON MERGE) ----------
 
   const handleImportJsonPreview = async () => {
@@ -1035,6 +1080,10 @@ const handleExportBackupPress = React.useCallback(async () => {
         return;
       }
 
+      // ✅ Delegate to shared backup logic
+      applyParsedBackup(parsed);
+
+
       const backupAccounts = Array.isArray(parsed.accounts)
         ? parsed.accounts
         : [];
@@ -1284,14 +1333,9 @@ const handleImportBackupPress = React.useCallback(async () => {
       return;
     }
 
-    // 4) Basic shape validation
-    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
-      Alert.alert(
-        'Invalid backup format',
-        'This file does not look like a Base44 backup (missing "state" property).'
-      );
-      return;
-    }
+    // ✅ Same shared backup logic as the full-restore button
+    applyParsedBackup(parsed);
+
 
     const backupState: any = parsed.state;
 
@@ -1387,7 +1431,7 @@ const handleImportBackupPress = React.useCallback(async () => {
             Export full backup (JSON)
           </Text>
         </Pressable>
-        
+
         {/* Restore from backup */}
         <Pressable
           style={styles.btnSecondary}
