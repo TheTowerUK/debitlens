@@ -18,6 +18,15 @@ import * as DocumentPicker from 'expo-document-picker';
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 type DateFormatOption = 'iso' | 'uk';
 
+type ValidationIssueLevel = 'warning' | 'error';
+
+type ValidationIssue = {
+  level: ValidationIssueLevel;
+  code: string;
+  message: string;
+  count: number;
+};
+
 // ---------- Helpers ----------
 
 // Simple CSV escaping: wraps in quotes if needed, doubles any existing quotes
@@ -315,6 +324,7 @@ type JsonPendingImport = {
     willCreateAccount: number;
     missingAccountName: number;
   };
+  issues: ValidationIssue[];
 };
 
 type CsvPendingImport = {
@@ -327,9 +337,10 @@ type CsvPendingImport = {
     willCreateAccount: number;
     missingAccountName: number;
   };
+  issues: ValidationIssue[];
 };
 
-type PendingImport = JsonPendingImport | CsvPendingImport | null;
+type PendingImport = JsonPendingImport | CsvPendingImport;
 
 // Full restore preview
 type PendingFullRestore = {
@@ -353,7 +364,9 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const txs = state.transactions || [];
 
   const [lastStatus, setLastStatus] = useState<string | null>(null);
-  const [pendingImport, setPendingImport] = useState<PendingImport>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(
+    null,
+  );
   const [pendingFullRestore, setPendingFullRestore] =
     useState<PendingFullRestore | null>(null);
 
@@ -565,6 +578,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       let existingAccountMatch = 0;
       let willCreateAccount = 0;
       let missingAccountName = 0;
+      let zeroAmount = 0;
 
       for (const tx of importedTxs) {
         const accountNameFromImported =
@@ -572,6 +586,11 @@ const DataExportImportScreen: React.FC<Props> = () => {
           tx.account ||
           tx.accountName ||
           '';
+
+        const amountNum = parseMixedNumber(
+          tx.amount ?? tx.value ?? tx.total,
+        );
+        if (amountNum === 0) zeroAmount++;
 
         if (!accountNameFromImported.trim()) {
           missingAccountName++;
@@ -600,13 +619,48 @@ const DataExportImportScreen: React.FC<Props> = () => {
         missingAccountName,
       };
 
-      setPendingImport({
+      const issues: ValidationIssue[] = [];
+
+      if (missingAccountName > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'missingAccount',
+          message:
+            `${missingAccountName} transaction(s) have no account name and will be skipped on merge.`,
+          count: missingAccountName,
+        });
+      }
+
+      if (willCreateAccount > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'newAccounts',
+          message:
+            `${willCreateAccount} transaction(s) refer to unknown account names and will create new accounts if applied.`,
+          count: willCreateAccount,
+        });
+      }
+
+      if (zeroAmount > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'zeroAmount',
+          message:
+            `${zeroAmount} transaction(s) have an amount of 0. They will still be imported.`,
+          count: zeroAmount,
+        });
+      }
+
+      const pending: JsonPendingImport = {
         source: 'json',
         fileName: asset.name,
         importedAccounts,
         importedTxs,
         stats,
-      });
+        issues,
+      };
+
+      setPendingImport(pending);
       setPendingFullRestore(null);
 
       setLastStatus(
@@ -685,6 +739,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       let existingAccountMatch = 0;
       let willCreateAccount = 0;
       let missingAccountName = 0;
+      let zeroAmount = 0;
 
       for (const row of rows) {
         const get = (idx: number): string =>
@@ -693,10 +748,15 @@ const DataExportImportScreen: React.FC<Props> = () => {
         const accountNameRaw = get(accountIdx);
         const accountName = accountNameRaw ? accountNameRaw.trim() : '';
 
+        const amountRaw =
+          amountIdx >= 0 ? get(amountIdx) : undefined;
+        const amountNum = parseMixedNumber(amountRaw);
+        if (amountNum === 0) zeroAmount++;
+
         const rawObj: Record<string, any> = {
           date: dateIdx >= 0 ? get(dateIdx) : undefined,
           account: accountName,
-          amount: amountIdx >= 0 ? get(amountIdx) : undefined,
+          amount: amountRaw,
           type: typeIdx >= 0 ? get(typeIdx) : undefined,
           description: descIdx >= 0 ? get(descIdx) : undefined,
           category: categoryIdx >= 0 ? get(categoryIdx) : undefined,
@@ -704,7 +764,6 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
         // Skip completely empty/junk rows:
         const descStr = (rawObj.description || '').toString().trim();
-        const amountNum = parseMixedNumber(rawObj.amount);
         const hasAnyContent =
           accountName ||
           descStr ||
@@ -738,12 +797,47 @@ const DataExportImportScreen: React.FC<Props> = () => {
         missingAccountName,
       };
 
-      setPendingImport({
+      const issues: ValidationIssue[] = [];
+
+      if (missingAccountName > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'missingAccount',
+          message:
+            `${missingAccountName} row(s) have no account name and will be skipped on merge.`,
+          count: missingAccountName,
+        });
+      }
+
+      if (willCreateAccount > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'newAccounts',
+          message:
+            `${willCreateAccount} row(s) refer to unknown account names and will create new accounts if applied.`,
+          count: willCreateAccount,
+        });
+      }
+
+      if (zeroAmount > 0) {
+        issues.push({
+          level: 'warning',
+          code: 'zeroAmount',
+          message:
+            `${zeroAmount} row(s) have an amount of 0. They will still be imported.`,
+          count: zeroAmount,
+        });
+      }
+
+      const pending: CsvPendingImport = {
         source: 'csv',
         fileName: asset.name,
         rows: rowObjs,
         stats,
-      });
+        issues,
+      };
+
+      setPendingImport(pending);
       setPendingFullRestore(null);
 
       setLastStatus(
@@ -896,7 +990,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
     const createdByName: Record<string, string> = {};
 
     if (pendingImport.source === 'json') {
-      const { importedAccounts, importedTxs, stats } = pendingImport;
+      const { importedAccounts, importedTxs, stats } =
+        pendingImport as JsonPendingImport;
       let added = 0;
       let skippedNoAccountName = 0;
 
@@ -952,7 +1047,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
             : `Preview had ${stats.missingAccountName} without account names; some may have been resolved if accounts changed.`),
       );
     } else if (pendingImport.source === 'csv') {
-      const { rows, stats } = pendingImport;
+      const { rows, stats } = pendingImport as CsvPendingImport;
       let added = 0;
       let skippedNoAccountName = 0;
 
@@ -1182,7 +1277,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 {(pendingImport as JsonPendingImport).stats.withAccountName}
               </Text>
               <Text style={styles.previewText}>
-                To existing accounts: {pendingImport.stats.existingAccountMatch}
+                To existing accounts:{' '}
+                {pendingImport.stats.existingAccountMatch}
               </Text>
               <Text style={styles.previewText}>
                 Will create new accounts:{' '}
@@ -1199,7 +1295,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 Rows in file: {pendingImport.stats.total}
               </Text>
               <Text style={styles.previewText}>
-                To existing accounts: {pendingImport.stats.existingAccountMatch}
+                To existing accounts:{' '}
+                {pendingImport.stats.existingAccountMatch}
               </Text>
               <Text style={styles.previewText}>
                 Will create new accounts:{' '}
@@ -1210,6 +1307,25 @@ const DataExportImportScreen: React.FC<Props> = () => {
                 {pendingImport.stats.missingAccountName}
               </Text>
             </>
+          )}
+
+          {/* Validation section */}
+          {pendingImport.issues && pendingImport.issues.length > 0 && (
+            <View style={styles.validationBox}>
+              <Text style={styles.validationTitle}>Validation</Text>
+              {pendingImport.issues.map((issue, idx) => (
+                <Text
+                  key={issue.code + String(idx)}
+                  style={[
+                    styles.validationText,
+                    issue.level === 'error' &&
+                      styles.validationTextError,
+                  ]}
+                >
+                  {issue.level.toUpperCase()}: {issue.message}
+                </Text>
+              ))}
+            </View>
           )}
 
           <View style={styles.previewButtonsRow}>
@@ -1490,5 +1606,25 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 11,
     marginTop: 4,
+  },
+  validationBox: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1F2933',
+  },
+  validationTitle: {
+    color: '#FACC15',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  validationText: {
+    color: '#FDE68A',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  validationTextError: {
+    color: '#FCA5A5',
   },
 });
