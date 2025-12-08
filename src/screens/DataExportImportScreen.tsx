@@ -8,36 +8,25 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-// Adjust these paths as needed
-// If you already have these imports in your old file, keep your versions
+
 import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 
-// Work around expo-file-system typing weirdness
+import { useApp } from '../state/AppContext';
+
+// --- Work around expo-file-system typing quirks in this project ---
 const FS: any = FileSystem;
-
 const writeFileAsync = (
   uri: string,
   data: string,
   options?: { encoding?: string }
-) => {
-  return FS.writeAsStringAsync(uri, data, options);
-};
-
+) => FS.writeAsStringAsync(uri, data, options);
 const readFileAsync = (
   uri: string,
   options?: { encoding?: string }
-) => {
-  return FS.readAsStringAsync(uri, options);
-};
+) => FS.readAsStringAsync(uri, options);
 
-
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
-
-// TODO: adjust path to your actual AppContext hook
-import { useApp } from '../state/AppContext';
-
-// If you have proper navigation types, replace this with your RootStackParamList typing
 type Props = {
   navigation: any;
 };
@@ -49,7 +38,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
     React.useState(true);
   const [lastStatus, setLastStatus] = React.useState<string>('');
 
-  // ====== SHARED BACKUP APPLY LOGIC ======
+  // ====== SHARED BACKUP APPLY LOGIC (JSON full backup) ======
   const applyParsedBackup = React.useCallback(
     (parsed: any) => {
       if (!parsed || typeof parsed !== 'object' || !parsed.state) {
@@ -81,10 +70,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
             text: 'Apply backup',
             style: 'destructive',
             onPress: () => {
-              // 🔥 actually replace app state
-              // Make sure you've defined actions.loadBackup in AppProvider
               actions.loadBackup(backupState);
-
               setLastStatus(
                 `Backup applied. Version: ${version}, exported: ${exportedAt}.`
               );
@@ -96,7 +82,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
     [actions, setLastStatus]
   );
 
-  // ====== CSV EXPORT ======
+  // ====== CSV EXPORT (transactions) ======
   const handleExportCsvPress = React.useCallback(async () => {
     try {
       const txs = state.transactions || [];
@@ -147,12 +133,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `debitlens-transactions-${today}.csv`;
-      const fileUri = FileSystem.documentDirectory + fileName;
+      const fileUri = FS.documentDirectory + fileName;
 
       await writeFileAsync(fileUri, csvString, {
         encoding: 'utf8',
       });
-
 
       const canShare = await Sharing.isAvailableAsync();
       if (!canShare) {
@@ -181,6 +166,144 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   }, [state.transactions, csvIncludeDescription, setLastStatus]);
 
+  // ====== CSV IMPORT (transactions) ======
+
+  // Very small CSV parser for our simple export format
+  const parseCsvLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+
+      if (ch === '"') {
+        // Toggle quote mode or handle escaped quote ("")
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    result.push(current);
+    return result;
+  };
+
+  const parseCsv = (text: string): string[][] => {
+    return text
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0)
+      .map(parseCsvLine);
+  };
+
+  const handleImportCsvPress = React.useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'text/csv',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const file = result.assets?.[0];
+      if (!file) {
+        Alert.alert(
+          'No file selected',
+          'Please choose a CSV file to import.'
+        );
+        return;
+      }
+
+      const content = await readFileAsync(file.uri, {
+        encoding: 'utf8',
+      });
+
+      const rows = parseCsv(content);
+      if (!rows.length) {
+        Alert.alert('Empty CSV', 'The selected CSV file is empty.');
+        return;
+      }
+
+      const header = rows[0];
+      const body = rows.slice(1);
+
+      const idxDate = header.indexOf('date');
+      const idxAccountId = header.indexOf('accountId');
+      const idxType = header.indexOf('type');
+      const idxCategory = header.indexOf('category');
+      const idxAmount = header.indexOf('amount');
+      const idxDescription = header.indexOf('description');
+
+      if (
+        idxDate === -1 ||
+        idxAccountId === -1 ||
+        idxType === -1 ||
+        idxAmount === -1
+      ) {
+        Alert.alert(
+          'Invalid CSV format',
+          'CSV must contain at least date, accountId, type, and amount columns.'
+        );
+        return;
+      }
+
+      let importedCount = 0;
+
+      for (const row of body) {
+        const date = row[idxDate];
+        const accountId = row[idxAccountId];
+        const type = row[idxType] as any;
+        const category = idxCategory >= 0 ? row[idxCategory] : undefined;
+        const amountRaw = row[idxAmount];
+        const description =
+          idxDescription >= 0 ? row[idxDescription] : undefined;
+
+        if (!date || !accountId || !amountRaw || !type) {
+          continue;
+        }
+
+        const amount = Number(amountRaw);
+        if (!Number.isFinite(amount)) {
+          continue;
+        }
+
+        // We rely on addTransaction to generate its own ID
+        actions.addTransaction({
+          accountId,
+          date,
+          type,
+          category,
+          amount,
+          description,
+        } as any);
+        importedCount++;
+      }
+
+      Alert.alert(
+        'CSV import complete',
+        `Imported ${importedCount} transactions from CSV.`
+      );
+      setLastStatus(`Imported ${importedCount} transactions from CSV.`);
+    } catch (err) {
+      console.error('CSV import failed', err);
+      Alert.alert(
+        'Import failed',
+        'There was a problem importing from CSV. Please try again.'
+      );
+      setLastStatus('CSV import failed.');
+    }
+  }, [actions, setLastStatus]);
+
   // ====== FULL BACKUP EXPORT (JSON) ======
   const handleExportBackupPress = React.useCallback(async () => {
     try {
@@ -193,7 +316,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const jsonString = JSON.stringify(backupPayload, null, 2);
       const iso = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = `debitlens-backup-${iso}.json`;
-      const fileUri = FileSystem.documentDirectory + fileName;
+      const fileUri = FS.documentDirectory + fileName;
 
       await writeFileAsync(fileUri, jsonString, {
         encoding: 'utf8',
@@ -251,9 +374,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         encoding: 'utf8',
       });
 
-
-
-
       let parsed: any;
       try {
         parsed = JSON.parse(content);
@@ -266,7 +386,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      // Shared confirmation + apply
       applyParsedBackup(parsed);
     } catch (err) {
       console.error('Backup import failed', err);
@@ -282,8 +401,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
     <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
-        Export your DebitLens data for backup or analysis, and restore from
-        a JSON backup when needed.
+        Export and import your DebitLens data as CSV or JSON for backup,
+        analysis, and restore.
       </Text>
 
       {lastStatus ? (
@@ -293,12 +412,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
         </View>
       ) : null}
 
-      {/* CSV EXPORT SECTION */}
+      {/* CSV SECTION */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Transactions CSV export</Text>
+        <Text style={styles.sectionTitle}>Transactions (CSV)</Text>
         <Text style={styles.sectionHelp}>
-          Export all transactions as a CSV file that you can open in Excel
-          or Google Sheets.
+          Export and import transactions in CSV format for spreadsheets and
+          other tools.
         </Text>
 
         <View style={styles.optionRow}>
@@ -317,14 +436,23 @@ export default function DataExportImportScreen({ navigation }: Props) {
             Export transactions as CSV (file)
           </Text>
         </Pressable>
+
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={handleImportCsvPress}
+        >
+          <Text style={styles.btnSecondaryText}>
+            Import transactions from CSV
+          </Text>
+        </Pressable>
       </View>
 
-      {/* FULL BACKUP SECTION */}
+      {/* JSON BACKUP SECTION */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Full backup (JSON)</Text>
         <Text style={styles.sectionHelp}>
-          Create a full JSON backup of your DebitLens data that can be
-          safely stored in cloud storage or your Files app.
+          Create and restore full JSON backups of your DebitLens data via
+          the Files / cloud storage apps.
         </Text>
 
         <Pressable
@@ -345,8 +473,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
           </Text>
         </Pressable>
       </View>
-
-      {/* You can add other sections (Import Preview, Data validation, etc.) here */}
     </ScrollView>
   );
 }
