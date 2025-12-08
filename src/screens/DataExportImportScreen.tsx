@@ -254,7 +254,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const body = rows.slice(1);
 
       const idxDate = header.indexOf('date');
-      const idxAccountId = header.indexOf('accountId');
+
+      // Accept either "accountId" (new) or "account" (old files)
+      let idxAccountId = header.indexOf('accountId');
+      if (idxAccountId === -1) {
+        idxAccountId = header.indexOf('account');
+      }
+
       const idxType = header.indexOf('type');
       const idxCategory = header.indexOf('category');
       const idxAmount = header.indexOf('amount');
@@ -268,10 +274,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
       ) {
         Alert.alert(
           'Invalid CSV format',
-          'CSV must contain at least date, accountId, type, and amount columns.'
+          'CSV must contain at least date, account/accountId, type, and amount columns.'
         );
         return;
       }
+
 
       const preview: CsvPreviewRow[] = [];
 
