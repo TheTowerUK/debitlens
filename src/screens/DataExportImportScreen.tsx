@@ -348,19 +348,30 @@ export default function DataExportImportScreen({ navigation }: Props) {
       return;
     }
 
-    let importedCount = 0;
+      let importedCount = 0;
 
-    for (const row of csvPreview) {
-      actions.addTransaction({
-        accountId: row.accountId,
-        date: row.date,
-        type: row.type as any,
-        category: row.category,
-        amount: row.amount,
-        description: row.description,
-      } as any);
-      importedCount++;
-    }
+      for (const row of csvPreview) {
+        // Raw amount from preview
+        let amount = Number(row.amount);
+
+        // Infer transaction type from sign
+        let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
+
+        // Normalise amount for internal storage (always positive)
+        amount = Math.abs(amount);
+
+        actions.addTransaction({
+          accountId: row.accountId,
+          date: row.date,
+          type: txType,
+          category: row.category,
+          amount: amount,
+          description: row.description,
+        } as any);
+
+        importedCount++;
+      }
+
 
     setCsvPreview(null);
     setCsvPreviewSourceName(null);
