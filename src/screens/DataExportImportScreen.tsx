@@ -544,9 +544,9 @@ const handleExportCsvPress = React.useCallback(async () => {
 
     const csvString = [header.join(','), ...rows].join('\n');
 
-    // File name like base44-transactions-2025-12-08.csv
+    // File name like DebitLens-transactions-2025-12-08.csv
     const today = new Date().toISOString().slice(0, 10);
-    const fileName = `base44-transactions-${today}.csv`;
+    const fileName = `DebitLens-transactions-${today}.csv`;
     const fileUri = FileSystem.documentDirectory + fileName;
 
     // Save CSV
@@ -594,7 +594,7 @@ const handleExportBackupPress = React.useCallback(async () => {
 
     // Safe timestamp for filenames (no colons)
     const iso = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `base44-backup-${iso}.json`;
+    const fileName = `DebitLens-backup-${iso}.json`;
     const fileUri = FileSystem.documentDirectory + fileName;
 
     // Save JSON backup
