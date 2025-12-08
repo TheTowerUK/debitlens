@@ -250,7 +250,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      const header = rows[0];
+      // Trim header cells to tolerate "date, account, amount, ..."
+      const rawHeader = rows[0];
+      const header = rawHeader.map((h) => h.trim());
       const body = rows.slice(1);
 
       const idxDate = header.indexOf('date');
@@ -265,6 +267,20 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const idxCategory = header.indexOf('category');
       const idxAmount = header.indexOf('amount');
       const idxDescription = header.indexOf('description');
+
+      if (
+        idxDate === -1 ||
+        idxAccountId === -1 ||
+        idxType === -1 ||
+        idxAmount === -1
+      ) {
+        Alert.alert(
+          'Invalid CSV format',
+          'CSV must contain at least date, account/accountId, type, and amount columns.'
+        );
+        return;
+      }
+
 
       if (
         idxDate === -1 ||
@@ -339,48 +355,109 @@ export default function DataExportImportScreen({ navigation }: Props) {
   }, [setLastStatus]);
 
   // Step 2: user confirms import → apply preview into app state
+ 
   const handleConfirmCsvImport = React.useCallback(() => {
-    if (!csvPreview || csvPreview.length === 0) {
+  if (!csvPreview || csvPreview.length === 0) {
+    Alert.alert(
+      'Nothing to import',
+      'No CSV preview is loaded. Choose a CSV file first.'
+    );
+    return;
+  }
+
+  let importedCount = 0;
+  let skippedUnknownAccount = 0;
+
+  for (const row of csvPreview) {
+    // Resolve account: match by id OR name
+    const accountKey = row.accountId;
+    const existingAccount = state.accounts.find(
+      (a) => a.id === accountKey || a.name === accountKey
+    );
+
+    if (!existingAccount) {
+      // Skip rows referencing unknown accounts
+      skippedUnknownAccount++;
+      continue;
+    }
+
+    // Raw amount from preview
+    let amount = Number(row.amount);
+
+    // Infer transaction type from sign
+    let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
+
+    // Normalise amount for internal storage (always positive)
+    amount = Math.abs(amount);
+
+    actions.addTransaction({
+      accountId: existingAccount.id,
+      date: row.date,
+      type: txType,
+      category: row.category,
+      amount,
+      description: row.description,
+    } as any);
+
+    importedCount++;
+  }
+const applyParsedBackup = React.useCallback(
+  (parsed: any) => {
+    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
       Alert.alert(
-        'Nothing to import',
-        'No CSV preview is loaded. Choose a CSV file first.'
+        'Invalid backup format',
+        'This JSON does not look like a DebitLens backup (missing "state" property).'
       );
       return;
     }
 
-      let importedCount = 0;
+    const backupState: any = parsed.state;
 
-      for (const row of csvPreview) {
-        // Raw amount from preview
-        let amount = Number(row.amount);
+    const accountsCount = Array.isArray(backupState.accounts)
+      ? backupState.accounts.length
+      : 0;
+    const txCount = Array.isArray(backupState.transactions)
+      ? backupState.transactions.length
+      : 0;
 
-        // Infer transaction type from sign
-        let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
+    const version = parsed.version ?? 'n/a';
+    const exportedAt = parsed.exportedAt ?? 'n/a';
 
-        // Normalise amount for internal storage (always positive)
-        amount = Math.abs(amount);
-
-        actions.addTransaction({
-          accountId: row.accountId,
-          date: row.date,
-          type: txType,
-          category: row.category,
-          amount: amount,
-          description: row.description,
-        } as any);
-
-        importedCount++;
-      }
-
-
-    setCsvPreview(null);
-    setCsvPreviewSourceName(null);
     Alert.alert(
-      'CSV import complete',
-      `Imported ${importedCount} transactions from CSV.`
+      'Restore from backup?',
+      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply backup',
+          style: 'destructive',
+          onPress: () => {
+            // 🔥 This is where the full replace happens
+            actions.loadBackup(backupState);
+
+            setLastStatus(
+              `Backup applied. Version: ${version}, exported: ${exportedAt}.`
+            );
+          },
+        },
+      ]
     );
-    setLastStatus(`Imported ${importedCount} transactions from CSV.`);
-  }, [actions, csvPreview, setLastStatus]);
+  },
+  [actions, setLastStatus]
+);
+
+  setCsvPreview(null);
+  setCsvPreviewSourceName(null);
+
+  let message = `Imported ${importedCount} transactions from CSV.`;
+  if (skippedUnknownAccount > 0) {
+    message += `\nSkipped ${skippedUnknownAccount} row(s) due to unknown account names/IDs.`;
+  }
+
+  Alert.alert('CSV import complete', message);
+  setLastStatus(message);
+}, [actions, csvPreview, state.accounts, setLastStatus]);
+
 
   // ====== FULL BACKUP EXPORT (JSON) ======
   const handleExportBackupPress = React.useCallback(async () => {
@@ -429,50 +506,52 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   // ====== RESTORE FROM BACKUP (JSON via DocumentPicker) ======
   const handleImportBackupPress = React.useCallback(async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/json',
-        copyToCacheDirectory: true,
-      });
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/json',
+      copyToCacheDirectory: true,
+    });
 
-      if (result.canceled) {
-        return;
-      }
-
-      const file = result.assets?.[0];
-      if (!file) {
-        Alert.alert(
-          'No file selected',
-          'Please choose a backup file to restore.'
-        );
-        return;
-      }
-
-      const content = await readFileAsync(file.uri, {
-        encoding: 'utf8',
-      });
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(content);
-      } catch (err) {
-        console.error('Failed to parse backup JSON', err);
-        Alert.alert(
-          'Invalid backup file',
-          'The selected file is not valid JSON. Please choose a valid backup file.'
-        );
-        return;
-      }
-
-      applyParsedBackup(parsed);
-    } catch (err) {
-      console.error('Backup import failed', err);
-      Alert.alert(
-        'Import failed',
-        'There was a problem reading the backup file. Please try again.'
-      );
+    if (result.canceled) {
+      return;
     }
-  }, [applyParsedBackup]);
+
+    const file = result.assets?.[0];
+    if (!file) {
+      Alert.alert(
+        'No file selected',
+        'Please choose a backup file to restore.'
+      );
+      return;
+    }
+
+    const content = await readFileAsync(file.uri, {
+      encoding: 'utf8',
+    });
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch (err) {
+      console.error('Failed to parse backup JSON', err);
+      Alert.alert(
+        'Invalid backup file',
+        'The selected file is not valid JSON. Please choose a valid backup file.'
+      );
+      return;
+    }
+
+    // ✅ shared confirmation + apply
+    applyParsedBackup(parsed);
+  } catch (err) {
+    console.error('Backup import failed', err);
+    Alert.alert(
+      'Import failed',
+      'There was a problem reading the backup file. Please try again.'
+    );
+  }
+}, [applyParsedBackup]);
+
 
   // ====== RENDER ======
   return (

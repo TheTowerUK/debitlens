@@ -44,7 +44,7 @@ export type AppActions = {
   clearAllData: () => void;
 
   // Full backup restore
-  loadBackup: (backupState: any) => void;
+  loadBackup: (backupState: AppState)=> void;
 };
 
 // ====== INITIAL STATE ======
@@ -153,28 +153,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // --- Full backup restore ---
 
   const loadBackup = React.useCallback((backupState: any) => {
-    // Accept any object and try to coerce it into AppState.
-    // We assume the backup was created by our own backup exporter.
-    if (!backupState || typeof backupState !== 'object') {
-      console.warn('loadBackup: backupState is not an object', backupState);
-      return;
-    }
+  if (!backupState || typeof backupState !== 'object') {
+    console.warn('loadBackup: backupState is not an object', backupState);
+    return;
+  }
 
-    // If backupState has extra keys, they’ll be preserved; if it’s missing some,
-    // we fall back to INITIAL_STATE defaults for those.
-    setState((prev) => {
-      const merged: AppState = {
-        ...prev,
-        ...backupState,
-      };
+  setState((prev) => {
+    // Start from INITIAL_STATE to avoid carrying over old data
+    const merged: AppState = {
+      ...prev,         // or ...INITIAL_STATE if you prefer a hard reset
+      ...backupState,
+    };
 
-      // Very light safety: ensure arrays exist
-      if (!Array.isArray(merged.accounts)) merged.accounts = [];
-      if (!Array.isArray(merged.transactions)) merged.transactions = [];
+    if (!Array.isArray(merged.accounts)) merged.accounts = [];
+    if (!Array.isArray(merged.transactions)) merged.transactions = [];
 
-      return merged;
-    });
-  }, []);
+    return merged;
+  });
+}, []);
 
   const actions: AppActions = {
     addAccount,
