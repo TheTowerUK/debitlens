@@ -126,6 +126,21 @@ function formatMaybeDate(value: unknown, fieldName: string): string {
   return String(value);
 }
 
+// For validation only: is this a recognisable date format?
+function isValidImportDate(raw: unknown): boolean {
+  if (raw == null) return false;
+  const s = String(raw).trim();
+  if (!s) return false;
+
+  // ISO: 2025-12-07 or 2025-12-07T...
+  if (/^\d{4}-\d{2}-\d{2}(T.*)?$/.test(s)) return true;
+
+  // Day-first: 07/12/2025, 7/12/25, 07-12-2025, etc.
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(s)) return true;
+
+  return false;
+}
+
 // For CSV export: convert an ISO date to the chosen format
 function formatDateForCsv(dateStr: string, format: DateFormatOption): string {
   const iso = normaliseDate(dateStr);
@@ -579,6 +594,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
       let willCreateAccount = 0;
       let missingAccountName = 0;
       let zeroAmount = 0;
+      let invalidDateCount = 0;
 
       for (const tx of importedTxs) {
         const accountNameFromImported =
@@ -586,6 +602,17 @@ const DataExportImportScreen: React.FC<Props> = () => {
           tx.account ||
           tx.accountName ||
           '';
+
+        const rawDate =
+          tx.date ??
+          tx.txnDate ??
+          tx.transactionDate ??
+          tx.createdAt ??
+          tx.updatedAt;
+
+        if (!isValidImportDate(rawDate)) {
+          invalidDateCount++;
+        }
 
         const amountNum = parseMixedNumber(
           tx.amount ?? tx.value ?? tx.total,
@@ -620,6 +647,16 @@ const DataExportImportScreen: React.FC<Props> = () => {
       };
 
       const issues: ValidationIssue[] = [];
+
+            if (invalidDateCount > 0) {
+        issues.push({
+          level: 'error',
+          code: 'invalidDate',
+          message:
+            `${invalidDateCount} transaction(s) have an invalid date format. Fix the dates in the file or remove those rows before importing.`,
+          count: invalidDateCount,
+        });
+      }
 
       if (missingAccountName > 0) {
         issues.push({
@@ -740,6 +777,8 @@ const DataExportImportScreen: React.FC<Props> = () => {
       let willCreateAccount = 0;
       let missingAccountName = 0;
       let zeroAmount = 0;
+      let invalidDateCount = 0;
+
 
       for (const row of rows) {
         const get = (idx: number): string =>
@@ -748,15 +787,21 @@ const DataExportImportScreen: React.FC<Props> = () => {
         const accountNameRaw = get(accountIdx);
         const accountName = accountNameRaw ? accountNameRaw.trim() : '';
 
+        const dateRaw = dateIdx >= 0 ? get(dateIdx) : undefined;
+        if (!isValidImportDate(dateRaw)) {
+          invalidDateCount++;
+        }
+
         const amountRaw =
           amountIdx >= 0 ? get(amountIdx) : undefined;
         const amountNum = parseMixedNumber(amountRaw);
         if (amountNum === 0) zeroAmount++;
 
         const rawObj: Record<string, any> = {
-          date: dateIdx >= 0 ? get(dateIdx) : undefined,
+          date: dateRaw,
           account: accountName,
           amount: amountRaw,
+
           type: typeIdx >= 0 ? get(typeIdx) : undefined,
           description: descIdx >= 0 ? get(descIdx) : undefined,
           category: categoryIdx >= 0 ? get(categoryIdx) : undefined,
@@ -798,6 +843,16 @@ const DataExportImportScreen: React.FC<Props> = () => {
       };
 
       const issues: ValidationIssue[] = [];
+
+      if (invalidDateCount > 0) {
+        issues.push({
+          level: 'error',
+          code: 'invalidDate',
+          message:
+            `${invalidDateCount} row(s) have an invalid date format. Fix the dates in the file or remove those rows before importing.`,
+          count: invalidDateCount,
+        });
+      }
 
       if (missingAccountName > 0) {
         issues.push({
@@ -1102,6 +1157,12 @@ const DataExportImportScreen: React.FC<Props> = () => {
     setLastStatus('Import preview discarded. No data has been changed.');
   };
 
+  const hasImportErrors =
+    !!pendingImport &&
+    pendingImport.issues &&
+    pendingImport.issues.some((i) => i.level === 'error');
+
+
   // ---------- RENDER ----------
 
   return (
@@ -1330,10 +1391,17 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
           <View style={styles.previewButtonsRow}>
             <Pressable
-              style={[styles.btnPrimary, styles.previewBtn]}
-              onPress={handleApplyImport}
+              style={[
+                styles.btnPrimary,
+                styles.previewBtn,
+                hasImportErrors && { opacity: 0.4 },
+              ]}
+              onPress={hasImportErrors ? undefined : handleApplyImport}
+              disabled={hasImportErrors}
             >
-              <Text style={styles.btnPrimaryText}>Apply merge</Text>
+              <Text style={styles.btnPrimaryText}>
+                {hasImportErrors ? 'Resolve errors above' : 'Apply merge'}
+              </Text>
             </Pressable>
             <Pressable
               style={[styles.btnSecondary, styles.previewBtn]}
@@ -1342,6 +1410,14 @@ const DataExportImportScreen: React.FC<Props> = () => {
               <Text style={styles.btnSecondaryText}>Discard</Text>
             </Pressable>
           </View>
+          
+          {hasImportErrors && (
+            <Text style={styles.validationTextError}>
+              Fix the error(s) in your file and re-import before you can apply
+              this merge.
+            </Text>
+          )}
+
         </View>
       )}
 
