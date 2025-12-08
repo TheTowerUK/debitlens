@@ -1250,6 +1250,14 @@ const DataExportImportScreen: React.FC<Props> = () => {
           <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
         </Pressable>
 
+        {/* CSV export */}
+        <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
+          <Text style={styles.btnSecondaryText}>
+            Export transactions as CSV (file)
+          </Text>
+        </Pressable>
+
+
       {/* Export filters + CSV options */}
       <View style={styles.optionsBox}>
         <Text style={styles.optionsTitle}>Export filters</Text>
