@@ -17,6 +17,7 @@ import * as DocumentPicker from 'expo-document-picker';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 type DateFormatOption = 'iso' | 'uk';
+type ExportDateRange = 'all' | '12m' | '90d';
 
 type ValidationIssueLevel = 'warning' | 'error';
 
@@ -26,6 +27,7 @@ type ValidationIssue = {
   message: string;
   count: number;
 };
+
 
 // ---------- Helpers ----------
 
@@ -229,6 +231,41 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
   return { headers, rows };
 }
 
+function applyExportFilters(
+  transactions: any[],
+  accountId: string | 'all',
+  dateRange: ExportDateRange,
+): any[] {
+  let result = transactions || [];
+
+  // Account filter
+  if (accountId !== 'all') {
+    result = result.filter((tx) => tx.accountId === accountId);
+  }
+
+  // Date range filter
+  if (dateRange !== 'all') {
+    const now = new Date();
+    const cutoff = new Date(now.getTime());
+
+    if (dateRange === '12m') {
+      cutoff.setFullYear(cutoff.getFullYear() - 1);
+    } else if (dateRange === '90d') {
+      cutoff.setDate(cutoff.getDate() - 90);
+    }
+
+    result = result.filter((tx) => {
+      const dStr = normaliseDate(tx.date);
+      if (!dStr) return false;
+      const d = new Date(dStr);
+      if (Number.isNaN(d.getTime())) return false;
+      return d >= cutoff;
+    });
+  }
+
+  return result;
+}
+
 // Compute transaction type from a row/tx + amount fallback
 function resolveType(rawType: unknown, rawAmount: unknown): 'income' | 'expense' {
   const t = (rawType ?? '').toString().toLowerCase();
@@ -390,6 +427,14 @@ const DataExportImportScreen: React.FC<Props> = () => {
   const [csvIncludeCategory, setCsvIncludeCategory] = useState(true);
   const [csvDateFormat, setCsvDateFormat] = useState<DateFormatOption>('iso');
 
+  // Export filters (used by both JSON and CSV exports)
+  const [exportAccountId, setExportAccountId] = useState<string | 'all'>(
+    'all',
+  );
+  const [exportDateRange, setExportDateRange] =
+    useState<ExportDateRange>('all');
+
+
   // Expo provides documentDirectory; fall back to '' just in case.
   const exportDir = (FileSystem.documentDirectory ?? '') as string;
 
@@ -397,12 +442,19 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const handleExportJsonPress = async () => {
     try {
+      const filteredTxs = applyExportFilters(
+        txs as any[],
+        exportAccountId,
+        exportDateRange,
+      );
+
       const payload = {
         version: 1,
         exportedAt: new Date().toISOString(),
-        accounts,
-        transactions: txs,
+        accounts, // always export all accounts
+        transactions: filteredTxs,
       };
+
 
       const json = JSON.stringify(payload, null, 2);
 
@@ -438,12 +490,19 @@ const DataExportImportScreen: React.FC<Props> = () => {
 
   const handleExportCsvPress = async () => {
     try {
-      const txsForCsv = txs as any[];
+      const txsForCsv = applyExportFilters(
+        txs as any[],
+        exportAccountId,
+        exportDateRange,
+      );
 
       if (!txsForCsv.length) {
-        setLastStatus('No transactions available to export as CSV.');
+        setLastStatus(
+          'No transactions match the current export filters.',
+        );
         return;
       }
+
 
       // Use keys from the first transaction, but we:
       // - exclude internal IDs
@@ -1191,71 +1250,178 @@ const DataExportImportScreen: React.FC<Props> = () => {
           <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
         </Pressable>
 
-        {/* CSV export */}
-        <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
-          <Text style={styles.btnSecondaryText}>
-            Export transactions as CSV (file)
-          </Text>
-        </Pressable>
+      {/* Export filters + CSV options */}
+      <View style={styles.optionsBox}>
+        <Text style={styles.optionsTitle}>Export filters</Text>
+        <Text style={styles.optionHint}>
+          Filters apply to transactions in both JSON and CSV exports.
+          Accounts are always fully included in JSON backups.
+        </Text>
 
-        {/* CSV export options */}
-        <View style={styles.optionsBox}>
-          <Text style={styles.optionsTitle}>CSV export options</Text>
-
-          <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Include description</Text>
-            <Switch
-              value={csvIncludeDescription}
-              onValueChange={setCsvIncludeDescription}
-            />
-          </View>
-
-          <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Include category</Text>
-            <Switch
-              value={csvIncludeCategory}
-              onValueChange={setCsvIncludeCategory}
-            />
-          </View>
-
-          <Text style={[styles.optionLabel, { marginTop: 8 }]}>
-            Date format
-          </Text>
-          <View style={styles.dateFormatRow}>
-            <Pressable
+        {/* Account filter */}
+        <Text style={[styles.optionLabel, { marginTop: 6 }]}>Account</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.accountChipsScroll}
+        >
+          <Pressable
+            style={[
+              styles.chip,
+              exportAccountId === 'all' && styles.chipActive,
+            ]}
+            onPress={() => setExportAccountId('all')}
+          >
+            <Text
               style={[
-                styles.dateFormatBtn,
-                csvDateFormat === 'iso' && styles.dateFormatBtnActive,
+                styles.chipText,
+                exportAccountId === 'all' && styles.chipTextActive,
               ]}
-              onPress={() => setCsvDateFormat('iso')}
+            >
+              All accounts
+            </Text>
+          </Pressable>
+
+          {accounts.map((a) => (
+            <Pressable
+              key={a.id}
+              style={[
+                styles.chip,
+                exportAccountId === a.id && styles.chipActive,
+              ]}
+              onPress={() => setExportAccountId(a.id)}
             >
               <Text
                 style={[
-                  styles.dateFormatText,
-                  csvDateFormat === 'iso' && styles.dateFormatTextActive,
+                  styles.chipText,
+                  exportAccountId === a.id && styles.chipTextActive,
                 ]}
               >
-                YYYY-MM-DD
+                {a.name || 'Unnamed'}
               </Text>
             </Pressable>
-            <Pressable
+          ))}
+        </ScrollView>
+
+        {/* Date range filter */}
+        <Text style={[styles.optionLabel, { marginTop: 8 }]}>
+          Date range
+        </Text>
+        <View style={styles.dateRangeRow}>
+          <Pressable
+            style={[
+              styles.dateFormatBtn,
+              exportDateRange === 'all' && styles.dateFormatBtnActive,
+            ]}
+            onPress={() => setExportDateRange('all')}
+          >
+            <Text
               style={[
-                styles.dateFormatBtn,
-                csvDateFormat === 'uk' && styles.dateFormatBtnActive,
+                styles.dateFormatText,
+                exportDateRange === 'all' &&
+                  styles.dateFormatTextActive,
               ]}
-              onPress={() => setCsvDateFormat('uk')}
             >
-              <Text
-                style={[
-                  styles.dateFormatText,
-                  csvDateFormat === 'uk' && styles.dateFormatTextActive,
-                ]}
-              >
-                DD/MM/YYYY
-              </Text>
-            </Pressable>
-          </View>
+              All time
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.dateFormatBtn,
+              exportDateRange === '12m' && styles.dateFormatBtnActive,
+            ]}
+            onPress={() => setExportDateRange('12m')}
+          >
+            <Text
+              style={[
+                styles.dateFormatText,
+                exportDateRange === '12m' &&
+                  styles.dateFormatTextActive,
+              ]}
+            >
+              Last 12 months
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.dateFormatBtn,
+              exportDateRange === '90d' && styles.dateFormatBtnActive,
+            ]}
+            onPress={() => setExportDateRange('90d')}
+          >
+            <Text
+              style={[
+                styles.dateFormatText,
+                exportDateRange === '90d' &&
+                  styles.dateFormatTextActive,
+              ]}
+            >
+              Last 90 days
+            </Text>
+          </Pressable>
         </View>
+
+        <View style={styles.divider} />
+
+        <Text style={styles.optionsTitle}>CSV columns</Text>
+
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>Include description</Text>
+          <Switch
+            value={csvIncludeDescription}
+            onValueChange={setCsvIncludeDescription}
+          />
+        </View>
+
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>Include category</Text>
+          <Switch
+            value={csvIncludeCategory}
+            onValueChange={setCsvIncludeCategory}
+          />
+        </View>
+
+        <Text style={[styles.optionLabel, { marginTop: 8 }]}>
+          Date format
+        </Text>
+        <View style={styles.dateFormatRow}>
+          <Pressable
+            style={[
+              styles.dateFormatBtn,
+              csvDateFormat === 'iso' && styles.dateFormatBtnActive,
+            ]}
+            onPress={() => setCsvDateFormat('iso')}
+          >
+            <Text
+              style={[
+                styles.dateFormatText,
+                csvDateFormat === 'iso' &&
+                  styles.dateFormatTextActive,
+              ]}
+            >
+              YYYY-MM-DD
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.dateFormatBtn,
+              csvDateFormat === 'uk' && styles.dateFormatBtnActive,
+            ]}
+            onPress={() => setCsvDateFormat('uk')}
+          >
+            <Text
+              style={[
+                styles.dateFormatText,
+                csvDateFormat === 'uk' &&
+                  styles.dateFormatTextActive,
+              ]}
+            >
+              DD/MM/YYYY
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
       </View>
 
       {/* IMPORT CARD */}
@@ -1410,7 +1576,7 @@ const DataExportImportScreen: React.FC<Props> = () => {
               <Text style={styles.btnSecondaryText}>Discard</Text>
             </Pressable>
           </View>
-          
+
           {hasImportErrors && (
             <Text style={styles.validationTextError}>
               Fix the error(s) in your file and re-import before you can apply
@@ -1703,4 +1869,45 @@ const styles = StyleSheet.create({
   validationTextError: {
     color: '#FCA5A5',
   },
+    optionHint: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  accountChipsScroll: {
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  chip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 6,
+    backgroundColor: '#0B1018',
+  },
+  chipActive: {
+    backgroundColor: '#3B82F6',
+    borderColor: '#3B82F6',
+  },
+  chipText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
+  },
+  divider: {
+    marginTop: 10,
+    marginBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1F2933',
+  },
+  dateRangeRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+
 });
