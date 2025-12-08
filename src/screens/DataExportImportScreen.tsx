@@ -1,3 +1,5 @@
+
+import { Alert, /* ...other RN imports */ } from 'react-native';
 import React, { useState } from 'react';
 import {
   View,
@@ -14,6 +16,9 @@ import { useApp } from '../state/AppContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+
+
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 type DateFormatOption = 'iso' | 'uk';
@@ -488,113 +493,92 @@ const DataExportImportScreen: React.FC<Props> = () => {
     }
   };
 
-  const handleExportCsvPress = async () => {
-    try {
-      const txsForCsv = applyExportFilters(
-        txs as any[],
-        exportAccountId,
-        exportDateRange,
+const handleExportCsvPress = React.useCallback(async () => {
+  try {
+    const txs = state.transactions || [];
+
+    if (!txs.length) {
+      Alert.alert(
+        'No transactions',
+        'There are no transactions to export yet.'
       );
-
-      if (!txsForCsv.length) {
-        setLastStatus(
-          'No transactions match the current export filters.',
-        );
-        return;
-      }
-
-
-      // Use keys from the first transaction, but we:
-      // - exclude internal IDs
-      // - replace accountId with a friendly "account" column
-      // - force a "type" column
-      const rawHeaders: string[] = Object.keys(txsForCsv[0]);
-
-      const excluded = ['id', 'accountId'];
-
-      const hasDate = rawHeaders.includes('date');
-
-      let otherHeaders = rawHeaders.filter(
-        (h) =>
-          !excluded.includes(h) &&
-          h !== 'date' &&
-          h.toLowerCase() !== 'account' &&
-          h !== 'type',
-      );
-
-      // Apply column toggle rules
-      otherHeaders = otherHeaders.filter((h) => {
-        if (h === 'description' && !csvIncludeDescription) return false;
-        if (h === 'category' && !csvIncludeCategory) return false;
-        return true;
-      });
-
-      const headers: string[] = [];
-      if (hasDate) headers.push('date');
-      headers.push('account'); // human-readable account name
-      headers.push('type'); // ensure type column is always present
-      headers.push(...otherHeaders);
-
-      const headerLine = headers.map((h) => escapeCsv(h)).join(',');
-
-      const rows = txsForCsv.map((tx) =>
-        headers
-          .map((h) => {
-            if (h === 'account') {
-              const accId = tx.accountId;
-              const name = accId
-                ? getAccountNameFromAccounts(accId, accounts)
-                : '';
-              return escapeCsv(name);
-            }
-
-            if (h === 'type') {
-              const type = resolveType(tx.type, tx.amount);
-              return escapeCsv(type);
-            }
-
-            if (h === 'date') {
-              const formattedDate = formatDateForCsv(tx.date, csvDateFormat);
-              return escapeCsv(formattedDate);
-            }
-
-            const formatted = formatMaybeDate(tx[h], h);
-            return escapeCsv(formatted);
-          })
-          .join(','),
-      );
-
-      const csv = [headerLine, ...rows].join('\n');
-
-      const filename = `debitlens-transactions-${Date.now()}.csv`;
-      const fileUri = exportDir + filename;
-
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
-        encoding: 'utf8',
-      });
-
-      const canShare = await Sharing.isAvailableAsync();
-
-      if (canShare) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Share DebitLens CSV export',
-        });
-        setLastStatus(
-          `CSV export created as file (${filename}) and sharing dialog shown.`,
-        );
-      } else {
-        setLastStatus(
-          `CSV export file created at: ${fileUri} — but file sharing is not available on this device.`,
-        );
-      }
-    } catch (err: any) {
-      console.error('CSV export error', err);
-      setLastStatus(
-        `CSV export failed: ${err?.message ?? 'Unknown error occurred.'}`,
-      );
+      return;
     }
-  };
+
+    // Build CSV header – tweak columns to match your actual Tx shape
+    const header = [
+      'id',
+      'date',
+      'accountId',
+      'type',
+      'category',
+      'amount',
+      csvIncludeDescription ? 'description' : undefined,
+    ].filter(Boolean) as string[];
+
+    const escapeCsv = (value: unknown): string => {
+      const s =
+        value === null || value === undefined ? '' : String(value);
+      // Escape quotes
+      const escaped = s.replace(/"/g, '""');
+      // Wrap in quotes so commas etc. are safe
+      return `"${escaped}"`;
+    };
+
+    const rows = txs.map((t: any) => {
+      const cols: (string | number | null | undefined)[] = [
+        t.id,
+        t.date,
+        t.accountId,
+        t.type,
+        t.category,
+        t.amount,
+      ];
+
+      if (csvIncludeDescription) {
+        cols.push(t.description);
+      }
+
+      return cols.map(escapeCsv).join(',');
+    });
+
+    const csvString = [header.join(','), ...rows].join('\n');
+
+    // File name like base44-transactions-2025-12-08.csv
+    const today = new Date().toISOString().slice(0, 10);
+    const fileName = `base44-transactions-${today}.csv`;
+    const fileUri = FileSystem.documentDirectory + fileName;
+
+    // Save CSV
+    await FileSystem.writeAsStringAsync(fileUri, csvString, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+
+    // If sharing is not available, at least tell the user where the file is
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      Alert.alert(
+        'Exported to file',
+        `Your CSV has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
+      );
+      return;
+    }
+
+    // Share via Files / iCloud / Drive / Mail etc.
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'text/csv',
+      dialogTitle: 'Share transactions CSV',
+      UTI: 'public.comma-separated-values-text',
+    });
+  } catch (err) {
+    console.error('CSV export/share failed', err);
+    Alert.alert(
+      'Export failed',
+      'There was a problem exporting your CSV. Please try again.'
+    );
+  }
+}, [state.transactions, csvIncludeDescription]);
+
 
   // ---------- IMPORT PREVIEW (JSON MERGE) ----------
 
@@ -1245,16 +1229,16 @@ const DataExportImportScreen: React.FC<Props> = () => {
           transaction(s).
         </Text>
 
-        {/* JSON export */}
-        <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
-          <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
-        </Pressable>
-
         {/* CSV export */}
         <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
           <Text style={styles.btnSecondaryText}>
             Export transactions as CSV (file)
           </Text>
+        </Pressable>
+        
+        {/* JSON export */}
+        <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
+          <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
         </Pressable>
 
 
