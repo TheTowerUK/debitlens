@@ -31,12 +31,27 @@ type Props = {
   navigation: any;
 };
 
+type CsvPreviewRow = {
+  date: string;
+  accountId: string;
+  type: string;
+  category?: string;
+  amount: number;
+  description?: string;
+};
+
 export default function DataExportImportScreen({ navigation }: Props) {
   const { state, actions } = useApp();
 
   const [csvIncludeDescription, setCsvIncludeDescription] =
     React.useState(true);
   const [lastStatus, setLastStatus] = React.useState<string>('');
+
+  const [csvPreview, setCsvPreview] = React.useState<CsvPreviewRow[] | null>(
+    null
+  );
+  const [csvPreviewSourceName, setCsvPreviewSourceName] =
+    React.useState<string | null>(null);
 
   // ====== SHARED BACKUP APPLY LOGIC (JSON full backup) ======
   const applyParsedBackup = React.useCallback(
@@ -166,7 +181,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   }, [state.transactions, csvIncludeDescription, setLastStatus]);
 
-  // ====== CSV IMPORT (transactions) ======
+  // ====== CSV IMPORT (transactions) WITH PREVIEW ======
 
   // Very small CSV parser for our simple export format
   const parseCsvLine = (line: string): string[] => {
@@ -204,6 +219,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       .map(parseCsvLine);
   };
 
+  // Step 1: load CSV and build preview (no data changes yet)
   const handleImportCsvPress = React.useCallback(async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -257,12 +273,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      let importedCount = 0;
+      const preview: CsvPreviewRow[] = [];
 
       for (const row of body) {
         const date = row[idxDate];
         const accountId = row[idxAccountId];
-        const type = row[idxType] as any;
+        const type = row[idxType];
         const category = idxCategory >= 0 ? row[idxCategory] : undefined;
         const amountRaw = row[idxAmount];
         const description =
@@ -277,32 +293,76 @@ export default function DataExportImportScreen({ navigation }: Props) {
           continue;
         }
 
-        // We rely on addTransaction to generate its own ID
-        actions.addTransaction({
-          accountId,
+        preview.push({
           date,
+          accountId,
           type,
           category,
           amount,
           description,
-        } as any);
-        importedCount++;
+        });
       }
 
-      Alert.alert(
-        'CSV import complete',
-        `Imported ${importedCount} transactions from CSV.`
+      if (!preview.length) {
+        Alert.alert(
+          'No valid rows',
+          'The CSV did not contain any valid transaction rows.'
+        );
+        return;
+      }
+
+      setCsvPreview(preview);
+      setCsvPreviewSourceName(file.name ?? 'Selected CSV');
+      setLastStatus(
+        `Loaded ${preview.length} transactions from CSV for preview.`
       );
-      setLastStatus(`Imported ${importedCount} transactions from CSV.`);
+
+      Alert.alert(
+        'CSV loaded',
+        `Found ${preview.length} valid transaction rows.\nReview the preview below and tap "Import" to apply.`
+      );
     } catch (err) {
-      console.error('CSV import failed', err);
+      console.error('CSV import (preview) failed', err);
       Alert.alert(
         'Import failed',
-        'There was a problem importing from CSV. Please try again.'
+        'There was a problem reading the CSV file. Please try again.'
       );
-      setLastStatus('CSV import failed.');
+      setLastStatus('CSV import (preview) failed.');
     }
-  }, [actions, setLastStatus]);
+  }, [setLastStatus]);
+
+  // Step 2: user confirms import → apply preview into app state
+  const handleConfirmCsvImport = React.useCallback(() => {
+    if (!csvPreview || csvPreview.length === 0) {
+      Alert.alert(
+        'Nothing to import',
+        'No CSV preview is loaded. Choose a CSV file first.'
+      );
+      return;
+    }
+
+    let importedCount = 0;
+
+    for (const row of csvPreview) {
+      actions.addTransaction({
+        accountId: row.accountId,
+        date: row.date,
+        type: row.type as any,
+        category: row.category,
+        amount: row.amount,
+        description: row.description,
+      } as any);
+      importedCount++;
+    }
+
+    setCsvPreview(null);
+    setCsvPreviewSourceName(null);
+    Alert.alert(
+      'CSV import complete',
+      `Imported ${importedCount} transactions from CSV.`
+    );
+    setLastStatus(`Imported ${importedCount} transactions from CSV.`);
+  }, [actions, csvPreview, setLastStatus]);
 
   // ====== FULL BACKUP EXPORT (JSON) ======
   const handleExportBackupPress = React.useCallback(async () => {
@@ -417,7 +477,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
         <Text style={styles.sectionTitle}>Transactions (CSV)</Text>
         <Text style={styles.sectionHelp}>
           Export and import transactions in CSV format for spreadsheets and
-          other tools.
+          other tools. Imports are previewed before they are applied.
         </Text>
 
         <View style={styles.optionRow}>
@@ -442,9 +502,52 @@ export default function DataExportImportScreen({ navigation }: Props) {
           onPress={handleImportCsvPress}
         >
           <Text style={styles.btnSecondaryText}>
-            Import transactions from CSV
+            Load CSV and preview import
           </Text>
         </Pressable>
+
+        {/* CSV PREVIEW PANEL */}
+        {csvPreview && csvPreview.length > 0 && (
+          <View style={styles.previewBox}>
+            <Text style={styles.previewTitle}>CSV import preview</Text>
+            {csvPreviewSourceName && (
+              <Text style={styles.previewSubtle}>
+                Source: {csvPreviewSourceName}
+              </Text>
+            )}
+            <Text style={styles.previewSubtle}>
+              {csvPreview.length} transactions will be imported.
+            </Text>
+
+            {csvPreview.slice(0, 5).map((row, idx) => (
+              <View key={idx} style={styles.previewRow}>
+                <Text style={styles.previewRowMain}>
+                  {row.date} · {row.type} · {row.amount.toFixed(2)}
+                </Text>
+                <Text style={styles.previewRowSub}>
+                  Acc: {row.accountId}
+                  {row.category ? ` · Cat: ${row.category}` : ''}
+                  {row.description ? ` · ${row.description}` : ''}
+                </Text>
+              </View>
+            ))}
+
+            {csvPreview.length > 5 && (
+              <Text style={styles.previewSubtle}>
+                Showing first 5 rows only.
+              </Text>
+            )}
+
+            <Pressable
+              style={styles.btnPrimary}
+              onPress={handleConfirmCsvImport}
+            >
+              <Text style={styles.btnPrimaryText}>
+                Import {csvPreview.length} transactions
+              </Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {/* JSON BACKUP SECTION */}
@@ -452,7 +555,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
         <Text style={styles.sectionTitle}>Full backup (JSON)</Text>
         <Text style={styles.sectionHelp}>
           Create and restore full JSON backups of your DebitLens data via
-          the Files / cloud storage apps.
+          the Files / cloud storage apps. Restores show a summary before
+          replacing your data.
         </Text>
 
         <Pressable
@@ -541,6 +645,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
+  btnPrimary: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 8,
+    backgroundColor: '#0066cc',
+  },
+  btnPrimaryText: {
+    textAlign: 'center',
+    fontWeight: '700',
+    color: '#fff',
+  },
   btnDanger: {
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -552,5 +668,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '700',
     color: '#fff',
+  },
+  previewBox: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#eef4ff',
+  },
+  previewTitle: {
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  previewSubtle: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 4,
+  },
+  previewRow: {
+    marginTop: 6,
+  },
+  previewRowMain: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  previewRowSub: {
+    fontSize: 12,
+    color: '#555',
   },
 });
