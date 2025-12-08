@@ -1229,18 +1229,17 @@ const handleExportCsvPress = React.useCallback(async () => {
           transaction(s).
         </Text>
 
+        {/* JSON export */}
+        <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
+          <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
+        </Pressable>
+
         {/* CSV export */}
         <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
           <Text style={styles.btnSecondaryText}>
             Export transactions as CSV (file)
           </Text>
         </Pressable>
-        
-        {/* JSON export */}
-        <Pressable style={styles.btnPrimary} onPress={handleExportJsonPress}>
-          <Text style={styles.btnPrimaryText}>Export as JSON (file)</Text>
-        </Pressable>
-
 
       {/* Export filters + CSV options */}
       <View style={styles.optionsBox}>
