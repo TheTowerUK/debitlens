@@ -1,239 +1,180 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  ReactNode,
-} from 'react';
+import React from 'react';
 
-// ---- Basic types (kept loose so we don't explode TS everywhere) ----
+// ====== TYPES ======
 
 export type Account = {
   id: string;
   name: string;
-  // optional extras so other screens don't choke
-  type?: string;
-  currency?: string;
-  initialBalance?: number;
+  type: 'cash' | 'bank' | 'credit' | 'other';
+  balance: number;
   archived?: boolean;
-  [key: string]: any;
 };
+
+export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export type Transaction = {
   id: string;
   accountId: string;
-  date: string; // YYYY-MM-DD
-  amount: number;
-  type: 'income' | 'expense';
-  description: string;
+  date: string; // ISO string: 'YYYY-MM-DD'
+  type: TransactionType;
   category?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  [key: string]: any;
+  amount: number;
+  description?: string;
 };
 
-// Keep AppState permissive so other code reading extra keys won't scream
 export type AppState = {
   accounts: Account[];
   transactions: Transaction[];
-  // any other legacy fields can live here without type errors
-  [key: string]: any;
+  // 👇 If you know you have more in state elsewhere, you can extend this later
+  // e.g. settings?: { currency: string; ... };
 };
 
-// Actions we actually implement; extra keys allowed too via index signature
 export type AppActions = {
-  addAccount: (account: Partial<Account>) => void;
+  // Accounts
+  addAccount: (account: Omit<Account, 'id'>) => void;
   updateAccount: (id: string, patch: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
 
-  addTransaction: (tx: Partial<Transaction>) => void;
+  // Transactions
+  addTransaction: (tx: Omit<Transaction, 'id'>) => void;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
 
-  fullRestoreFromBackup: (payload: {
-    accounts: Account[];
-    transactions: Transaction[];
-  }) => void;
+  // Utilities
+  clearAllData: () => void;
 
-  // allow other actions to be hung on later without TS misery
-  [key: string]: any;
+  // Full backup restore
+  loadBackup: (backupState: any) => void;
 };
+
+// ====== INITIAL STATE ======
+
+const INITIAL_STATE: AppState = {
+  accounts: [
+    {
+      id: 'acc-1',
+      name: 'Main account',
+      type: 'bank',
+      balance: 0,
+    },
+  ],
+  transactions: [],
+};
+
+// ====== CONTEXT SETUP ======
 
 type AppContextValue = {
   state: AppState;
   actions: AppActions;
 };
 
-// ---- Helpers ----
+const AppContext = React.createContext<AppContextValue | undefined>(undefined);
 
-function makeId(prefix: string): string {
-  return (
-    prefix +
-    '_' +
-    Date.now().toString(36) +
-    '_' +
-    Math.random().toString(36).slice(2, 8)
+// ====== PROVIDER ======
+
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [state, setState] = React.useState<AppState>(INITIAL_STATE);
+
+  // --- Account actions ---
+
+  const addAccount = React.useCallback(
+    (account: Omit<Account, 'id'>) => {
+      const id = `acc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const next: Account = { id, ...account };
+
+      setState((prev) => ({
+        ...prev,
+        accounts: [...prev.accounts, next],
+      }));
+    },
+    []
   );
-}
 
-function normaliseDate(raw: unknown): string {
-  if (raw == null) return new Date().toISOString().slice(0, 10);
-  const s = String(raw).trim();
-  if (!s) return new Date().toISOString().slice(0, 10);
-
-  // If looks like YYYY-MM-DD or YYYY-MM-DDT..., keep first 10 chars
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    return s.slice(0, 10);
-  }
-
-  // Naive fallback: use today
-  return new Date().toISOString().slice(0, 10);
-}
-
-// ---- Initial state ----
-
-const initialState: AppState = {
-  accounts: [],
-  transactions: [],
-};
-
-// ---- Context + hooks ----
-
-const AppContext = createContext<AppContextValue | undefined>(undefined);
-
-export function useApp(): AppContextValue {
-  const ctx = useContext(AppContext);
-  if (!ctx) {
-    throw new Error('useApp must be used within AppProvider');
-  }
-  return ctx;
-}
-
-// ---- Provider ----
-
-type AppProviderProps = {
-  children: ReactNode;
-};
-
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [state, setState] = useState<AppState>(initialState);
-
-  // ---- Account actions ----
-
-  const addAccount: AppActions['addAccount'] = (accountPartial) => {
-    setState((prev) => {
-      const id = accountPartial.id ?? makeId('acc');
-      const name = accountPartial.name ?? 'Unnamed account';
-
-      const account: Account = {
-        id,
-        name,
-        ...accountPartial,
-      };
-
-      return {
+  const updateAccount = React.useCallback(
+    (id: string, patch: Partial<Account>) => {
+      setState((prev) => ({
         ...prev,
-        accounts: [...(prev.accounts || []), account],
-      };
-    });
-  };
+        accounts: prev.accounts.map((a) =>
+          a.id === id ? { ...a, ...patch } : a
+        ),
+      }));
+    },
+    []
+  );
 
-  const updateAccount: AppActions['updateAccount'] = (id, patch) => {
+  const deleteAccount = React.useCallback((id: string) => {
     setState((prev) => ({
       ...prev,
-      accounts: (prev.accounts || []).map((a) =>
-        a.id === id ? { ...a, ...patch } : a,
-      ),
+      accounts: prev.accounts.filter((a) => a.id !== id),
+      transactions: prev.transactions.filter((t) => t.accountId !== id),
     }));
-  };
+  }, []);
 
-  const deleteAccount: AppActions['deleteAccount'] = (id) => {
-    setState((prev) => ({
-      ...prev,
-      accounts: (prev.accounts || []).filter((a) => a.id !== id),
-      // Also remove transactions for that account to keep things sane
-      transactions: (prev.transactions || []).filter(
-        (t) => t.accountId !== id,
-      ),
-    }));
-  };
+  // --- Transaction actions ---
 
-  // ---- Transaction actions ----
+  const addTransaction = React.useCallback(
+    (tx: Omit<Transaction, 'id'>) => {
+      const id = `tx-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const next: Transaction = { id, ...tx };
 
-  const addTransaction: AppActions['addTransaction'] = (txPartial) => {
-    setState((prev) => {
-      const id = txPartial.id ?? makeId('tx');
-      const date = normaliseDate(txPartial.date);
-      const amountNum = Number(txPartial.amount ?? 0);
-      const amount = Number.isFinite(amountNum) ? amountNum : 0;
-
-      const type: 'income' | 'expense' =
-        (txPartial.type as any) ??
-        (amount >= 0 ? 'income' : 'expense');
-
-      const description =
-        txPartial.description ?? 'New transaction';
-
-      const tx: Transaction = {
-        id,
-        accountId: String(txPartial.accountId ?? ''),
-        date,
-        amount,
-        type,
-        description,
-        category: txPartial.category,
-        createdAt:
-          txPartial.createdAt ?? new Date().toISOString(),
-        updatedAt:
-          txPartial.updatedAt ?? new Date().toISOString(),
-        ...txPartial,
-      };
-
-      return {
+      setState((prev) => ({
         ...prev,
-        transactions: [...(prev.transactions || []), tx],
+        transactions: [...prev.transactions, next],
+      }));
+    },
+    []
+  );
+
+  const updateTransaction = React.useCallback(
+    (id: string, patch: Partial<Transaction>) => {
+      setState((prev) => ({
+        ...prev,
+        transactions: prev.transactions.map((t) =>
+          t.id === id ? { ...t, ...patch } : t
+        ),
+      }));
+    },
+    []
+  );
+
+  const deleteTransaction = React.useCallback((id: string) => {
+    setState((prev) => ({
+      ...prev,
+      transactions: prev.transactions.filter((t) => t.id !== id),
+    }));
+  }, []);
+
+  // --- Utilities ---
+
+  const clearAllData = React.useCallback(() => {
+    setState(INITIAL_STATE);
+  }, []);
+
+  // --- Full backup restore ---
+
+  const loadBackup = React.useCallback((backupState: any) => {
+    // Accept any object and try to coerce it into AppState.
+    // We assume the backup was created by our own backup exporter.
+    if (!backupState || typeof backupState !== 'object') {
+      console.warn('loadBackup: backupState is not an object', backupState);
+      return;
+    }
+
+    // If backupState has extra keys, they’ll be preserved; if it’s missing some,
+    // we fall back to INITIAL_STATE defaults for those.
+    setState((prev) => {
+      const merged: AppState = {
+        ...prev,
+        ...backupState,
       };
+
+      // Very light safety: ensure arrays exist
+      if (!Array.isArray(merged.accounts)) merged.accounts = [];
+      if (!Array.isArray(merged.transactions)) merged.transactions = [];
+
+      return merged;
     });
-  };
-
-  const updateTransaction: AppActions['updateTransaction'] = (
-    id,
-    patch,
-  ) => {
-    setState((prev) => ({
-      ...prev,
-      transactions: (prev.transactions || []).map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              ...patch,
-              updatedAt: new Date().toISOString(),
-            }
-          : t,
-      ),
-    }));
-  };
-
-  const deleteTransaction: AppActions['deleteTransaction'] = (id) => {
-    setState((prev) => ({
-      ...prev,
-      transactions: (prev.transactions || []).filter(
-        (t) => t.id !== id,
-      ),
-    }));
-  };
-
-  // ---- Full restore from backup (used by DataExportImportScreen) ----
-
-  const fullRestoreFromBackup: AppActions['fullRestoreFromBackup'] = ({
-    accounts,
-    transactions,
-  }) => {
-    setState((prev) => ({
-      ...prev,
-      accounts: accounts ?? [],
-      transactions: transactions ?? [],
-    }));
-  };
+  }, []);
 
   const actions: AppActions = {
     addAccount,
@@ -242,12 +183,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     addTransaction,
     updateTransaction,
     deleteTransaction,
-    fullRestoreFromBackup,
+    clearAllData,
+    loadBackup,
   };
 
-  return (
-    <AppContext.Provider value={{ state, actions }}>
-      {children}
-    </AppContext.Provider>
-  );
-};
+  const value: AppContextValue = { state, actions };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+// ====== HOOK ======
+
+export function useApp(): AppContextValue {
+  const ctx = React.useContext(AppContext);
+  if (!ctx) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return ctx;
+}
