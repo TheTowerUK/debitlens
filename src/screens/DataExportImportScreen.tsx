@@ -56,48 +56,48 @@ export default function DataExportImportScreen({ navigation }: Props) {
     React.useState<string | null>(null);
 
   // ====== SHARED BACKUP APPLY LOGIC (JSON full backup) ======
-  const applyParsedBackup = React.useCallback(
-    (parsed: any) => {
-      if (!parsed || typeof parsed !== 'object' || !parsed.state) {
-        Alert.alert(
-          'Invalid backup format',
-          'This JSON does not look like a DebitLens backup (missing "state" property).'
-        );
-        return;
-      }
-
-      const backupState: any = parsed.state;
-
-      const accountsCount = Array.isArray(backupState.accounts)
-        ? backupState.accounts.length
-        : 0;
-      const txCount = Array.isArray(backupState.transactions)
-        ? backupState.transactions.length
-        : 0;
-
-      const version = parsed.version ?? 'n/a';
-      const exportedAt = parsed.exportedAt ?? 'n/a';
-
+const applyParsedBackup = React.useCallback(
+  (parsed: any) => {
+    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
       Alert.alert(
-        'Restore from backup?',
-        `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Apply backup',
-            style: 'destructive',
-            onPress: () => {
-              actions.loadBackup(backupState);
-              setLastStatus(
-                `Backup applied. Version: ${version}, exported: ${exportedAt}.`
-              );
-            },
-          },
-        ]
+        'Invalid backup format',
+        'This JSON does not look like a DebitLens backup (missing "state" property).'
       );
-    },
-    [actions, setLastStatus]
-  );
+      return;
+    }
+
+    const backupState: any = parsed.state;
+
+    const accountsCount = Array.isArray(backupState.accounts)
+      ? backupState.accounts.length
+      : 0;
+    const txCount = Array.isArray(backupState.transactions)
+      ? backupState.transactions.length
+      : 0;
+
+    const version = parsed.version ?? 'n/a';
+    const exportedAt = parsed.exportedAt ?? 'n/a';
+
+    Alert.alert(
+      'Restore from backup?',
+      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply backup',
+          style: 'destructive',
+          onPress: () => {
+            actions.loadBackup(backupState);
+            setLastStatus(
+              `Backup applied. Version: ${version}, exported: ${exportedAt}.`
+            );
+          },
+        },
+      ]
+    );
+  },
+  [actions, setLastStatus]
+);
 
   // ====== CSV EXPORT (transactions) ======
   const handleExportCsvPress = React.useCallback(async () => {
@@ -281,7 +281,7 @@ const handleExportXlsxPress = React.useCallback(async () => {
 
   // ====== CSV IMPORT (transactions) WITH PREVIEW ======
 
-  // Very small CSV parser for our simple export format
+  // Pure helpers – no hooks
   const parseCsvLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -291,7 +291,6 @@ const handleExportXlsxPress = React.useCallback(async () => {
       const ch = line[i];
 
       if (ch === '"') {
-        // Toggle quote mode or handle escaped quote ("")
         if (inQuotes && line[i + 1] === '"') {
           current += '"';
           i++;
@@ -348,7 +347,7 @@ const handleExportXlsxPress = React.useCallback(async () => {
         return;
       }
 
-      // Trim header cells to tolerate "date, account, amount, ..."
+      // Trim header to accept "date, account, amount, ..."
       const rawHeader = rows[0];
       const header = rawHeader.map((h) => h.trim());
       const body = rows.slice(1);
@@ -378,21 +377,6 @@ const handleExportXlsxPress = React.useCallback(async () => {
         );
         return;
       }
-
-
-      if (
-        idxDate === -1 ||
-        idxAccountId === -1 ||
-        idxType === -1 ||
-        idxAmount === -1
-      ) {
-        Alert.alert(
-          'Invalid CSV format',
-          'CSV must contain at least date, account/accountId, type, and amount columns.'
-        );
-        return;
-      }
-
 
       const preview: CsvPreviewRow[] = [];
 
@@ -453,157 +437,110 @@ const handleExportXlsxPress = React.useCallback(async () => {
   }, [setLastStatus]);
 
   // Step 2: user confirms import → apply preview into app state
- 
   const handleConfirmCsvImport = React.useCallback(() => {
-  if (!csvPreview || csvPreview.length === 0) {
-    Alert.alert(
-      'Nothing to import',
-      'No CSV preview is loaded. Choose a CSV file first.'
-    );
-    return;
-  }
-
-  let importedCount = 0;
-  let skippedUnknownAccount = 0;
-
-  for (const row of csvPreview) {
-    // Resolve account: match by id OR name
-    const accountKey = row.accountId;
-    const existingAccount = state.accounts.find(
-      (a) => a.id === accountKey || a.name === accountKey
-    );
-
-    if (!existingAccount) {
-      // Skip rows referencing unknown accounts
-      skippedUnknownAccount++;
-      continue;
-    }
-
-    // Raw amount from preview
-    let amount = Number(row.amount);
-
-    // Infer transaction type from sign
-    let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
-
-    // Normalise amount for internal storage (always positive)
-    amount = Math.abs(amount);
-
-    actions.addTransaction({
-      accountId: existingAccount.id,
-      date: row.date,
-      type: txType,
-      category: row.category,
-      amount,
-      description: row.description,
-    } as any);
-
-    importedCount++;
-  }
-const applyParsedBackup = React.useCallback(
-  (parsed: any) => {
-    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
+    if (!csvPreview || csvPreview.length === 0) {
       Alert.alert(
-        'Invalid backup format',
-        'This JSON does not look like a DebitLens backup (missing "state" property).'
+        'Nothing to import',
+        'No CSV preview is loaded. Choose a CSV file first.'
       );
       return;
     }
 
-    const backupState: any = parsed.state;
+    let importedCount = 0;
+    let skippedUnknownAccount = 0;
 
-    const accountsCount = Array.isArray(backupState.accounts)
-      ? backupState.accounts.length
-      : 0;
-    const txCount = Array.isArray(backupState.transactions)
-      ? backupState.transactions.length
-      : 0;
+    for (const row of csvPreview) {
+      // Resolve account: match by id OR name
+      const accountKey = row.accountId;
+      const existingAccount = state.accounts.find(
+        (a) => a.id === accountKey || a.name === accountKey
+      );
 
-    const version = parsed.version ?? 'n/a';
-    const exportedAt = parsed.exportedAt ?? 'n/a';
+      if (!existingAccount) {
+        skippedUnknownAccount++;
+        continue;
+      }
 
+      // Raw amount from preview
+      let amount = Number(row.amount);
+
+      // Infer transaction type from sign
+      let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
+
+      // Normalise amount for internal storage (always positive)
+      amount = Math.abs(amount);
+
+      actions.addTransaction({
+        accountId: existingAccount.id,
+        date: row.date,
+        type: txType,
+        category: row.category,
+        amount,
+        description: row.description,
+      } as any);
+
+      importedCount++;
+    }
+
+    setCsvPreview(null);
+    setCsvPreviewSourceName(null);
+
+    let message = `Imported ${importedCount} transactions from CSV.`;
+    if (skippedUnknownAccount > 0) {
+      message += `\nSkipped ${skippedUnknownAccount} row(s) due to unknown account names/IDs.`;
+    }
+
+    Alert.alert('CSV import complete', message);
+    setLastStatus(message);
+  }, [actions, csvPreview, state.accounts, setLastStatus]);
+
+const handleExportBackupPress = React.useCallback(async () => {
+  try {
+    const backupPayload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      state, // full app state
+    };
+
+    const jsonString = JSON.stringify(backupPayload, null, 2);
+    const iso = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `debitlens-backup-${iso}.json`;
+    const fileUri = FS.documentDirectory + fileName;
+
+    await writeFileAsync(fileUri, jsonString, {
+      encoding: 'utf8',
+    });
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      Alert.alert(
+        'Backup created',
+        `Your backup file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
+      );
+      setLastStatus(`Backup exported to file: ${fileUri}`);
+      return;
+    }
+
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'application/json',
+      dialogTitle: 'Share full DebitLens backup',
+      UTI: 'public.json',
+    });
+
+    setLastStatus('Backup exported and shared.');
+  } catch (err) {
+    console.error('Backup export/share failed', err);
     Alert.alert(
-      'Restore from backup?',
-      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply backup',
-          style: 'destructive',
-          onPress: () => {
-            // 🔥 This is where the full replace happens
-            actions.loadBackup(backupState);
-
-            setLastStatus(
-              `Backup applied. Version: ${version}, exported: ${exportedAt}.`
-            );
-          },
-        },
-      ]
+      'Backup failed',
+      'There was a problem creating or sharing the backup. Please try again.'
     );
-  },
-  [actions, setLastStatus]
-);
-
-  setCsvPreview(null);
-  setCsvPreviewSourceName(null);
-
-  let message = `Imported ${importedCount} transactions from CSV.`;
-  if (skippedUnknownAccount > 0) {
-    message += `\nSkipped ${skippedUnknownAccount} row(s) due to unknown account names/IDs.`;
+    setLastStatus('Backup export failed.');
   }
-
-  Alert.alert('CSV import complete', message);
-  setLastStatus(message);
-}, [actions, csvPreview, state.accounts, setLastStatus]);
+}, [state, setLastStatus]);
 
 
   // ====== FULL BACKUP EXPORT (JSON) ======
-  const handleExportBackupPress = React.useCallback(async () => {
-    try {
-      const backupPayload = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        state, // full app state
-      };
-
-      const jsonString = JSON.stringify(backupPayload, null, 2);
-      const iso = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `debitlens-backup-${iso}.json`;
-      const fileUri = FS.documentDirectory + fileName;
-
-      await writeFileAsync(fileUri, jsonString, {
-        encoding: 'utf8',
-      });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert(
-          'Backup created',
-          `Your backup file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
-        );
-        setLastStatus(`Backup exported to file: ${fileUri}`);
-        return;
-      }
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'application/json',
-        dialogTitle: 'Share full DebitLens backup',
-        UTI: 'public.json',
-      });
-
-      setLastStatus('Backup exported and shared.');
-    } catch (err) {
-      console.error('Backup export/share failed', err);
-      Alert.alert(
-        'Backup failed',
-        'There was a problem creating or sharing the backup. Please try again.'
-      );
-      setLastStatus('Backup export failed.');
-    }
-  }, [state, setLastStatus]);
-
-  // ====== RESTORE FROM BACKUP (JSON via DocumentPicker) ======
-  const handleImportBackupPress = React.useCallback(async () => {
+const handleImportBackupPress = React.useCallback(async () => {
   try {
     const result = await DocumentPicker.getDocumentAsync({
       type: 'application/json',
@@ -639,7 +576,6 @@ const applyParsedBackup = React.useCallback(
       return;
     }
 
-    // ✅ shared confirmation + apply
     applyParsedBackup(parsed);
   } catch (err) {
     console.error('Backup import failed', err);
