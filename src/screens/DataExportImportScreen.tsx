@@ -224,9 +224,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      const fileContents = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
+      // Use "as any" so TS stops complaining about missing readAsStringAsync / EncodingType
+      const fs: any = FileSystem;
+      const fileContents = await fs.readAsStringAsync(asset.uri);
 
       setImportCsvText(fileContents);
       setLastStatus(
