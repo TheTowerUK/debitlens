@@ -14,6 +14,8 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -108,10 +110,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
   const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
 
+  const [lastStatus, setLastStatus] = useState<string>('');
+
   // ----- JSON BACKUP (EXPORT ONLY) -----
   const [exportJsonText, setExportJsonText] = useState<string>('');
-
-  const [lastStatus, setLastStatus] = useState<string>('');
 
   const handleGenerateBackupJson = () => {
     try {
@@ -201,9 +203,45 @@ export default function DataExportImportScreen({ navigation }: Props) {
     [accounts]
   );
 
+  /**
+   * Pick a CSV file from device and load its contents into importCsvText.
+   */
+  const handlePickCsvFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/csv', 'text/plain', 'application/vnd.ms-excel'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setLastStatus('File selection cancelled.');
+        return;
+      }
+
+      const asset = result.assets && result.assets[0];
+      if (!asset || !asset.uri) {
+        setLastStatus('No file selected or file has no URI.');
+        return;
+      }
+
+      const fileContents = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      setImportCsvText(fileContents);
+      setLastStatus(
+        `Loaded CSV from file: ${asset.name ?? 'selected file'}. You can now preview or import it.`
+      );
+    } catch (err: any) {
+      console.error('Error picking CSV file', err);
+      Alert.alert('File error', 'Something went wrong while reading the CSV file.');
+      setLastStatus(`File error: ${String(err?.message ?? err)}`);
+    }
+  };
+
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
-      setLastStatus('Paste CSV text into the import box first.');
+      setLastStatus('Paste CSV text or pick a file first.');
       return;
     }
 
@@ -299,7 +337,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   const handleApplyCsvImportPress = () => {
     if (!importCsvText.trim()) {
-      setLastStatus('Paste CSV text into the import box first.');
+      setLastStatus('Paste CSV text or pick a file first.');
       return;
     }
 
@@ -481,8 +519,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
         Export your data as JSON/CSV, or import transactions from a CSV file. You
-        can choose whether missing accounts should be created automatically during
-        import.
+        can paste CSV text or pick a CSV file. You can also choose whether missing
+        accounts should be created automatically during import.
       </Text>
 
       {/* CURRENT SNAPSHOT */}
@@ -566,8 +604,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV import</Text>
         <Text style={styles.sectionText}>
-          Paste CSV text below (for example, from a spreadsheet export). We&apos;ll
-          parse it and then import rows as transactions.
+          You can either pick a CSV file or paste CSV text below. We&apos;ll parse
+          it and then import rows as transactions.
         </Text>
 
         <View style={styles.optionRow}>
@@ -583,7 +621,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
           />
         </View>
 
-        <Text style={styles.textBoxLabel}>Paste CSV text here</Text>
+        <View style={styles.rowButtons}>
+          <Pressable style={styles.btnSecondary} onPress={handlePickCsvFile}>
+            <Text style={styles.btnSecondaryText}>Pick CSV file</Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.textBoxLabel}>Or paste CSV text here</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline
@@ -714,6 +758,7 @@ const styles = StyleSheet.create({
   btnSecondaryText: {
     color: '#E5E7EB',
     fontWeight: '600',
+    textAlign: 'center',
   },
   btnDestructive: {
     flex: 1,
