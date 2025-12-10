@@ -31,7 +31,7 @@ export type AppState = {
 
 export type AppActions = {
   // Accounts
-  addAccount: (account: Omit<Account, 'id'>) => void;
+  addAccount: (account: Omit<Account, 'id'>) => Account;
   updateAccount: (id: string, patch: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
 
@@ -77,18 +77,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // --- Account actions ---
 
-  const addAccount = React.useCallback(
-    (account: Omit<Account, 'id'>) => {
-      const id = `acc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      const next: Account = { id, ...account };
+const addAccount = React.useCallback(
+  (account: Omit<Account, 'id'>): Account => {
+    const id = `acc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const next: Account = { id, ...account };
 
-      setState((prev) => ({
-        ...prev,
-        accounts: [...prev.accounts, next],
-      }));
-    },
-    []
-  );
+    setState((prev) => ({
+      ...prev,
+      accounts: [...prev.accounts, next],
+    }));
+
+    return next;
+  },
+  []
+);
 
   const updateAccount = React.useCallback(
     (id: string, patch: Partial<Account>) => {

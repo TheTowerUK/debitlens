@@ -437,24 +437,89 @@ const handleExportXlsxPress = React.useCallback(async () => {
   }, [setLastStatus]);
 
   // Step 2: user confirms import → apply preview into app state
-  const handleConfirmCsvImport = React.useCallback(() => {
-    if (!csvPreview || csvPreview.length === 0) {
-      Alert.alert(
-        'Nothing to import',
-        'No CSV preview is loaded. Choose a CSV file first.'
-      );
-      return;
+const handleConfirmCsvImport = React.useCallback(() => {
+  if (!csvPreview || csvPreview.length === 0) {
+    Alert.alert(
+      'Nothing to import',
+      'No CSV preview is loaded. Choose a CSV file first.'
+    );
+    return;
+  }
+
+  let importedCount = 0;
+  let skippedInvalidAccountName = 0;
+  let autoCreatedAccounts = 0;
+
+  for (const row of csvPreview) {
+    // 1) Normalise account key from CSV
+    const accountKeyRaw = row.accountId ?? '';
+    const accountKey = accountKeyRaw.trim();
+    const accountKeyLower = accountKey.toLowerCase();
+
+    if (!accountKey) {
+      skippedInvalidAccountName++;
+      continue;
     }
 
-    let importedCount = 0;
-    let skippedUnknownAccount = 0;
+    // 2) Try to find existing account by id or name (case-insensitive)
+    let existingAccount =
+      state.accounts.find((a) => {
+        const id = (a.id ?? '').trim().toLowerCase();
+        const name = (a.name ?? '').trim().toLowerCase();
+        return id === accountKeyLower || name === accountKeyLower;
+      }) ?? null;
 
-    for (const row of csvPreview) {
-      // Resolve account: match by id OR name
-      const accountKey = row.accountId;
-      const existingAccount = state.accounts.find(
-        (a) => a.id === accountKey || a.name === accountKey
-      );
+    // 3) If no account found, auto-create one
+    if (!existingAccount) {
+      existingAccount = actions.addAccount({
+        name: accountKey,    // use the CSV name
+        type: 'bank',        // sensible default; adjust if needed
+        balance: 0,
+      });
+      autoCreatedAccounts++;
+    }
+
+    // 4) Raw amount from preview
+    let amount = Number(row.amount);
+
+    if (!Number.isFinite(amount)) {
+      continue;
+    }
+
+    // 5) Infer transaction type from sign
+    let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
+
+    // 6) Normalise amount for internal storage (always positive)
+    amount = Math.abs(amount);
+
+    actions.addTransaction({
+      accountId: existingAccount.id,
+      date: row.date,
+      type: txType,
+      category: row.category,
+      amount,
+      description: row.description,
+    } as any);
+
+    importedCount++;
+  }
+
+  setCsvPreview(null);
+  setCsvPreviewSourceName(null);
+
+  let message = `Imported ${importedCount} transactions from CSV.`;
+  if (autoCreatedAccounts > 0) {
+    message += `\nAuto-created ${autoCreatedAccounts} account(s) from CSV account names.`;
+  }
+  if (skippedInvalidAccountName > 0) {
+    message += `\nSkipped ${skippedInvalidAccountName} row(s) with missing/invalid account value.`;
+  }
+
+  Alert.alert('CSV import complete', message);
+  setLastStatus(message);
+}, [actions, csvPreview, state.accounts, setLastStatus]);
+
+
 
       if (!existingAccount) {
         skippedUnknownAccount++;
