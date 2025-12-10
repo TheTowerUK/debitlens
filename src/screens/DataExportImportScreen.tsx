@@ -1,904 +1,766 @@
-import React from 'react';
+// src/screens/DataExportImportScreen.tsx
+import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Switch,
-  ScrollView,
   Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import * as DocumentPicker from 'expo-document-picker';
-
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
-import * as XLSX from 'xlsx';
 
+type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
-// --- Work around expo-file-system typing quirks in this project ---
-const FS: any = FileSystem;
-const writeFileAsync = (
-  uri: string,
-  data: string,
-  options?: { encoding?: string }
-) => FS.writeAsStringAsync(uri, data, options);
-const readFileAsync = (
-  uri: string,
-  options?: { encoding?: string }
-) => FS.readAsStringAsync(uri, options);
-
-type Props = {
-  navigation: any;
+/**
+ * Very loose shapes because different parts of the app may evolve over time.
+ */
+type Account = {
+  id: string;
+  name?: string;
+  [key: string]: any;
 };
 
-type CsvPreviewRow = {
-  date: string;
+type Transaction = {
+  id: string;
   accountId: string;
-  type: string;
-  category?: string;
   amount: number;
+  type?: 'income' | 'expense' | string;
+  date?: string;
   description?: string;
+  categoryId?: string | null;
+  [key: string]: any;
 };
 
-export default function DataExportImportScreen({ navigation }: Props) {
-  const { state, actions } = useApp();
+type BackupPayload = {
+  version: number;
+  exportedAt: string;
+  accounts: Account[];
+  transactions: Transaction[];
+};
 
-  const [csvIncludeDescription, setCsvIncludeDescription] =
-    React.useState(true);
-  const [lastStatus, setLastStatus] = React.useState<string>('');
-
-  const [csvPreview, setCsvPreview] = React.useState<CsvPreviewRow[] | null>(
-    null
-  );
-  const [csvPreviewSourceName, setCsvPreviewSourceName] =
-    React.useState<string | null>(null);
-
-  // ====== SHARED BACKUP APPLY LOGIC (JSON full backup) ======
-const applyParsedBackup = React.useCallback(
-  (parsed: any) => {
-    if (!parsed || typeof parsed !== 'object' || !parsed.state) {
-      Alert.alert(
-        'Invalid backup format',
-        'This JSON does not look like a DebitLens backup (missing "state" property).'
-      );
-      return;
-    }
-
-    const backupState: any = parsed.state;
-
-    const accountsCount = Array.isArray(backupState.accounts)
-      ? backupState.accounts.length
-      : 0;
-    const txCount = Array.isArray(backupState.transactions)
-      ? backupState.transactions.length
-      : 0;
-
-    const version = parsed.version ?? 'n/a';
-    const exportedAt = parsed.exportedAt ?? 'n/a';
-
-    Alert.alert(
-      'Restore from backup?',
-      `Version: ${version}\nExported: ${exportedAt}\n\nAccounts: ${accountsCount}\nTransactions: ${txCount}\n\nDo you want to replace current data with this backup?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Apply backup',
-          style: 'destructive',
-          onPress: () => {
-            actions.loadBackup(backupState);
-            setLastStatus(
-              `Backup applied. Version: ${version}, exported: ${exportedAt}.`
-            );
-          },
-        },
-      ]
-    );
-  },
-  [actions, setLastStatus]
-);
-
-  // ====== CSV EXPORT (transactions) ======
-  const handleExportCsvPress = React.useCallback(async () => {
-    try {
-      const txs = state.transactions || [];
-
-      if (!txs.length) {
-        Alert.alert(
-          'No transactions',
-          'There are no transactions to export yet.'
-        );
-        return;
-      }
-
-      const header = [
-        'id',
-        'date',
-        'accountId',
-        'type',
-        'category',
-        'amount',
-        csvIncludeDescription ? 'description' : undefined,
-      ].filter(Boolean) as string[];
-
-      const escapeCsv = (value: unknown): string => {
-        const s =
-          value === null || value === undefined ? '' : String(value);
-        const escaped = s.replace(/"/g, '""');
-        return `"${escaped}"`;
-      };
-
-      const rows = txs.map((t: any) => {
-        const cols: (string | number | null | undefined)[] = [
-          t.id,
-          t.date,
-          t.accountId,
-          t.type,
-          t.category,
-          t.amount,
-        ];
-
-        if (csvIncludeDescription) {
-          cols.push(t.description);
-        }
-
-        return cols.map(escapeCsv).join(',');
-      });
-
-      const csvString = [header.join(','), ...rows].join('\n');
-
-      const today = new Date().toISOString().slice(0, 10);
-      const fileName = `debitlens-transactions-${today}.csv`;
-      const fileUri = FS.documentDirectory + fileName;
-
-      await writeFileAsync(fileUri, csvString, {
-        encoding: 'utf8',
-      });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (!canShare) {
-        Alert.alert(
-          'Exported to file',
-          `Your CSV has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
-        );
-        setLastStatus(`CSV exported to file: ${fileUri}`);
-        return;
-      }
-
-      await Sharing.shareAsync(fileUri, {
-        mimeType: 'text/csv',
-        dialogTitle: 'Share transactions CSV',
-        UTI: 'public.comma-separated-values-text',
-      });
-
-      setLastStatus('CSV exported and shared.');
-    } catch (err) {
-      console.error('CSV export/share failed', err);
-      Alert.alert(
-        'Export failed',
-        'There was a problem exporting your CSV. Please try again.'
-      );
-      setLastStatus('CSV export failed.');
-    }
-  }, [state.transactions, csvIncludeDescription, setLastStatus]);
-
-const handleExportXlsxPress = React.useCallback(async () => {
-  try {
-    const txs = state.transactions || [];
-
-    if (!txs.length) {
-      Alert.alert(
-        'No transactions',
-        'There are no transactions to export yet.'
-      );
-      return;
-    }
-
-    const includeDesc = csvIncludeDescription;
-
-    // Header row
-    const header = [
-      'id',
-      'date',
-      'accountId',
-      'type',
-      'category',
-      'amount',
-    ];
-    if (includeDesc) {
-      header.push('description');
-    }
-
-    // Data rows
-    const data = [
-      header,
-      ...txs.map((t: any) => {
-        const row: (string | number)[] = [
-          t.id ?? '',
-          t.date ?? '',
-          t.accountId ?? '',
-          t.type ?? '',
-          t.category ?? '',
-          t.amount ?? 0,
-        ];
-
-        if (includeDesc) {
-          row.push(t.description ?? '');
-        }
-
-        return row;
-      }),
-    ];
-
-    // Build worksheet + workbook
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
-
-    // Write as base64 so we can save via expo-file-system/legacy
-    const wbout = XLSX.write(wb, {
-      type: 'base64',
-      bookType: 'xlsx',
-    });
-
-    const today = new Date().toISOString().slice(0, 10);
-    const fileName = `debitlens-transactions-${today}.xlsx`;
-    const fileUri = FS.documentDirectory + fileName;
-
-    // Save file (base64 encoded)
-    await writeFileAsync(fileUri, wbout, {
-      encoding: 'base64',
-    });
-
-    const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) {
-      Alert.alert(
-        'Exported to file',
-        `Your Excel file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
-      );
-      setLastStatus(`XLSX exported to file: ${fileUri}`);
-      return;
-    }
-
-    await Sharing.shareAsync(fileUri, {
-      mimeType:
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      dialogTitle: 'Share transactions Excel file',
-      UTI: 'org.openxmlformats.spreadsheetml.sheet',
-    });
-
-    setLastStatus('XLSX exported and shared.');
-  } catch (err) {
-    console.error('XLSX export/share failed', err);
-    Alert.alert(
-      'Export failed',
-      'There was a problem exporting your Excel file. Please try again.'
-    );
-    setLastStatus('XLSX export failed.');
+/**
+ * Small CSV helper – deliberately simple / conservative.
+ */
+function csvEscape(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const s = String(value);
+  if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+    return `"${s.replace(/"/g, '""')}"`;
   }
-}, [state.transactions, csvIncludeDescription, setLastStatus]);
+  return s;
+}
 
-  // ====== CSV IMPORT (transactions) WITH PREVIEW ======
+function csvUnescapeCell(cell: string): string {
+  const trimmed = cell.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1).replace(/""/g, '"');
+  }
+  return trimmed;
+}
 
-  // Pure helpers – no hooks
-  const parseCsvLine = (line: string): string[] => {
-    const result: string[] = [];
+function parseCsvLines(raw: string): string[][] {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trimEnd())
+    .filter((l) => l.length > 0);
+
+  const rows: string[][] = [];
+
+  for (const line of lines) {
+    const cells: string[] = [];
     let current = '';
     let inQuotes = false;
 
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
-
       if (ch === '"') {
         if (inQuotes && line[i + 1] === '"') {
+          // Escaped quote
           current += '"';
           i++;
         } else {
           inQuotes = !inQuotes;
         }
       } else if (ch === ',' && !inQuotes) {
-        result.push(current);
+        cells.push(csvUnescapeCell(current));
         current = '';
       } else {
         current += ch;
       }
     }
-    result.push(current);
-    return result;
-  };
+    cells.push(csvUnescapeCell(current));
+    rows.push(cells);
+  }
 
-  const parseCsv = (text: string): string[][] => {
-    return text
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0)
-      .map(parseCsvLine);
-  };
+  return rows;
+}
 
-  // Step 1: load CSV and build preview (no data changes yet)
-  const handleImportCsvPress = React.useCallback(async () => {
+export default function DataExportImportScreen({ navigation }: Props) {
+  // Cast to any to avoid TS complaining about actions we haven't added to AppActions yet.
+  const { state, actions } = useApp() as any;
+
+  const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
+  const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
+
+  // ----- JSON BACKUP (EXPORT ONLY) -----
+  const [exportJsonText, setExportJsonText] = useState<string>('');
+
+  const handleGenerateBackupJson = () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'text/csv',
-        copyToCacheDirectory: true,
-      });
+      const backup: BackupPayload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        accounts,
+        transactions: txs,
+      };
+      const json = JSON.stringify(backup, null, 2);
+      setExportJsonText(json);
+      setLastStatus('Backup JSON generated. You can copy it from the box below.');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to generate backup JSON.');
+      setLastStatus('Failed to generate backup JSON.');
+    }
+  };
 
-      if (result.canceled) {
-        return;
+  // ----- CSV EXPORT -----
+  const [csvIncludeDescription, setCsvIncludeDescription] = useState<boolean>(true);
+  const [csvIncludeAccountName, setCsvIncludeAccountName] = useState<boolean>(true);
+
+  const accountNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of accounts) {
+      if (a && a.id) {
+        map[a.id] = a.name ?? a.id;
       }
+    }
+    return map;
+  }, [accounts]);
 
-      const file = result.assets?.[0];
-      if (!file) {
-        Alert.alert(
-          'No file selected',
-          'Please choose a CSV file to import.'
-        );
-        return;
+  const [exportCsvText, setExportCsvText] = useState<string>('');
+
+  const handleExportCsvPress = () => {
+    if (!txs.length) {
+      Alert.alert('No transactions', 'There are no transactions to export.');
+      setLastStatus('No transactions to export.');
+      return;
+    }
+
+    const headers: string[] = [];
+    headers.push('date');
+    headers.push('type');
+    headers.push('amount');
+    if (csvIncludeAccountName) headers.push('account_name');
+    if (csvIncludeDescription) headers.push('description');
+
+    const lines: string[] = [];
+    lines.push(headers.map(csvEscape).join(','));
+
+    for (const t of txs) {
+      const row: (string | number)[] = [];
+      row.push(t.date ?? '');
+      row.push(t.type ?? '');
+      row.push(t.amount ?? 0);
+      if (csvIncludeAccountName) {
+        row.push(accountNameById[t.accountId] ?? '');
       }
+      if (csvIncludeDescription) {
+        row.push(t.description ?? '');
+      }
+      lines.push(row.map(csvEscape).join(','));
+    }
 
-      const content = await readFileAsync(file.uri, {
-        encoding: 'utf8',
-      });
+    const csv = lines.join('\n');
+    setExportCsvText(csv);
+    setLastStatus('CSV text generated. You can copy it from the box below.');
+  };
 
-      const rows = parseCsv(content);
+  // ----- CSV IMPORT -----
+  const [importCsvText, setImportCsvText] = useState<string>('');
+  const [csvHasHeaderRow, setCsvHasHeaderRow] = useState<boolean>(true);
+  const [csvPreview, setCsvPreview] = useState<string>('');
+  const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>('');
+  const [lastImportSummary, setLastImportSummary] = useState<string>('');
+
+  const [lastStatus, setLastStatus] = useState<string>('');
+
+  const knownAccountNames = useMemo(
+    () =>
+      new Set(
+        accounts
+          .map((a) => (a && typeof a.name === 'string' ? a.name.trim() : ''))
+          .filter((n) => n.length > 0)
+      ),
+    [accounts]
+  );
+
+  const handleParseCsvPress = () => {
+    if (!importCsvText.trim()) {
+      setLastStatus('Paste CSV text into the import box first.');
+      return;
+    }
+
+    try {
+      const rows = parseCsvLines(importCsvText);
+
       if (!rows.length) {
-        Alert.alert('Empty CSV', 'The selected CSV file is empty.');
+        setLastStatus('CSV parsed but contains no rows.');
+        setCsvPreview('');
+        setCsvPreviewSourceName('');
+        setLastImportSummary('');
         return;
       }
 
-      // Trim header to accept "date, account, amount, ..."
-      const rawHeader = rows[0];
-      const header = rawHeader.map((h) => h.trim());
-      const body = rows.slice(1);
+      const [firstRow, ...restRows] = rows;
+      let dataRows = rows;
+      let headerRow: string[] | null = null;
 
-      const idxDate = header.indexOf('date');
-
-      // Accept either "accountId" (new) or "account" (old files)
-      let idxAccountId = header.indexOf('accountId');
-      if (idxAccountId === -1) {
-        idxAccountId = header.indexOf('account');
+      if (csvHasHeaderRow) {
+        headerRow = firstRow;
+        dataRows = restRows;
       }
 
-      const idxType = header.indexOf('type');
-      const idxCategory = header.indexOf('category');
-      const idxAmount = header.indexOf('amount');
-      const idxDescription = header.indexOf('description');
+      const maxPreviewRows = 10;
+      const previewRows = dataRows.slice(0, maxPreviewRows);
 
-      if (
-        idxDate === -1 ||
-        idxAccountId === -1 ||
-        idxType === -1 ||
-        idxAmount === -1
-      ) {
-        Alert.alert(
-          'Invalid CSV format',
-          'CSV must contain at least date, account/accountId, type, and amount columns.'
+      // Simple preview string
+      const previewLines: string[] = [];
+      if (headerRow) {
+        previewLines.push('HEADER: ' + headerRow.join(' | '));
+      } else {
+        previewLines.push('No header row (csvHasHeaderRow=false)');
+      }
+
+      previewLines.push('--- Sample rows ---');
+      for (const row of previewRows) {
+        previewLines.push(row.join(' | '));
+      }
+      if (dataRows.length > maxPreviewRows) {
+        previewLines.push(`…plus ${dataRows.length - maxPreviewRows} more rows`);
+      }
+
+      setCsvPreview(previewLines.join('\n'));
+
+      // Quick look at account name matching (if we detect an account column).
+      let accountColIndex = -1;
+
+      if (headerRow) {
+        const headerLower = headerRow.map((h) => h.toLowerCase());
+        accountColIndex = headerLower.findIndex(
+          (h) => h === 'account' || h === 'account_name' || h === 'account name'
         );
-        return;
       }
 
-      const preview: CsvPreviewRow[] = [];
+      if (accountColIndex >= 0) {
+        let matchedCount = 0;
+        let unknownCount = 0;
 
-      for (const row of body) {
-        const date = row[idxDate];
-        const accountId = row[idxAccountId];
-        const type = row[idxType];
-        const category = idxCategory >= 0 ? row[idxCategory] : undefined;
-        const amountRaw = row[idxAmount];
-        const description =
-          idxDescription >= 0 ? row[idxDescription] : undefined;
-
-        if (!date || !accountId || !amountRaw || !type) {
-          continue;
+        for (const row of dataRows) {
+          if (accountColIndex >= row.length) continue;
+          const accName = row[accountColIndex].trim();
+          if (!accName) continue;
+          if (knownAccountNames.has(accName)) matchedCount++;
+          else unknownCount++;
         }
 
-        const amount = Number(amountRaw);
-        if (!Number.isFinite(amount)) {
-          continue;
-        }
-
-        preview.push({
-          date,
-          accountId,
-          type,
-          category,
-          amount,
-          description,
-        });
-      }
-
-      if (!preview.length) {
-        Alert.alert(
-          'No valid rows',
-          'The CSV did not contain any valid transaction rows.'
+        setCsvPreviewSourceName(
+          `Detected account column at index ${accountColIndex}. ` +
+            `Rows with known accounts: ${matchedCount}. ` +
+            `Rows with unknown accounts: ${unknownCount}. (Unknown accounts will be skipped — no new accounts created.)`
         );
-        return;
+      } else {
+        setCsvPreviewSourceName(
+          'No obvious account column detected in header. ' +
+            'You can still import, but rows must map correctly by column order.'
+        );
       }
 
-      setCsvPreview(preview);
-      setCsvPreviewSourceName(file.name ?? 'Selected CSV');
-      setLastStatus(
-        `Loaded ${preview.length} transactions from CSV for preview.`
-      );
-
-      Alert.alert(
-        'CSV loaded',
-        `Found ${preview.length} valid transaction rows.\nReview the preview below and tap "Import" to apply.`
-      );
-    } catch (err) {
-      console.error('CSV import (preview) failed', err);
-      Alert.alert(
-        'Import failed',
-        'There was a problem reading the CSV file. Please try again.'
-      );
-      setLastStatus('CSV import (preview) failed.');
+      setLastImportSummary('');
+      setLastStatus('CSV parsed successfully. Review the preview, then tap "Apply CSV import" if happy.');
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('CSV parse error', 'Something went wrong while parsing the CSV text.');
+      setLastStatus(`CSV parse error: ${String(err?.message ?? err)}`);
+      setCsvPreview('');
+      setCsvPreviewSourceName('');
+      setLastImportSummary('');
     }
-  }, [setLastStatus]);
+  };
 
-  // Step 2: user confirms import → apply preview into app state
-const handleConfirmCsvImport = React.useCallback(() => {
-  if (!csvPreview || csvPreview.length === 0) {
+  const handleApplyCsvImportPress = () => {
+    if (!importCsvText.trim()) {
+      setLastStatus('Paste CSV text into the import box first.');
+      return;
+    }
+
     Alert.alert(
-      'Nothing to import',
-      'No CSV preview is loaded. Choose a CSV file first.'
+      'Confirm CSV import',
+      'This will import new transactions for existing accounts. Unknown accounts are skipped; no new accounts will be created. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              const rows = parseCsvLines(importCsvText);
+              if (!rows.length) {
+                setLastStatus('CSV parsed but contains no rows.');
+                return;
+              }
+
+              const [firstRow, ...restRows] = rows;
+              let dataRows = rows;
+              let headerRow: string[] | null = null;
+
+              if (csvHasHeaderRow) {
+                headerRow = firstRow;
+                dataRows = restRows;
+              }
+
+              let dateCol = 0;
+              let typeCol = 1;
+              let amountCol = 2;
+              let accountCol = 3;
+              let descriptionCol = 4;
+
+              if (headerRow) {
+                const headerLower = headerRow.map((h) => h.toLowerCase());
+                const findIndex = (names: string[]) =>
+                  headerLower.findIndex((h) => names.includes(h));
+
+                const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
+                const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
+                const amountIdx = findIndex(['amount', 'value']);
+                const accIdx = findIndex(['account', 'account_name', 'account name']);
+                const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+
+                if (dateIdx >= 0) dateCol = dateIdx;
+                if (typeIdx >= 0) typeCol = typeIdx;
+                if (amountIdx >= 0) amountCol = amountIdx;
+                if (accIdx >= 0) accountCol = accIdx;
+                if (descIdx >= 0) descriptionCol = descIdx;
+              }
+
+              let importedCount = 0;
+              let skippedUnknownAccount = 0;
+              let skippedBadAmount = 0;
+              let skippedMissingAccountName = 0;
+
+              for (const row of dataRows) {
+                if (!row.length) continue;
+
+                const dateStr = row[dateCol] ?? '';
+                const typeStr = (row[typeCol] ?? '').toLowerCase();
+                const amountRaw = row[amountCol] ?? '';
+                const accountName = (row[accountCol] ?? '').trim();
+                const description = row[descriptionCol] ?? '';
+
+                if (!accountName) {
+                  skippedMissingAccountName++;
+                  continue;
+                }
+
+                const existingAccount = accounts.find(
+                  (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
+                );
+
+                if (!existingAccount) {
+                  // IMPORTANT: per your request, we do NOT create new accounts here.
+                  skippedUnknownAccount++;
+                  continue;
+                }
+
+                const amountNum = Number(String(amountRaw).replace(/,/g, ''));
+                if (!isFinite(amountNum) || isNaN(amountNum)) {
+                  skippedBadAmount++;
+                  continue;
+                }
+
+                // Normalise type if present
+                let normalisedType: 'income' | 'expense' | string = typeStr;
+                if (typeStr === 'credit' || typeStr === 'income' || typeStr === 'in') {
+                  normalisedType = 'income';
+                } else if (
+                  typeStr === 'debit' ||
+                  typeStr === 'expense' ||
+                  typeStr === 'out'
+                ) {
+                  normalisedType = 'expense';
+                }
+
+                // You may have a specific transaction shape in your AppContext.
+                // This uses a very generic addTransaction call.
+                actions.addTransaction({
+                  accountId: existingAccount.id,
+                  amount: amountNum,
+                  type: normalisedType,
+                  date: dateStr || new Date().toISOString().slice(0, 10),
+                  description,
+                });
+
+                importedCount++;
+              }
+
+              const summaryLines: string[] = [];
+              summaryLines.push(`Imported transactions: ${importedCount}`);
+              summaryLines.push(
+                `Skipped rows with unknown account (no new accounts created): ${skippedUnknownAccount}`
+              );
+              summaryLines.push(`Skipped rows with invalid amount: ${skippedBadAmount}`);
+              summaryLines.push(
+                `Skipped rows missing account name: ${skippedMissingAccountName}`
+              );
+
+              const summary = summaryLines.join('\n');
+              setLastImportSummary(summary);
+              setLastStatus('CSV import completed. See summary below.');
+            } catch (err: any) {
+              console.error(err);
+              Alert.alert('Import error', 'Something went wrong during CSV import.');
+              setLastStatus(`Import error: ${String(err?.message ?? err)}`);
+            }
+          },
+        },
+      ]
     );
-    return;
-  }
+  };
 
-  let importedCount = 0;
-  let skippedInvalidAccountName = 0;
-  let autoCreatedAccounts = 0;
-
-  for (const row of csvPreview) {
-    // 1) Normalise account key from CSV
-    const accountKeyRaw = row.accountId ?? '';
-    const accountKey = accountKeyRaw.trim();
-    const accountKeyLower = accountKey.toLowerCase();
-
-    if (!accountKey) {
-      skippedInvalidAccountName++;
-      continue;
-    }
-
-    // 2) Try to find existing account by id or name (case-insensitive)
-    let existingAccount =
-      state.accounts.find((a) => {
-        const id = (a.id ?? '').trim().toLowerCase();
-        const name = (a.name ?? '').trim().toLowerCase();
-        return id === accountKeyLower || name === accountKeyLower;
-      }) ?? null;
-
-    // 3) If no account found, auto-create one
-    if (!existingAccount) {
-      existingAccount = actions.addAccount({
-        name: accountKey,    // use the CSV name
-        type: 'bank',        // sensible default; adjust if needed
-        balance: 0,
-      });
-      autoCreatedAccounts++;
-    }
-
-    // 4) Raw amount from preview
-    let amount = Number(row.amount);
-
-    if (!Number.isFinite(amount)) {
-      continue;
-    }
-
-    // 5) Infer transaction type from sign
-    let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
-
-    // 6) Normalise amount for internal storage (always positive)
-    amount = Math.abs(amount);
-
-    actions.addTransaction({
-      accountId: existingAccount.id,
-      date: row.date,
-      type: txType,
-      category: row.category,
-      amount,
-      description: row.description,
-    } as any);
-
-    importedCount++;
-  }
-
-  setCsvPreview(null);
-  setCsvPreviewSourceName(null);
-
-  let message = `Imported ${importedCount} transactions from CSV.`;
-  if (autoCreatedAccounts > 0) {
-    message += `\nAuto-created ${autoCreatedAccounts} account(s) from CSV account names.`;
-  }
-  if (skippedInvalidAccountName > 0) {
-    message += `\nSkipped ${skippedInvalidAccountName} row(s) with missing/invalid account value.`;
-  }
-
-  Alert.alert('CSV import complete', message);
-  setLastStatus(message);
-}, [actions, csvPreview, state.accounts, setLastStatus]);
-
-
-
-      if (!existingAccount) {
-        skippedUnknownAccount++;
-        continue;
-      }
-
-      // Raw amount from preview
-      let amount = Number(row.amount);
-
-      // Infer transaction type from sign
-      let txType: 'income' | 'expense' = amount < 0 ? 'expense' : 'income';
-
-      // Normalise amount for internal storage (always positive)
-      amount = Math.abs(amount);
-
-      actions.addTransaction({
-        accountId: existingAccount.id,
-        date: row.date,
-        type: txType,
-        category: row.category,
-        amount,
-        description: row.description,
-      } as any);
-
-      importedCount++;
-    }
-
-    setCsvPreview(null);
-    setCsvPreviewSourceName(null);
-
-    let message = `Imported ${importedCount} transactions from CSV.`;
-    if (skippedUnknownAccount > 0) {
-      message += `\nSkipped ${skippedUnknownAccount} row(s) due to unknown account names/IDs.`;
-    }
-
-    Alert.alert('CSV import complete', message);
-    setLastStatus(message);
-  }, [actions, csvPreview, state.accounts, setLastStatus]);
-
-const handleExportBackupPress = React.useCallback(async () => {
-  try {
-    const backupPayload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      state, // full app state
-    };
-
-    const jsonString = JSON.stringify(backupPayload, null, 2);
-    const iso = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `debitlens-backup-${iso}.json`;
-    const fileUri = FS.documentDirectory + fileName;
-
-    await writeFileAsync(fileUri, jsonString, {
-      encoding: 'utf8',
-    });
-
-    const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) {
-      Alert.alert(
-        'Backup created',
-        `Your backup file has been saved here:\n\n${fileUri}\n\nSharing is not supported on this device/emulator.`
-      );
-      setLastStatus(`Backup exported to file: ${fileUri}`);
-      return;
-    }
-
-    await Sharing.shareAsync(fileUri, {
-      mimeType: 'application/json',
-      dialogTitle: 'Share full DebitLens backup',
-      UTI: 'public.json',
-    });
-
-    setLastStatus('Backup exported and shared.');
-  } catch (err) {
-    console.error('Backup export/share failed', err);
-    Alert.alert(
-      'Backup failed',
-      'There was a problem creating or sharing the backup. Please try again.'
-    );
-    setLastStatus('Backup export failed.');
-  }
-}, [state, setLastStatus]);
-
-
-  // ====== FULL BACKUP EXPORT (JSON) ======
-const handleImportBackupPress = React.useCallback(async () => {
-  try {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: 'application/json',
-      copyToCacheDirectory: true,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    const file = result.assets?.[0];
-    if (!file) {
-      Alert.alert(
-        'No file selected',
-        'Please choose a backup file to restore.'
-      );
-      return;
-    }
-
-    const content = await readFileAsync(file.uri, {
-      encoding: 'utf8',
-    });
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(content);
-    } catch (err) {
-      console.error('Failed to parse backup JSON', err);
-      Alert.alert(
-        'Invalid backup file',
-        'The selected file is not valid JSON. Please choose a valid backup file.'
-      );
-      return;
-    }
-
-    applyParsedBackup(parsed);
-  } catch (err) {
-    console.error('Backup import failed', err);
-    Alert.alert(
-      'Import failed',
-      'There was a problem reading the backup file. Please try again.'
-    );
-  }
-}, [applyParsedBackup]);
-
-
-  // ====== RENDER ======
   return (
-    <ScrollView contentContainerStyle={styles.wrap}>
+    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
-        Export and import your DebitLens data as CSV or JSON for backup,
-        analysis, and restore.
+        Export your data as JSON/CSV, or import transactions from a CSV file. CSV
+        import will only add transactions for existing accounts — it will{' '}
+        <Text style={styles.strong}>not</Text> create new accounts.
       </Text>
 
+      {/* CURRENT SNAPSHOT */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Current data snapshot</Text>
+        <Text style={styles.statLine}>Accounts: {accounts.length}</Text>
+        <Text style={styles.statLine}>Transactions: {txs.length}</Text>
+      </View>
+
+      {/* JSON BACKUP (EXPORT ONLY) */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>JSON backup (export)</Text>
+        <Text style={styles.sectionText}>
+          Generate a JSON backup of your current data. You can copy this and keep
+          it somewhere safe. (Restore wiring can be added later if needed.)
+        </Text>
+
+        <Pressable style={styles.btnPrimary} onPress={handleGenerateBackupJson}>
+          <Text style={styles.btnPrimaryText}>Generate backup JSON</Text>
+        </Pressable>
+
+        {exportJsonText ? (
+          <View style={styles.textBox}>
+            <Text style={styles.textBoxLabel}>Backup JSON</Text>
+            <ScrollView style={styles.textBoxScroll}>
+              <Text selectable style={styles.monoText}>
+                {exportJsonText}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+
+      {/* CSV EXPORT */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>CSV export</Text>
+        <Text style={styles.sectionText}>
+          Export your transactions as CSV. You can copy the CSV text and save it
+          as a `.csv` file via your file system.
+        </Text>
+
+        <View style={styles.optionsBox}>
+          <Text style={styles.optionsTitle}>CSV export options</Text>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Include description</Text>
+            <Switch
+              value={csvIncludeDescription}
+              onValueChange={setCsvIncludeDescription}
+            />
+          </View>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Include account name</Text>
+            <Switch
+              value={csvIncludeAccountName}
+              onValueChange={setCsvIncludeAccountName}
+            />
+          </View>
+        </View>
+
+        <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
+          <Text style={styles.btnSecondaryText}>
+            Export transactions as CSV (text)
+          </Text>
+        </Pressable>
+
+        {exportCsvText ? (
+          <View style={styles.textBox}>
+            <Text style={styles.textBoxLabel}>Exported CSV</Text>
+            <ScrollView style={styles.textBoxScroll}>
+              <Text selectable style={styles.monoText}>
+                {exportCsvText}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
+      </View>
+
+      {/* CSV IMPORT */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>CSV import</Text>
+        <Text style={styles.sectionText}>
+          Paste CSV text below (for example, from a spreadsheet export). We&apos;ll
+          parse it and then import rows as transactions. Only rows with a matching
+          existing account name will be imported. Unknown accounts are skipped and
+          NOT created.
+        </Text>
+
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>First row is header</Text>
+          <Switch value={csvHasHeaderRow} onValueChange={setCsvHasHeaderRow} />
+        </View>
+
+        <Text style={styles.textBoxLabel}>Paste CSV text here</Text>
+        <TextInput
+          style={[styles.input, styles.inputMultiline]}
+          multiline
+          value={importCsvText}
+          onChangeText={setImportCsvText}
+          placeholder="Paste CSV text…"
+          textAlignVertical="top"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <View style={styles.rowButtons}>
+          <Pressable style={styles.btnSecondary} onPress={handleParseCsvPress}>
+            <Text style={styles.btnSecondaryText}>Preview CSV</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.btnDestructive]}
+            onPress={handleApplyCsvImportPress}
+          >
+            <Text style={styles.btnDestructiveText}>Apply CSV import</Text>
+          </Pressable>
+        </View>
+
+        {csvPreview ? (
+          <View style={styles.textBox}>
+            <Text style={styles.textBoxLabel}>CSV preview</Text>
+            <ScrollView style={styles.textBoxScroll}>
+              <Text selectable style={styles.monoText}>
+                {csvPreview}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
+
+        {csvPreviewSourceName ? (
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>CSV analysis</Text>
+            <Text style={styles.statusText}>{csvPreviewSourceName}</Text>
+          </View>
+        ) : null}
+
+        {lastImportSummary ? (
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>Import summary</Text>
+            <Text style={styles.statusText}>{lastImportSummary}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* GLOBAL STATUS */}
       {lastStatus ? (
         <View style={styles.statusBox}>
           <Text style={styles.statusLabel}>Status</Text>
           <Text style={styles.statusText}>{lastStatus}</Text>
         </View>
       ) : null}
-
-      {/* CSV SECTION */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Transactions (CSV)</Text>
-        <Text style={styles.sectionHelp}>
-          Export and import transactions in CSV format for spreadsheets and
-          other tools. Imports are previewed before they are applied.
-        </Text>
-
-        <View style={styles.optionRow}>
-          <Text style={styles.optionLabel}>Include description</Text>
-          <Switch
-            value={csvIncludeDescription}
-            onValueChange={setCsvIncludeDescription}
-          />
-        </View>
-
-        <Pressable
-          style={styles.btnSecondary}
-          onPress={handleExportCsvPress}
-        >
-          <Text style={styles.btnSecondaryText}>
-            Export transactions as CSV (file)
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.btnSecondary}
-          onPress={handleExportXlsxPress}
-        >
-          <Text style={styles.btnSecondaryText}>
-            Export transactions as Excel (XLSX)
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.btnSecondary}
-          onPress={handleImportCsvPress}
-        >
-          <Text style={styles.btnSecondaryText}>
-            Load CSV and preview import
-          </Text>
-        </Pressable>
-
-
-        {/* CSV PREVIEW PANEL */}
-        {csvPreview && csvPreview.length > 0 && (
-          <View style={styles.previewBox}>
-            <Text style={styles.previewTitle}>CSV import preview</Text>
-            {csvPreviewSourceName && (
-              <Text style={styles.previewSubtle}>
-                Source: {csvPreviewSourceName}
-              </Text>
-            )}
-            <Text style={styles.previewSubtle}>
-              {csvPreview.length} transactions will be imported.
-            </Text>
-
-            {csvPreview.slice(0, 5).map((row, idx) => (
-              <View key={idx} style={styles.previewRow}>
-                <Text style={styles.previewRowMain}>
-                  {row.date} · {row.type} · {row.amount.toFixed(2)}
-                </Text>
-                <Text style={styles.previewRowSub}>
-                  Acc: {row.accountId}
-                  {row.category ? ` · Cat: ${row.category}` : ''}
-                  {row.description ? ` · ${row.description}` : ''}
-                </Text>
-              </View>
-            ))}
-
-            {csvPreview.length > 5 && (
-              <Text style={styles.previewSubtle}>
-                Showing first 5 rows only.
-              </Text>
-            )}
-
-            <Pressable
-              style={styles.btnPrimary}
-              onPress={handleConfirmCsvImport}
-            >
-              <Text style={styles.btnPrimaryText}>
-                Import {csvPreview.length} transactions
-              </Text>
-            </Pressable>
-          </View>
-        )}
-      </View>
-
-      {/* JSON BACKUP SECTION */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Full backup (JSON)</Text>
-        <Text style={styles.sectionHelp}>
-          Create and restore full JSON backups of your DebitLens data via
-          the Files / cloud storage apps. Restores show a summary before
-          replacing your data.
-        </Text>
-
-        <Pressable
-          style={styles.btnSecondary}
-          onPress={handleExportBackupPress}
-        >
-          <Text style={styles.btnSecondaryText}>
-            Export full backup (JSON)
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.btnDanger}
-          onPress={handleImportBackupPress}
-        >
-          <Text style={styles.btnDangerText}>
-            Restore from JSON backup (full replace)
-          </Text>
-        </Pressable>
-      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   wrap: {
-    padding: 16,
+    flex: 1,
+    backgroundColor: '#050816',
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 32,
   },
   h1: {
+    color: 'white',
     fontSize: 24,
     fontWeight: '800',
     marginBottom: 8,
   },
   subtle: {
-    color: '#666',
+    color: '#9CA3AF',
     marginBottom: 16,
   },
-  statusBox: {
-    borderRadius: 8,
+  strong: {
+    fontWeight: '700',
+    color: '#F97316',
+  },
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 12,
     padding: 12,
-    backgroundColor: '#f3f3f7',
     marginBottom: 16,
-  },
-  statusLabel: {
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  statusText: {
-    color: '#555',
-  },
-  section: {
-    marginBottom: 24,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#f9f9fb',
+    borderWidth: 1,
+    borderColor: '#1F2937',
   },
   sectionTitle: {
+    color: 'white',
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 6,
   },
-  sectionHelp: {
-    fontSize: 14,
-    color: '#666',
+  sectionText: {
+    color: '#D1D5DB',
     marginBottom: 10,
+  },
+  statLine: {
+    color: '#E5E7EB',
+    marginTop: 2,
+  },
+  btnPrimary: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+  },
+  btnPrimaryText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  btnSecondary: {
+    flex: 1,
+    marginTop: 8,
+    marginRight: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
+  btnSecondaryText: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+  },
+  btnDestructive: {
+    flex: 1,
+    marginTop: 8,
+    marginLeft: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#B91C1C',
+  },
+  btnDestructiveText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  rowButtons: {
+    flexDirection: 'row',
+    marginTop: 4,
+  },
+  optionsBox: {
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#111827',
+  },
+  optionsTitle: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+    marginBottom: 4,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginVertical: 4,
   },
   optionLabel: {
-    fontSize: 14,
+    color: '#D1D5DB',
+    flex: 1,
+    marginRight: 8,
   },
-  btnSecondary: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+  textBox: {
+    marginTop: 10,
+    maxHeight: 260,
+  },
+  textBoxLabel: {
+    color: '#9CA3AF',
+    marginBottom: 4,
+  },
+  textBoxScroll: {
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    borderRadius: 8,
+    padding: 8,
+    backgroundColor: '#020617',
+  },
+  monoText: {
+    color: '#E5E7EB',
+    fontFamily: Platform.select({
+      ios: 'Menlo',
+      android: 'monospace',
+      default: 'monospace',
+    }) as string,
+    fontSize: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    borderRadius: 8,
+    padding: 8,
+    backgroundColor: '#020617',
+    color: '#E5E7EB',
+    fontSize: 13,
+  },
+  inputMultiline: {
+    minHeight: 140,
+  },
+  statusBox: {
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#0B1020',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#444',
-    marginTop: 4,
+    borderColor: '#1F2937',
   },
-  btnSecondaryText: {
-    textAlign: 'center',
+  statusLabel: {
+    color: '#9CA3AF',
     fontWeight: '600',
+    marginBottom: 2,
   },
-  btnPrimary: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    backgroundColor: '#0066cc',
-  },
-  btnPrimaryText: {
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#fff',
-  },
-  btnDanger: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    backgroundColor: '#b00020',
-  },
-  btnDangerText: {
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#fff',
-  },
-  previewBox: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#eef4ff',
-  },
-  previewTitle: {
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  previewSubtle: {
-    fontSize: 12,
-    color: '#555',
-    marginBottom: 4,
-  },
-  previewRow: {
-    marginTop: 6,
-  },
-  previewRowMain: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  previewRowSub: {
-    fontSize: 12,
-    color: '#555',
+  statusText: {
+    color: '#E5E7EB',
   },
 });
