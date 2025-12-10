@@ -27,7 +27,7 @@ type Account = {
 };
 
 type Transaction = {
-  id: string;
+  id?: string;
   accountId: string;
   amount: number;
   type?: 'income' | 'expense' | string;
@@ -102,7 +102,7 @@ function parseCsvLines(raw: string): string[][] {
 }
 
 export default function DataExportImportScreen({ navigation }: Props) {
-  // Cast to any to avoid TS complaining about actions we haven't added to AppActions yet.
+  // Cast to any to avoid TS complaining about actions types that may not be fully defined.
   const { state, actions } = useApp() as any;
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
@@ -110,6 +110,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   // ----- JSON BACKUP (EXPORT ONLY) -----
   const [exportJsonText, setExportJsonText] = useState<string>('');
+
+  const [lastStatus, setLastStatus] = useState<string>('');
 
   const handleGenerateBackupJson = () => {
     try {
@@ -187,8 +189,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const [csvPreview, setCsvPreview] = useState<string>('');
   const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>('');
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
-
-  const [lastStatus, setLastStatus] = useState<string>('');
+  const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
 
   const knownAccountNames = useMemo(
     () =>
@@ -234,7 +235,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       if (headerRow) {
         previewLines.push('HEADER: ' + headerRow.join(' | '));
       } else {
-        previewLines.push('No header row (csvHasHeaderRow=false)');
+        previewLines.push('No header row (First row is header = OFF)');
       }
 
       previewLines.push('--- Sample rows ---');
@@ -272,7 +273,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
         setCsvPreviewSourceName(
           `Detected account column at index ${accountColIndex}. ` +
             `Rows with known accounts: ${matchedCount}. ` +
-            `Rows with unknown accounts: ${unknownCount}. (Unknown accounts will be skipped — no new accounts created.)`
+            `Rows with unknown accounts: ${unknownCount}. ` +
+            (createMissingAccounts
+              ? 'Unknown accounts will be created during import.'
+              : 'Unknown accounts will be skipped (no new accounts created).')
         );
       } else {
         setCsvPreviewSourceName(
@@ -301,7 +305,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
     Alert.alert(
       'Confirm CSV import',
-      'This will import new transactions for existing accounts. Unknown accounts are skipped; no new accounts will be created. Continue?',
+      createMissingAccounts
+        ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
+        : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -352,6 +358,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
               let skippedUnknownAccount = 0;
               let skippedBadAmount = 0;
               let skippedMissingAccountName = 0;
+              let createdAccountsCount = 0;
+              let skippedCouldNotCreateAccount = 0;
+
+              // Local map so multiple rows for the same new account share a single created account
+              const createdAccountByName: Record<string, Account> = {};
 
               for (const row of dataRows) {
                 if (!row.length) continue;
@@ -367,16 +378,45 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   continue;
                 }
 
-                const existingAccount = accounts.find(
+                // Check if we already have this account (existing or already created in this import)
+                let accountForRow: Account | undefined = accounts.find(
                   (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
                 );
 
-                if (!existingAccount) {
-                  // IMPORTANT: per your request, we do NOT create new accounts here.
-                  skippedUnknownAccount++;
-                  continue;
+                if (!accountForRow && createdAccountByName[accountName]) {
+                  accountForRow = createdAccountByName[accountName];
                 }
 
+                // Not found anywhere
+                if (!accountForRow) {
+                  if (!createMissingAccounts) {
+                    // User chose not to create new accounts
+                    skippedUnknownAccount++;
+                    continue;
+                  }
+
+                  // Create a new account
+                  let newAccount: Account | undefined;
+                  try {
+                    newAccount = actions.addAccount({
+                      name: accountName,
+                    }) as Account | undefined;
+                  } catch (err) {
+                    console.error('Error creating account from CSV row', err);
+                  }
+
+                  if (!newAccount || !newAccount.id) {
+                    // If addAccount doesn't return anything useful, we can't link transactions.
+                    skippedCouldNotCreateAccount++;
+                    continue;
+                  }
+
+                  createdAccountsCount++;
+                  createdAccountByName[accountName] = newAccount;
+                  accountForRow = newAccount;
+                }
+
+                // At this point we should have an account
                 const amountNum = Number(String(amountRaw).replace(/,/g, ''));
                 if (!isFinite(amountNum) || isNaN(amountNum)) {
                   skippedBadAmount++;
@@ -395,15 +435,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   normalisedType = 'expense';
                 }
 
-                // You may have a specific transaction shape in your AppContext.
-                // This uses a very generic addTransaction call.
                 actions.addTransaction({
-                  accountId: existingAccount.id,
+                  accountId: accountForRow.id,
                   amount: amountNum,
                   type: normalisedType,
                   date: dateStr || new Date().toISOString().slice(0, 10),
                   description,
-                });
+                } as Transaction);
 
                 importedCount++;
               }
@@ -411,11 +449,17 @@ export default function DataExportImportScreen({ navigation }: Props) {
               const summaryLines: string[] = [];
               summaryLines.push(`Imported transactions: ${importedCount}`);
               summaryLines.push(
-                `Skipped rows with unknown account (no new accounts created): ${skippedUnknownAccount}`
+                `New accounts created from CSV: ${createdAccountsCount}`
+              );
+              summaryLines.push(
+                `Skipped rows with unknown account (when account creation disabled): ${skippedUnknownAccount}`
               );
               summaryLines.push(`Skipped rows with invalid amount: ${skippedBadAmount}`);
               summaryLines.push(
                 `Skipped rows missing account name: ${skippedMissingAccountName}`
+              );
+              summaryLines.push(
+                `Rows where account creation failed (no usable ID): ${skippedCouldNotCreateAccount}`
               );
 
               const summary = summaryLines.join('\n');
@@ -436,9 +480,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
-        Export your data as JSON/CSV, or import transactions from a CSV file. CSV
-        import will only add transactions for existing accounts — it will{' '}
-        <Text style={styles.strong}>not</Text> create new accounts.
+        Export your data as JSON/CSV, or import transactions from a CSV file. You
+        can choose whether missing accounts should be created automatically during
+        import.
       </Text>
 
       {/* CURRENT SNAPSHOT */}
@@ -523,14 +567,20 @@ export default function DataExportImportScreen({ navigation }: Props) {
         <Text style={styles.sectionTitle}>CSV import</Text>
         <Text style={styles.sectionText}>
           Paste CSV text below (for example, from a spreadsheet export). We&apos;ll
-          parse it and then import rows as transactions. Only rows with a matching
-          existing account name will be imported. Unknown accounts are skipped and
-          NOT created.
+          parse it and then import rows as transactions.
         </Text>
 
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>First row is header</Text>
           <Switch value={csvHasHeaderRow} onValueChange={setCsvHasHeaderRow} />
+        </View>
+
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>Create missing accounts from CSV</Text>
+          <Switch
+            value={createMissingAccounts}
+            onValueChange={setCreateMissingAccounts}
+          />
         </View>
 
         <Text style={styles.textBoxLabel}>Paste CSV text here</Text>
@@ -550,10 +600,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
             <Text style={styles.btnSecondaryText}>Preview CSV</Text>
           </Pressable>
 
-          <Pressable
-            style={[styles.btnDestructive]}
-            onPress={handleApplyCsvImportPress}
-          >
+          <Pressable style={styles.btnDestructive} onPress={handleApplyCsvImportPress}>
             <Text style={styles.btnDestructiveText}>Apply CSV import</Text>
           </Pressable>
         </View>
