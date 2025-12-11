@@ -56,17 +56,23 @@ const TxnEditorScreen: React.FC<Props> = ({ navigation, route }) => {
 
   const params = route.params ?? {};
   const editingId = params.id;
-  const initialTypeParam = params.type;
+  const initialTypeParam = params.type; // might be 'income' | 'expense' | something else
 
   const existing: Transaction | undefined = useMemo(
     () => (editingId ? txs.find((t) => t.id === editingId) : undefined),
     [txs, editingId]
   );
 
+  // Normalise initial type to just 'income' | 'expense'
+  const initialType: 'income' | 'expense' =
+    existing?.type === 'income' || existing?.type === 'expense'
+      ? existing.type
+      : initialTypeParam === 'income' || initialTypeParam === 'expense'
+      ? initialTypeParam
+      : 'expense';
+
   // Type (income/expense)
-  const [type, setType] = useState<'income' | 'expense'>(
-    existing?.type ?? initialTypeParam ?? 'expense'
-  );
+  const [type, setType] = useState<'income' | 'expense'>(initialType);
 
   // Account selection
   const [accountId, setAccountId] = useState<string | undefined>(
@@ -81,19 +87,18 @@ const TxnEditorScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   // Date (DD/MM/YYYY for UI)
-  const initialDateISO =
-    existing?.date ?? new Date().toISOString();
+  const initialDateISO = existing?.date ?? new Date().toISOString();
 
   const [dateInput, setDateInput] = useState<string>(
     formatDateDDMMYYYY(initialDateISO) // gives DD/MM/YYYY
   );
 
-  // Category & note
+  // Category & note/description
   const [category, setCategory] = useState<string>(
     existing?.category ?? ''
   );
   const [note, setNote] = useState<string>(
-    existing?.note ?? ''
+    existing?.description ?? ''
   );
 
   const isEditing = !!existing;
@@ -131,13 +136,19 @@ const TxnEditorScreen: React.FC<Props> = ({ navigation, route }) => {
     const cleanCategory = category.trim();
     const cleanNote = note.trim();
 
+    // Provide a required name for the transaction
+    const derivedName =
+      cleanCategory || (type === 'income' ? 'Income' : 'Expense');
+
     const patch: Omit<Transaction, 'id'> = {
+      name: derivedName,
       accountId: chosenAccountId,
       amount: numericAmount,
       type,
       date: isoDate,
-      category: cleanCategory || null,
-      note: cleanNote || null,
+      // optional fields:
+      category: cleanCategory || undefined,
+      description: cleanNote || undefined,
     };
 
     if (isEditing && existing) {
@@ -289,7 +300,7 @@ const TxnEditorScreen: React.FC<Props> = ({ navigation, route }) => {
           />
         </View>
 
-        {/* Note */}
+        {/* Note / Description */}
         <View style={styles.field}>
           <Text style={styles.label}>Note (optional)</Text>
           <TextInput

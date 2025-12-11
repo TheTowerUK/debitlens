@@ -127,26 +127,29 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
 
     // Outgoing transaction (expense)
     actions.addTransaction({
+      name: 'Transfer out',
       accountId: fromAccountId,
       amount: numericAmount,
       type: 'expense',
       date: isoDate,
       category: 'Transfer',
-      note: commonNoteOut,
+      description: commonNoteOut,
     });
 
     // Incoming transaction (income)
     actions.addTransaction({
+      name: 'Transfer in',
       accountId: toAccountId,
       amount: numericAmount,
       type: 'income',
       date: isoDate,
       category: 'Transfer',
-      note: commonNoteIn,
+      description: commonNoteIn,
     });
 
     navigation.goBack();
   };
+
 
   const onCancel = () => {
     navigation.goBack();

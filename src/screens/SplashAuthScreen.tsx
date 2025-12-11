@@ -11,14 +11,27 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp } from '../state/AppContext';
+import * as SecureStore from 'expo-secure-store';
 
 // Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-export default function SplashAuthScreen({ navigation }: Props) {
-  const { getPin, setPin } = useApp();
+const PIN_KEY = 'base44_app_pin';
 
+// Local helpers for PIN storage
+async function getStoredPin(): Promise<string | null> {
+  try {
+    return await SecureStore.getItemAsync(PIN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+async function setStoredPin(pin: string): Promise<void> {
+  await SecureStore.setItemAsync(PIN_KEY, pin);
+}
+
+export default function SplashAuthScreen({ navigation }: Props) {
   // Use simple string modes: 'loading' | 'sign' | 'pin'
   const [mode, setMode] = useState<string>('loading');
   const [pin, setPinInput] = useState('');
@@ -30,7 +43,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
     (async () => {
       try {
-        const stored = await getPin();
+        const stored = await getStoredPin();
         if (!mounted) return;
         setMode(stored ? 'sign' : 'pin');
       } catch {
@@ -42,14 +55,14 @@ export default function SplashAuthScreen({ navigation }: Props) {
     return () => {
       mounted = false;
     };
-  }, [getPin]);
+  }, []);
 
   const onSignIn = async () => {
     try {
-      const stored = await getPin();
+      const stored = (await getStoredPin())?.trim();
       const entered = pin.trim();
 
-      if (stored && stored.trim() === entered) {
+      if (stored && stored === entered) {
         navigation.replace('Dashboard');
       } else {
         Alert.alert('Incorrect PIN', 'Please try again.');
@@ -72,7 +85,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
     }
 
     try {
-      await setPin(p1);
+      await setStoredPin(p1);
       navigation.replace('Dashboard');
     } catch {
       Alert.alert('Error', 'Unable to save PIN right now.');
@@ -88,7 +101,6 @@ export default function SplashAuthScreen({ navigation }: Props) {
   }
 
   const isValidPin = /^\d{4,6}$/.test(pin.trim());
-
   const isSignMode = mode === 'sign';
 
   return (
