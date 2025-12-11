@@ -51,7 +51,7 @@ const RootNavigator: React.FC = () => {
   // Keep the original workaround so TS is happy about the mysterious `id` prop
   const navigatorProps = {
     id: undefined as undefined,
-    initialRouteName: 'Dashboard' as const,
+    initialRouteName: 'Login' as const,
     // We'll override `screenOptions` below via spread while keeping `id`
   };
 
