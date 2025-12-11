@@ -146,7 +146,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
             const accountName = t.accountId
               ? accountNameById.get(t.accountId)
               : undefined;
-            const note = t.note || '';
+            const note = t.description || '';
             const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : '';
 
             return (
@@ -162,7 +162,9 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                     ) : (
                       <Text style={styles.txMeta}>Account</Text>
                     )}
-                    {dateLabel ? <Text style={styles.txMeta}> • {dateLabel}</Text> : null}
+                    {dateLabel ? (
+                      <Text style={styles.txMeta}> • {dateLabel}</Text>
+                    ) : null}
                   </Text>
                 </View>
               </View>

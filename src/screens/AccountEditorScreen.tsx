@@ -29,7 +29,6 @@ const AccountEditorScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const [name, setName] = useState<string>(account?.name ?? '');
-  const [label, setLabel] = useState<string>(account?.label ?? account?.name ?? '');
 
   const handleSave = () => {
     if (!accountId) {
@@ -37,15 +36,12 @@ const AccountEditorScreen: React.FC<Props> = ({ navigation, route }) => {
     }
 
     const trimmedName = name.trim();
-    const trimmedLabel = label.trim();
-
     if (!trimmedName) {
       return;
     }
 
     actions.updateAccount(accountId, {
       name: trimmedName,
-      label: trimmedLabel || trimmedName,
     });
 
     navigation.goBack();
@@ -80,14 +76,6 @@ const AccountEditorScreen: React.FC<Props> = ({ navigation, route }) => {
         value={name}
         onChangeText={setName}
         placeholder="e.g. Main Current Account"
-      />
-
-      <Text style={styles.label}>Label (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={label}
-        onChangeText={setLabel}
-        placeholder="Short label to show in lists"
       />
 
       <View style={styles.buttonRow}>

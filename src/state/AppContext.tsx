@@ -14,6 +14,7 @@ export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export type Transaction = {
   id: string;
+  name: string;
   accountId: string;
   date: string; // ISO string: 'YYYY-MM-DD'
   type: TransactionType;
@@ -31,7 +32,9 @@ export type AppState = {
 
 export type AppActions = {
   // Accounts
-  addAccount: (account: Omit<Account, 'id'>) => Account;
+  //addAccount: (account: Omit<Account, 'id'>) => Account;
+  // updateAccount: (id: string, patch: Partial<Account>) => void;
+  addAccount: (input: Partial<Account>) => Account;
   updateAccount: (id: string, patch: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
 

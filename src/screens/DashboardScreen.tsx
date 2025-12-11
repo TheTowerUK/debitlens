@@ -107,7 +107,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
                 }
               >
                 <Text style={styles.accountName}>
-                  {acc.name || acc.label || 'Account'}
+                  {acc.name || 'Account'}
                 </Text>
                 <Text
                   style={[
@@ -183,7 +183,7 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
             const sign = isIncome ? '+' : '-';
             const amount = Number(t.amount) || 0;
             const label = t.category || 'Uncategorised';
-            const note = t.note || (t as any).description || '';
+            const note = t.description || '';
             const dateLabel = t.date
               ? new Date(t.date).toLocaleDateString()
               : '';

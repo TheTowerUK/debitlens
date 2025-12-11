@@ -52,7 +52,7 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
-            const note = item.note || '';
+            const note = item.description || '';
             return (
               <Pressable
                 style={styles.txRow}
@@ -68,7 +68,6 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
                       {formatDateDDMMYYYY(item.date)}
                     </Text>
                   ) : null}
-
                 </View>
                 <Text
                   style={[

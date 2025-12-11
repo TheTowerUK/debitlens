@@ -2,7 +2,6 @@
 import React, { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { useApp } from '../state/AppContext';
 
 // Show local notifications as alerts by default
 Notifications.setNotificationHandler({
@@ -11,14 +10,13 @@ Notifications.setNotificationHandler({
     shouldPlaySound: false,
     shouldSetBadge: false,
 
-    // Newer expo-notifications fields:
+    // Newer expo-notifications fields (ignored on older SDKs)
     shouldShowBanner: true,
     shouldShowList: true,
   }),
 });
 
-
-async function scheduleDailyLocal(timeHHMM: string | undefined) {
+async function scheduleDailyLocal(timeHHMM?: string) {
   try {
     const [hh, mm] = String(timeHHMM || '09:00')
       .split(':')
@@ -27,8 +25,10 @@ async function scheduleDailyLocal(timeHHMM: string | undefined) {
     // Cancel previous schedules we manage
     const all = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of all) {
-      if (n.identifier?.startsWith?.('DebitLens_daily_')) {
-        await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      if ((n as any)?.identifier?.startsWith?.('DebitLens_daily_')) {
+        await Notifications.cancelScheduledNotificationAsync(
+          (n as any).identifier
+        );
       }
     }
 
@@ -53,11 +53,6 @@ async function scheduleDailyLocal(timeHHMM: string | undefined) {
 }
 
 const NotificationBootstrapper: React.FC = () => {
-  const { state } = useApp();
-
-  const enabled = !!state?.prefs?.notifications?.enabled;
-  const dailyTime = state?.prefs?.notifications?.dailyTime || '09:00';
-
   useEffect(() => {
     let mounted = true;
 
@@ -78,14 +73,15 @@ const NotificationBootstrapper: React.FC = () => {
           }
         }
 
-        if (!enabled || !mounted) return;
+        if (!mounted) return;
 
         // Ask for permission (idempotent)
-        const { status } =
-          await Notifications.requestPermissionsAsync();
+        const { status } = await Notifications.requestPermissionsAsync();
         if (status !== 'granted' || !mounted) return;
 
-        await scheduleDailyLocal(dailyTime);
+        // For now we just always schedule at a fixed time (09:00).
+        // Later we can read this from user prefs when that feature exists.
+        await scheduleDailyLocal('09:00');
       } catch (e) {
         console.warn('[notifications] bootstrap error', e);
       }
@@ -94,7 +90,7 @@ const NotificationBootstrapper: React.FC = () => {
     return () => {
       mounted = false;
     };
-  }, [enabled, dailyTime]);
+  }, []);
 
   return null;
 };

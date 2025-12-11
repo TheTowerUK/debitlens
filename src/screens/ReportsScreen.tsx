@@ -18,7 +18,6 @@ type PeriodKey = 'thisMonth' | 'lastMonth' | 'allTime';
 
 type ReportsNav = NativeStackNavigationProp<RootStackParamList, 'Reports'>;
 
-
 const ReportsScreen: React.FC = () => {
   const { state } = useApp();
   const txs: Transaction[] = state.transactions || [];
@@ -28,7 +27,6 @@ const ReportsScreen: React.FC = () => {
   const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
   const navigation = useNavigation<ReportsNav>();
 
-
   // Work out date boundaries for periods
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -36,47 +34,46 @@ const ReportsScreen: React.FC = () => {
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd = thisMonthStart;
 
-const filteredTxs = useMemo(() => {
-  return txs.filter((t) => {
-    if (!t.date) return false;
-    const d = new Date(t.date);
-    if (isNaN(d.getTime())) return false;
+  const filteredTxs = useMemo(() => {
+    return txs.filter((t) => {
+      if (!t.date) return false;
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) return false;
 
-    // Period filter
-    let inPeriod = false;
-    switch (period) {
-      case 'thisMonth':
-        inPeriod = d >= thisMonthStart && d < nextMonthStart;
-        break;
-      case 'lastMonth':
-        inPeriod = d >= lastMonthStart && d < lastMonthEnd;
-        break;
-      case 'allTime':
-      default:
-        inPeriod = true;
-        break;
-    }
-    if (!inPeriod) return false;
-
-    // Account filter
-    if (selectedAccountId !== 'all') {
-      if (!t.accountId || t.accountId !== selectedAccountId) {
-        return false;
+      // Period filter
+      let inPeriod = false;
+      switch (period) {
+        case 'thisMonth':
+          inPeriod = d >= thisMonthStart && d < nextMonthStart;
+          break;
+        case 'lastMonth':
+          inPeriod = d >= lastMonthStart && d < lastMonthEnd;
+          break;
+        case 'allTime':
+        default:
+          inPeriod = true;
+          break;
       }
-    }
+      if (!inPeriod) return false;
 
-    return true;
-  });
-}, [
-  txs,
-  period,
-  selectedAccountId,
-  thisMonthStart,
-  nextMonthStart,
-  lastMonthStart,
-  lastMonthEnd,
-]);
+      // Account filter
+      if (selectedAccountId !== 'all') {
+        if (!t.accountId || t.accountId !== selectedAccountId) {
+          return false;
+        }
+      }
 
+      return true;
+    });
+  }, [
+    txs,
+    period,
+    selectedAccountId,
+    thisMonthStart,
+    nextMonthStart,
+    lastMonthStart,
+    lastMonthEnd,
+  ]);
 
   // Summary totals
   const { totalIncome, totalExpense, net } = useMemo(() => {
@@ -158,54 +155,53 @@ const filteredTxs = useMemo(() => {
         />
       </View>
 
-        {/* Account selector */}
-        {accounts.length > 0 && (
-          <View style={styles.accountRow}>
-            <Pressable
+      {/* Account selector */}
+      {accounts.length > 0 && (
+        <View style={styles.accountRow}>
+          <Pressable
+            style={[
+              styles.chip,
+              selectedAccountId === 'all' && styles.chipActive,
+            ]}
+            onPress={() => setSelectedAccountId('all')}
+          >
+            <Text
               style={[
-                styles.chip,
-                selectedAccountId === 'all' && styles.chipActive,
+                styles.chipText,
+                selectedAccountId === 'all' && styles.chipTextActive,
               ]}
-              onPress={() => setSelectedAccountId('all')}
             >
-              <Text
+              All accounts
+            </Text>
+          </Pressable>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingLeft: 4 }}
+          >
+            {accounts.map((acc: any) => (
+              <Pressable
+                key={acc.id}
                 style={[
-                  styles.chipText,
-                  selectedAccountId === 'all' && styles.chipTextActive,
+                  styles.chip,
+                  selectedAccountId === acc.id && styles.chipActive,
                 ]}
+                onPress={() => setSelectedAccountId(acc.id)}
               >
-                All accounts
-              </Text>
-            </Pressable>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingLeft: 4 }}
-            >
-              {accounts.map((acc: any) => (
-                <Pressable
-                  key={acc.id}
+                <Text
                   style={[
-                    styles.chip,
-                    selectedAccountId === acc.id && styles.chipActive,
+                    styles.chipText,
+                    selectedAccountId === acc.id && styles.chipTextActive,
                   ]}
-                  onPress={() => setSelectedAccountId(acc.id)}
                 >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selectedAccountId === acc.id && styles.chipTextActive,
-                    ]}
-                  >
-                    {acc.name || 'Account'}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
+                  {acc.name || 'Account'}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Summary cards */}
       <View style={styles.summaryRow}>
@@ -247,28 +243,29 @@ const filteredTxs = useMemo(() => {
           </Text>
         </View>
       ) : (
-  <View style={styles.card}>
-    {categoryRows.map((row) => (
-      <Pressable
-        key={row.category}
-        style={styles.row}
-        onPress={() =>
-          navigation.navigate('ReportDetail', {
-            categoryKey: row.category,
-            period,
-          })
-        }
-      >
-        <View style={{ flex: 1 }}>
-          <Text style={styles.categoryLabel}>{row.category}</Text>
+        <View style={styles.card}>
+          {categoryRows.map((row) => (
+            <Pressable
+              key={row.category}
+              style={styles.row}
+              onPress={() =>
+                navigation.navigate('ReportDetail', {
+                  categoryKey: row.category,
+                  period,
+                })
+              }
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.categoryLabel}>{row.category}</Text>
+              </View>
+              <Text style={styles.amountText}>
+                £{row.amount.toFixed(2)}
+              </Text>
+            </Pressable>
+          ))}
         </View>
-        <Text style={styles.amountText}>
-          £{row.amount.toFixed(2)}
-        </Text>
-      </Pressable>
-    ))}
-  </View>
-)}
+      )}
+
       {/* Transactions list for this period */}
       <Text style={styles.sectionTitle}>Transactions in this period</Text>
       {filteredTxs.length === 0 ? (
@@ -291,7 +288,7 @@ const filteredTxs = useMemo(() => {
               const isIncome = t.type === 'income';
               const sign = isIncome ? '+' : '-';
               const label = t.category || 'Uncategorised';
-              const note = t.note || '';
+              const note = t.description || '';
               return (
                 <View key={t.id} style={styles.txRow}>
                   <View style={{ flex: 1 }}>
@@ -482,13 +479,12 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginLeft: 12,
   },
-    accountRow: {
+  accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
     columnGap: 8,
   },
-
 });
 
 export default ReportsScreen;

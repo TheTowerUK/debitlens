@@ -51,7 +51,7 @@ export default function AccountScreen({ navigation, route }: Props) {
     });
   };
 
-    const handleTransfer = () => {
+  const handleTransfer = () => {
     if (!account) return;
     navigation.navigate('Transfer', { fromAccountId: account.id });
   };
@@ -64,7 +64,9 @@ export default function AccountScreen({ navigation, route }: Props) {
     return (
       <View style={styles.wrap}>
         <Text style={styles.h1}>Account</Text>
-        <Text style={styles.subtle}>No accounts found. Add one from the Dashboard.</Text>
+        <Text style={styles.subtle}>
+          No accounts found. Add one from the Dashboard.
+        </Text>
       </View>
     );
   }
@@ -137,7 +139,8 @@ export default function AccountScreen({ navigation, route }: Props) {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
-            const note = item.note || '';
+            const note = item.description || ''; // <-- use description here
+
             return (
               <Pressable
                 style={styles.txRow}
@@ -252,7 +255,6 @@ const styles = StyleSheet.create({
   txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
 
   quickTransfer: {
-  backgroundColor: 'rgba(59, 130, 246, 0.2)', // soft blue
+    backgroundColor: 'rgba(59, 130, 246, 0.2)', // soft blue
   },
-
 });

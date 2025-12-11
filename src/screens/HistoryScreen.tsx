@@ -175,7 +175,7 @@ export default function HistoryScreen({ navigation }: Props) {
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Text style={styles.rowTitle}>
-                  {item.note || (isIncome ? 'Income' : 'Expense')}
+                  {item.description || (isIncome ? 'Income' : 'Expense')}
                 </Text>
                 <Text style={styles.rowSub}>
                   {accName}

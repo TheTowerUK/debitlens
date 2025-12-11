@@ -18,20 +18,18 @@ const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
   const { actions } = useApp();
 
   const [name, setName] = useState<string>('');
-  const [label, setLabel] = useState<string>('');
 
   const handleSave = () => {
     const trimmedName = name.trim();
-    const trimmedLabel = label.trim();
 
     if (!trimmedName) {
-      // you could use Alert here if you like
+      // You could use Alert here if you like
       return;
     }
 
+    // We only pass the fields that actually exist on Account.
     actions.addAccount({
       name: trimmedName,
-      label: trimmedLabel || trimmedName,
     });
 
     navigation.goBack();
@@ -47,14 +45,6 @@ const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
         value={name}
         onChangeText={setName}
         placeholder="e.g. Main Current Account"
-      />
-
-      <Text style={styles.label}>Label (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={label}
-        onChangeText={setLabel}
-        placeholder="Short label to show in lists"
       />
 
       <View style={styles.buttonRow}>
