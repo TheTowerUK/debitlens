@@ -21,6 +21,7 @@ import DataExportImportScreen from '../screens/DataExportImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
 
 export type RootStackParamList = {
+  Login: undefined;   // 👈 add this
   Dashboard: undefined;
   Account: { accountId?: string } | undefined;
   AddAccount: undefined;
@@ -41,8 +42,9 @@ export type RootStackParamList = {
   Settings: undefined;
   Reports: undefined;
   DataExportImport: undefined;
-  ImportCSV: undefined; // <-- add this
+  ImportCSV: undefined;
 };
+
 
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -51,7 +53,7 @@ const RootNavigator: React.FC = () => {
   // Keep the original workaround so TS is happy about the mysterious `id` prop
   const navigatorProps = {
     id: undefined as undefined,
-    initialRouteName: 'Login' as const,
+    initialRouteName: 'LoginScreen' as const,
     // We'll override `screenOptions` below via spread while keeping `id`
   };
 
