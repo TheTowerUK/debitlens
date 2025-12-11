@@ -46,7 +46,9 @@ export default function PaymentsScreen({ navigation }: Props) {
             <View style={styles.row}>
               <View style={{flex:1}}>
                 <Text style={styles.rowLabel}>{item.category || 'Uncategorised'}</Text>
-                {item.note ? <Text style={styles.rowNote}>{item.note}</Text> : null}
+                {item.description ? (
+                  <Text style={styles.rowNote}>{item.description}</Text>
+                ) : null}
                 {item.date ? <Text style={styles.rowMeta}>{item.date}</Text> : null}
               </View>
               <Text style={styles.rowAmount}>-£{Number(item.amount||0).toFixed(2)}</Text>
