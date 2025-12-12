@@ -15,7 +15,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -667,6 +667,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
           </View>
         ) : null}
 
+      {/* GLOBAL STATUS */}
+      {lastStatus ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusLabel}>Status</Text>
+          <Text style={styles.statusText}>{lastStatus}</Text>
+        </View>
+      ) : null}
         {lastImportSummary ? (
           <View style={styles.statusBox}>
             <Text style={styles.statusLabel}>Import summary</Text>
@@ -675,13 +682,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         ) : null}
       </View>
 
-      {/* GLOBAL STATUS */}
-      {lastStatus ? (
-        <View style={styles.statusBox}>
-          <Text style={styles.statusLabel}>Status</Text>
-          <Text style={styles.statusText}>{lastStatus}</Text>
-        </View>
-      ) : null}
     </ScrollView>
   );
 }
