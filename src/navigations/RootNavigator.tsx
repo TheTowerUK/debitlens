@@ -19,6 +19,7 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import DataExportImportScreen from '../screens/DataExportImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
+import LoginScreen from '../screens/LoginScreen';
 
 export type RootStackParamList = {
   Login: undefined;   // 👈 add this
@@ -53,15 +54,14 @@ const RootNavigator: React.FC = () => {
   // Keep the original workaround so TS is happy about the mysterious `id` prop
   const navigatorProps = {
     id: undefined as undefined,
-    initialRouteName: 'LoginScreen' as const,
-    // We'll override `screenOptions` below via spread while keeping `id`
+    initialRouteName: 'Login' as const,  // 👈 use the route name, not component name
   };
 
   return (
     <Stack.Navigator
       {...(navigatorProps as any)}
       screenOptions={({ navigation, route }) => ({
-        // Show header on all screens EXCEPT Dashboard
+        // Hide header on Dashboard; we'll also hide it on Login via per-screen options
         headerShown: route.name !== 'Dashboard',
 
         headerStyle: { backgroundColor: '#020617' },
@@ -85,6 +85,13 @@ const RootNavigator: React.FC = () => {
         },
       })}
     >
+      {/* Login first so it's the initial route */}
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{ headerShown: false }} // splash-style, full screen
+      />
+
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
 
       {/* Accounts */}
@@ -120,7 +127,7 @@ const RootNavigator: React.FC = () => {
         component={DataExportImportScreen}
         options={{ title: 'Export / Import' }}
       />
-      <Stack.Screen name="ImportCSV" component={ImportCsvScreen}/>
+      <Stack.Screen name="ImportCSV" component={ImportCsvScreen} />
     </Stack.Navigator>
   );
 };
