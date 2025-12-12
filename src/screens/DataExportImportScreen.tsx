@@ -335,184 +335,225 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   };
 
-  const handleApplyCsvImportPress = () => {
-    if (!importCsvText.trim()) {
-      setLastStatus('Paste CSV text or pick a file first.');
-      return;
-    }
+const handleApplyCsvImportPress = () => {
+  if (!importCsvText.trim()) {
+    setLastStatus('Paste CSV text or pick a file first.');
+    return;
+  }
 
-    Alert.alert(
-      'Confirm CSV import',
-      createMissingAccounts
-        ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
-        : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Import',
-          style: 'destructive',
-          onPress: () => {
-            try {
-              const rows = parseCsvLines(importCsvText);
-              if (!rows.length) {
-                setLastStatus('CSV parsed but contains no rows.');
-                return;
-              }
-
-              const [firstRow, ...restRows] = rows;
-              let dataRows = rows;
-              let headerRow: string[] | null = null;
-
-              if (csvHasHeaderRow) {
-                headerRow = firstRow;
-                dataRows = restRows;
-              }
-
-              let dateCol = 0;
-              let typeCol = 1;
-              let amountCol = 2;
-              let accountCol = 3;
-              let descriptionCol = 4;
-
-              if (headerRow) {
-                const headerLower = headerRow.map((h) => h.toLowerCase());
-                const findIndex = (names: string[]) =>
-                  headerLower.findIndex((h) => names.includes(h));
-
-                const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
-                const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
-                const amountIdx = findIndex(['amount', 'value']);
-                const accIdx = findIndex(['account', 'account_name', 'account name']);
-                const descIdx = findIndex(['description', 'desc', 'details', 'note']);
-
-                if (dateIdx >= 0) dateCol = dateIdx;
-                if (typeIdx >= 0) typeCol = typeIdx;
-                if (amountIdx >= 0) amountCol = amountIdx;
-                if (accIdx >= 0) accountCol = accIdx;
-                if (descIdx >= 0) descriptionCol = descIdx;
-              }
-
-              let importedCount = 0;
-              let skippedUnknownAccount = 0;
-              let skippedBadAmount = 0;
-              let skippedMissingAccountName = 0;
-              let createdAccountsCount = 0;
-              let skippedCouldNotCreateAccount = 0;
-
-              // Local map so multiple rows for the same new account share a single created account
-              const createdAccountByName: Record<string, Account> = {};
-
-              for (const row of dataRows) {
-                if (!row.length) continue;
-
-                const dateStr = row[dateCol] ?? '';
-                const typeStr = (row[typeCol] ?? '').toLowerCase();
-                const amountRaw = row[amountCol] ?? '';
-                const accountName = (row[accountCol] ?? '').trim();
-                const description = row[descriptionCol] ?? '';
-
-                if (!accountName) {
-                  skippedMissingAccountName++;
-                  continue;
-                }
-
-                // Check if we already have this account (existing or already created in this import)
-                let accountForRow: Account | undefined = accounts.find(
-                  (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
-                );
-
-                if (!accountForRow && createdAccountByName[accountName]) {
-                  accountForRow = createdAccountByName[accountName];
-                }
-
-                // Not found anywhere
-                if (!accountForRow) {
-                  if (!createMissingAccounts) {
-                    // User chose not to create new accounts
-                    skippedUnknownAccount++;
-                    continue;
-                  }
-
-                  // Create a new account
-                  let newAccount: Account | undefined;
-                  try {
-                    newAccount = actions.addAccount({
-                      name: accountName,
-                    }) as Account | undefined;
-                  } catch (err) {
-                    console.error('Error creating account from CSV row', err);
-                  }
-
-                  if (!newAccount || !newAccount.id) {
-                    // If addAccount doesn't return anything useful, we can't link transactions.
-                    skippedCouldNotCreateAccount++;
-                    continue;
-                  }
-
-                  createdAccountsCount++;
-                  createdAccountByName[accountName] = newAccount;
-                  accountForRow = newAccount;
-                }
-
-                // At this point we should have an account
-                const amountNum = Number(String(amountRaw).replace(/,/g, ''));
-                if (!isFinite(amountNum) || isNaN(amountNum)) {
-                  skippedBadAmount++;
-                  continue;
-                }
-
-                // Normalise type if present
-                let normalisedType: 'income' | 'expense' | string = typeStr;
-                if (typeStr === 'credit' || typeStr === 'income' || typeStr === 'in') {
-                  normalisedType = 'income';
-                } else if (
-                  typeStr === 'debit' ||
-                  typeStr === 'expense' ||
-                  typeStr === 'out'
-                ) {
-                  normalisedType = 'expense';
-                }
-
-                actions.addTransaction({
-                  accountId: accountForRow.id,
-                  amount: amountNum,
-                  type: normalisedType,
-                  date: dateStr || new Date().toISOString().slice(0, 10),
-                  description,
-                } as Transaction);
-
-                importedCount++;
-              }
-
-              const summaryLines: string[] = [];
-              summaryLines.push(`Imported transactions: ${importedCount}`);
-              summaryLines.push(
-                `New accounts created from CSV: ${createdAccountsCount}`
-              );
-              summaryLines.push(
-                `Skipped rows with unknown account (when account creation disabled): ${skippedUnknownAccount}`
-              );
-              summaryLines.push(`Skipped rows with invalid amount: ${skippedBadAmount}`);
-              summaryLines.push(
-                `Skipped rows missing account name: ${skippedMissingAccountName}`
-              );
-              summaryLines.push(
-                `Rows where account creation failed (no usable ID): ${skippedCouldNotCreateAccount}`
-              );
-
-              const summary = summaryLines.join('\n');
-              setLastImportSummary(summary);
-              setLastStatus('CSV import completed. See summary below.');
-            } catch (err: any) {
-              console.error(err);
-              Alert.alert('Import error', 'Something went wrong during CSV import.');
-              setLastStatus(`Import error: ${String(err?.message ?? err)}`);
+  Alert.alert(
+    'Confirm CSV import',
+    createMissingAccounts
+      ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
+      : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Import',
+        style: 'destructive',
+        onPress: () => {
+          try {
+            const rows = parseCsvLines(importCsvText);
+            if (!rows.length) {
+              setLastStatus('CSV parsed but contains no rows.');
+              return;
             }
-          },
+
+            const [firstRow, ...restRows] = rows;
+            let dataRows = rows;
+            let headerRow: string[] | null = null;
+
+            if (csvHasHeaderRow) {
+              headerRow = firstRow;
+              dataRows = restRows;
+            }
+
+            // Default column positions if no header
+            let dateCol = 0;
+            let typeCol = 1;
+            let amountCol = 2;
+            let accountCol = 3;
+            let descriptionCol = 4;
+
+            if (headerRow) {
+              const headerLower = headerRow.map((h) => h.toLowerCase());
+              const findIndex = (names: string[]) =>
+                headerLower.findIndex((h) => names.includes(h));
+
+              const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
+              const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
+              const amountIdx = findIndex(['amount', 'value']);
+              const accIdx = findIndex(['account', 'account_name', 'account name']);
+              const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+
+              if (dateIdx >= 0) dateCol = dateIdx;
+              if (typeIdx >= 0) typeCol = typeIdx;
+              if (amountIdx >= 0) amountCol = amountIdx;
+              if (accIdx >= 0) accountCol = accIdx;
+              if (descIdx >= 0) descriptionCol = descIdx;
+            }
+
+            let importedCount = 0;
+            let skippedUnknownAccount = 0;
+            let skippedBadAmount = 0;
+            let skippedMissingAccountName = 0;
+            let createdAccountsCount = 0;
+            let skippedCouldNotCreateAccount = 0;
+
+            // Local map so multiple rows for the same new account share a single created account
+            const createdAccountByName: Record<string, Account> = {};
+
+            for (const row of dataRows) {
+              if (!row.length) continue;
+
+              const dateStr = row[dateCol] ?? '';
+              const typeStr = (row[typeCol] ?? '').toLowerCase();
+              const amountRaw = row[amountCol] ?? '';
+              const accountName = (row[accountCol] ?? '').trim();
+              const description = row[descriptionCol] ?? '';
+
+              if (!accountName) {
+                skippedMissingAccountName++;
+                continue;
+              }
+
+              // Check if we already have this account (existing or already created in this import)
+              let accountForRow: Account | undefined = accounts.find(
+                (a) =>
+                  a && typeof a.name === 'string' && a.name.trim() === accountName
+              );
+
+              if (!accountForRow && createdAccountByName[accountName]) {
+                accountForRow = createdAccountByName[accountName];
+              }
+
+              // Not found anywhere
+              if (!accountForRow) {
+                if (!createMissingAccounts) {
+                  // User chose not to create new accounts
+                  skippedUnknownAccount++;
+                  continue;
+                }
+
+                // Create a new account
+                let newAccount: Account | undefined;
+                try {
+                  newAccount = actions.addAccount({
+                    name: accountName,
+                  }) as Account | undefined;
+                } catch (err) {
+                  console.error('Error creating account from CSV row', err);
+                }
+
+                if (!newAccount || !newAccount.id) {
+                  // If addAccount doesn't return anything useful, we can't link transactions.
+                  skippedCouldNotCreateAccount++;
+                  continue;
+                }
+
+                createdAccountsCount++;
+                createdAccountByName[accountName] = newAccount;
+                accountForRow = newAccount;
+              }
+
+              // At this point we should have an account
+              const amountNum = Number(String(amountRaw).replace(/,/g, ''));
+              if (!isFinite(amountNum) || isNaN(amountNum)) {
+                skippedBadAmount++;
+                continue;
+              }
+
+              // --- New: normalise amount + infer type from sign ---
+
+              // Normalise type from the CSV "type" column if present (fallback only)
+              let csvType: 'income' | 'expense' | null = null;
+              const typeLower = (typeStr || '').toLowerCase();
+
+              if (
+                typeLower === 'credit' ||
+                typeLower === 'income' ||
+                typeLower === 'in'
+              ) {
+                csvType = 'income';
+              } else if (
+                typeLower === 'debit' ||
+                typeLower === 'expense' ||
+                typeLower === 'out'
+              ) {
+                csvType = 'expense';
+              }
+
+              // amountNum is whatever you parsed from the CSV, may be negative
+              const rawAmount = amountNum;
+
+              // Guard: skip if not a valid number
+              if (rawAmount == null || isNaN(rawAmount)) {
+                skippedBadAmount++;
+                continue;
+              }
+
+              // Always store a positive amount internally
+              const amount = Math.abs(rawAmount);
+
+              // Decide final type:
+              //  - If CSV amount is negative  -> expense
+              //  - If CSV amount is positive  -> income
+              //  - If it's exactly 0          -> fall back to CSV type (or default expense)
+              let finalType: 'income' | 'expense';
+              if (rawAmount < 0) {
+                finalType = 'expense';
+              } else if (rawAmount > 0) {
+                finalType = 'income';
+              } else {
+                finalType = csvType ?? 'expense';
+              }
+
+              actions.addTransaction({
+                accountId: accountForRow.id,
+                amount,
+                type: finalType,
+                date: dateStr || new Date().toISOString().slice(0, 10),
+                description,
+              } as Transaction);
+
+              importedCount++;
+            } // <-- end for (const row of dataRows)
+
+            const summaryLines: string[] = [];
+            summaryLines.push(`Imported transactions: ${importedCount}`);
+            summaryLines.push(
+              `New accounts created from CSV: ${createdAccountsCount}`
+            );
+            summaryLines.push(
+              `Skipped rows with unknown account (when account creation disabled): ${skippedUnknownAccount}`
+            );
+            summaryLines.push(
+              `Skipped rows with invalid amount: ${skippedBadAmount}`
+            );
+            summaryLines.push(
+              `Skipped rows missing account name: ${skippedMissingAccountName}`
+            );
+            summaryLines.push(
+              `Rows where account creation failed (no usable ID): ${skippedCouldNotCreateAccount}`
+            );
+
+            const summary = summaryLines.join('\n');
+            setLastImportSummary(summary);
+            setLastStatus('CSV import completed. See summary below.');
+          } catch (err: any) {
+            console.error(err);
+            Alert.alert(
+              'Import error',
+              'Something went wrong during CSV import.'
+            );
+            setLastStatus(`Import error: ${String(err?.message ?? err)}`);
+          }
         },
-      ]
-    );
-  };
+      },
+    ]
+  );
+};
+
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
