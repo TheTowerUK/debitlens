@@ -19,14 +19,14 @@ import SettingsScreen from '../screens/SettingsScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import DataExportImportScreen from '../screens/DataExportImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
-import LoginScreen from '../screens/LoginScreen';
+import SplashAuthScreen from '../screens/SplashAuthScreen';
 
 export type RootStackParamList = {
-  Login: undefined;   // 👈 add this
+  Login: undefined;
   Dashboard: undefined;
   Account: { accountId?: string } | undefined;
   AddAccount: undefined;
-  Transfer: undefined;
+  Transfer: { fromAccountId?: string } | undefined;
   RecentActivity: undefined;
   TxnEditor:
     | {
@@ -46,31 +46,33 @@ export type RootStackParamList = {
   ImportCSV: undefined;
 };
 
-
-
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => {
-  // Keep the original workaround so TS is happy about the mysterious `id` prop
+  // 👇 workaround so TS is happy about `id`
   const navigatorProps = {
     id: undefined as undefined,
-    initialRouteName: 'Login' as const,  // 👈 use the route name, not component name
+    initialRouteName: 'Login' as const,
   };
 
   return (
     <Stack.Navigator
       {...(navigatorProps as any)}
       screenOptions={({ navigation, route }) => ({
-        // Hide header on Dashboard; we'll also hide it on Login via per-screen options
+        // Hide header on Dashboard to keep it "full bleed"
         headerShown: route.name !== 'Dashboard',
 
         headerStyle: { backgroundColor: '#020617' },
         headerTintColor: '#F9FAFB',
         headerTitleStyle: { fontWeight: '700' },
+        headerBackTitleVisible: false,
 
-        // Global "Dashboard" button on non-dashboard screens
+        // Global Dashboard button on the right,
+        // but NOT on Dashboard itself or Login screen
         headerRight: () => {
-          if (route.name === 'Dashboard') return null;
+          if (route.name === 'Dashboard' || route.name === 'Login') {
+            return null;
+          }
 
           return (
             <Pressable
@@ -85,13 +87,14 @@ const RootNavigator: React.FC = () => {
         },
       })}
     >
-      {/* Login first so it's the initial route */}
+      {/* Auth / splash */}
       <Stack.Screen
         name="Login"
-        component={LoginScreen}
-        options={{ headerShown: false }} // splash-style, full screen
+        component={SplashAuthScreen}
+        options={{ title: 'Welcome' }}
       />
 
+      {/* Main */}
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
 
       {/* Accounts */}
