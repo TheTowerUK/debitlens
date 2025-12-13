@@ -192,6 +192,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>('');
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
+  const [importSource, setImportSource] = useState<'manual' | 'file' | null>(null);
 
   const knownAccountNames = useMemo(
     () =>
@@ -224,11 +225,15 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      // Use "as any" so TS stops complaining about missing readAsStringAsync / EncodingType
       const fs: any = FileSystem;
       const fileContents = await fs.readAsStringAsync(asset.uri);
 
       setImportCsvText(fileContents);
+      setImportSource('file');              // 👈 mark as file-imported
+      setCsvPreview('');                    // optional: clear old preview
+      setCsvPreviewSourceName('');
+      setLastImportSummary('');
+
       setLastStatus(
         `Loaded CSV from file: ${asset.name ?? 'selected file'}. You can now preview or import it.`
       );
@@ -238,6 +243,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setLastStatus(`File error: ${String(err?.message ?? err)}`);
     }
   };
+
 
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
@@ -670,12 +676,17 @@ const handleApplyCsvImportPress = () => {
           style={[styles.input, styles.inputMultiline]}
           multiline
           value={importCsvText}
-          onChangeText={setImportCsvText}
+          onChangeText={(text) => {
+            setImportCsvText(text);
+            setImportSource('manual');       // 👈 user is editing manually
+          }}
           placeholder="Paste CSV text…"
           textAlignVertical="top"
           autoCapitalize="none"
           autoCorrect={false}
+          editable={importSource !== 'file'} // 👈 lock if it came from file
         />
+
 
         <View style={styles.rowButtons}>
           <Pressable style={styles.btnSecondary} onPress={handleParseCsvPress}>
