@@ -1,6 +1,5 @@
 // src/navigation/RootNavigator.tsx
 import React from 'react';
-import { Text, Pressable } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Screens
@@ -49,7 +48,7 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => {
-  // 👇 workaround so TS is happy about `id`
+  // TS workaround for `id`
   const navigatorProps = {
     id: undefined as undefined,
     initialRouteName: 'Login' as const,
@@ -58,33 +57,15 @@ const RootNavigator: React.FC = () => {
   return (
     <Stack.Navigator
       {...(navigatorProps as any)}
-      screenOptions={({ navigation, route }) => ({
-        // Hide header on Dashboard to keep it "full bleed"
+      screenOptions={({ route }) => ({
+        // Hide header on Dashboard
         headerShown: route.name !== 'Dashboard',
 
         headerStyle: { backgroundColor: '#020617' },
         headerTintColor: '#F9FAFB',
         headerTitleStyle: { fontWeight: '700' },
         headerBackTitleVisible: false,
-
-        // Global Dashboard button on the right,
-        // but NOT on Dashboard itself or Login screen
-        headerRight: () => {
-          if (route.name === 'Dashboard' || route.name === 'Login') {
-            return null;
-          }
-
-          return (
-            <Pressable
-              onPress={() => navigation.navigate('Dashboard')}
-              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-            >
-              <Text style={{ color: '#93C5FD', fontSize: 14 }}>
-                Dashboard
-              </Text>
-            </Pressable>
-          );
-        },
+        // 👇 No headerRight here – we rely on the normal back button
       })}
     >
       {/* Auth / splash */}
