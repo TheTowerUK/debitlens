@@ -687,23 +687,23 @@ const handleApplyCsvImportPress = () => {
           </Pressable>
         </View>
 
+        {/* CSV PREVIEW (read-only) */}
         {csvPreview ? (
-          <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>CSV preview</Text>
-            <ScrollView style={styles.textBoxScroll}>
-              <Text selectable style={styles.monoText}>
+          <View style={styles.previewBox}>
+            <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
+
+            {csvPreviewSourceName ? (
+              <Text style={styles.previewMeta}>{csvPreviewSourceName}</Text>
+            ) : null}
+
+            <View style={styles.previewScroll}>
+              <Text selectable style={styles.previewText}>
                 {csvPreview}
               </Text>
-            </ScrollView>
+            </View>
           </View>
         ) : null}
 
-        {csvPreviewSourceName ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusLabel}>CSV analysis</Text>
-            <Text style={styles.statusText}>{csvPreviewSourceName}</Text>
-          </View>
-        ) : null}
 
       {/* GLOBAL STATUS */}
       {lastStatus ? (
@@ -893,4 +893,27 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#E5E7EB',
   },
+  previewBox: {
+    marginTop: 16,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#020617',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  previewMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  previewScroll: {
+    maxHeight: 200,
+  },
+  previewText: {
+    color: '#E5E7EB',
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+    fontSize: 12,
+  },
 });
+
