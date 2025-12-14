@@ -17,7 +17,7 @@ import { useApp } from '../state/AppContext';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 /**
  * Very loose shapes because different parts of the app may evolve over time.
@@ -559,7 +559,21 @@ const handleApplyCsvImportPress = () => {
 
 
   return (
-    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+  <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+    {/* Header row with title + Settings pill */}
+    <View style={styles.headerRow}>
+      <View>
+        <Text style={styles.h1}>Dashboard</Text>
+        <Text style={styles.subtle}>Overview of your accounts and activity</Text>
+      </View>
+
+      <Pressable
+        style={styles.settingsPill}
+        onPress={() => navigation.navigate('Settings')}
+      >
+        <Text style={styles.settingsPillText}>Settings</Text>
+      </Pressable>
+    </View>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
         Export your data as JSON/CSV, or import transactions from a CSV file. You
@@ -926,5 +940,26 @@ const styles = StyleSheet.create({
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
     fontSize: 12,
   },
+    headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  settingsPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#020617',
+    alignSelf: 'flex-start',
+  },
+  settingsPillText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
 });
 
