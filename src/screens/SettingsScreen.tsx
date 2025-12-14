@@ -89,6 +89,21 @@ export default function SettingsScreen({ navigation }: Props) {
         >
           <Text style={styles.btnText}>Sign out</Text>
         </Pressable>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Security</Text>
+
+          <Pressable
+            style={[styles.btn, styles.btnDanger]}
+            onPress={() => {
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
+            }}
+          >
+            <Text style={styles.btnText}>Sign out</Text>
+          </Pressable>
+        </View>
 
       </View>
     </View>
