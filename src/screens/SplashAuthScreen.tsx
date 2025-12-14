@@ -11,31 +11,19 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import * as SecureStore from 'expo-secure-store';
+import { useApp } from '../state/AppContext';
 
 // Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-const PIN_KEY = 'base44_app_pin';
-
-// Local helpers for PIN storage
-async function getStoredPin(): Promise<string | null> {
-  try {
-    return await SecureStore.getItemAsync(PIN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-async function setStoredPin(pin: string): Promise<void> {
-  await SecureStore.setItemAsync(PIN_KEY, pin);
-}
-
 export default function SplashAuthScreen({ navigation }: Props) {
+  const { getPin, setPin } = useApp();
+
   // Use simple string modes: 'loading' | 'sign' | 'pin'
   const [mode, setMode] = useState<string>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [pinError, setPinError] = useState(''); // 👈 inline error text
 
   // Decide whether to show "Sign in" or "Create PIN"
   useEffect(() => {
@@ -43,7 +31,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
     (async () => {
       try {
-        const stored = await getStoredPin();
+        const stored = await getPin();
         if (!mounted) return;
         setMode(stored ? 'sign' : 'pin');
       } catch {
@@ -55,17 +43,21 @@ export default function SplashAuthScreen({ navigation }: Props) {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [getPin]);
 
   const onSignIn = async () => {
     try {
-      const stored = (await getStoredPin())?.trim();
+      const stored = await getPin();
       const entered = pin.trim();
 
-      if (stored && stored === entered) {
+      if (stored && stored.trim() === entered) {
+        setPinError(''); // clear error on success
         navigation.replace('Dashboard');
       } else {
-        Alert.alert('Incorrect PIN', 'Please try again.');
+        // Optional: keep the Alert if you like, or remove it
+        // Alert.alert('Incorrect PIN', 'Please try again.');
+
+        setPinError('Incorrect PIN. Please try again.'); // 👈 show pill
         setPinInput('');
       }
     } catch {
@@ -85,7 +77,8 @@ export default function SplashAuthScreen({ navigation }: Props) {
     }
 
     try {
-      await setStoredPin(p1);
+      await setPin(p1);
+      setPinError('');
       navigation.replace('Dashboard');
     } catch {
       Alert.alert('Error', 'Unable to save PIN right now.');
@@ -116,7 +109,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
         <>
           <TextInput
             value={pin}
-            onChangeText={setPinInput}
+            onChangeText={(value) => {
+              setPinInput(value);
+              if (pinError) setPinError(''); // clear error on change
+            }}
             placeholder="PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
             secureTextEntry
@@ -124,8 +120,15 @@ export default function SplashAuthScreen({ navigation }: Props) {
             style={styles.input}
           />
 
+          {/* Inline error pill */}
+          {pinError ? (
+            <View style={styles.errorPill}>
+              <Text style={styles.errorText}>{pinError}</Text>
+            </View>
+          ) : null}
+
           <Pressable
-            style={styles.primary}
+            style={[styles.primary, !isValidPin && { opacity: 0.5 }]}
             onPress={onSignIn}
             disabled={!isValidPin}
           >
@@ -136,6 +139,8 @@ export default function SplashAuthScreen({ navigation }: Props) {
             style={[styles.ghost, { marginTop: 8 }]}
             onPress={() => {
               setPinInput('');
+              setConfirm('');
+              setPinError('');
               setMode('pin');
             }}
           >
@@ -144,7 +149,11 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
           <Pressable
             style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => navigation.replace('Dashboard')}
+            onPress={() => {
+              setPinInput('');
+              setPinError('');
+              navigation.replace('Dashboard');
+            }}
           >
             <Text style={styles.ghostText}>Continue without PIN</Text>
           </Pressable>
@@ -153,7 +162,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
         <>
           <TextInput
             value={pin}
-            onChangeText={setPinInput}
+            onChangeText={(value) => {
+              setPinInput(value);
+              if (pinError) setPinError('');
+            }}
             placeholder="New PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
             secureTextEntry
@@ -171,7 +183,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
           />
 
           <Pressable
-            style={styles.primary}
+            style={[styles.primary, (!isValidPin || !confirm.trim()) && { opacity: 0.5 }]}
             onPress={onSavePin}
             disabled={!isValidPin || confirm.trim().length === 0}
           >
@@ -183,6 +195,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
             onPress={() => {
               setPinInput('');
               setConfirm('');
+              setPinError('');
               setMode('sign');
             }}
           >
@@ -191,7 +204,12 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
           <Pressable
             style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => navigation.replace('Dashboard')}
+            onPress={() => {
+              setPinInput('');
+              setConfirm('');
+              setPinError('');
+              navigation.replace('Dashboard');
+            }}
           >
             <Text style={styles.ghostText}>Continue without PIN</Text>
           </Pressable>
@@ -252,5 +270,19 @@ const styles = StyleSheet.create({
   ghostText: {
     color: '#E5E7EB',
     fontWeight: '700',
+  },
+  // 👇 New styles for error pill
+  errorPill: {
+    backgroundColor: '#7F1D1D',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#FEE2E2',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

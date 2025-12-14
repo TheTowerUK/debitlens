@@ -57,22 +57,22 @@ const RootNavigator: React.FC = () => {
   return (
     <Stack.Navigator
       {...(navigatorProps as any)}
-      screenOptions={({ route }) => ({
-        // Hide header on Dashboard
-        headerShown: route.name !== 'Dashboard',
+    screenOptions={({ route }) => ({
+      // Hide header on Dashboard and Login
+      headerShown: route.name !== 'Dashboard' && route.name !== 'Login',
 
-        headerStyle: { backgroundColor: '#020617' },
-        headerTintColor: '#F9FAFB',
-        headerTitleStyle: { fontWeight: '700' },
-        headerBackTitleVisible: false,
-        // 👇 No headerRight here – we rely on the normal back button
-      })}
+      headerStyle: { backgroundColor: '#020617' },
+      headerTintColor: '#F9FAFB',
+      headerTitleStyle: { fontWeight: '700' },
+      headerBackTitleVisible: false,
+    })}
+
     >
       {/* Auth / splash */}
       <Stack.Screen
         name="Login"
         component={SplashAuthScreen}
-        options={{ title: 'Welcome' }}
+        options={{ headerShown: false }} // this also works, and overrides screenOptions
       />
 
       {/* Main */}
