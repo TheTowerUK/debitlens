@@ -1,387 +1,194 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
+  StyleSheet,
   Pressable,
   Platform,
 } from 'react-native';
-import { useApp, type Transaction } from '../state/AppContext';
+import { useApp } from '../state/AppContext';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 
-type Props = {
-  navigation: any;
-};
+type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
-const DashboardScreen: React.FC<Props> = ({ navigation }) => {
+export default function DashboardScreen({ navigation }: Props) {
   const { state } = useApp();
-  const accounts = state.accounts ?? [];
-  const transactions: Transaction[] = state.transactions ?? [];
-
-  // Build a balance map per account from transactions (income +, expense -)
-  const { accountBalances, totalBalance } = useMemo(() => {
-    const balances = new Map<string, number>();
-
-    transactions.forEach((t) => {
-      if (!t.accountId) return;
-      const amount = Number(t.amount) || 0;
-      const delta = t.type === 'income' ? amount : -amount;
-      balances.set(t.accountId, (balances.get(t.accountId) || 0) + delta);
-    });
-
-    const total = Array.from(balances.values()).reduce(
-      (sum, b) => sum + b,
-      0
-    );
-
-    return { accountBalances: balances, totalBalance: total };
-  }, [transactions]);
-
-  // Recent transactions (last 5 by date desc)
-  const recentTxs = useMemo(() => {
-    return transactions
-      .slice()
-      .sort((a, b) => {
-        const da = a.date ? Date.parse(a.date) : 0;
-        const db = b.date ? Date.parse(b.date) : 0;
-        return db - da;
-      })
-      .slice(0, 5);
-  }, [transactions]);
+  const accounts = state.accounts || [];
+  const txs = state.transactions || [];
 
   return (
-    <ScrollView
-      style={styles.wrap}
-      contentContainerStyle={{ paddingBottom: 32 }}
-    >
-      {/* Header */}
-      <Text style={styles.h1}>Dashboard</Text>
-      <Text style={styles.subtle}>
-        Overview of your accounts, spending, and upcoming activity.
-      </Text>
-
-      {/* Balance summary */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Total balance</Text>
-        <Text style={styles.balanceValue}>
-          £{totalBalance.toFixed(2)}
-        </Text>
-        <Text style={styles.cardSubtitle}>
-          Across {accounts.length} account
-          {accounts.length === 1 ? '' : 's'}
-        </Text>
-      </View>
-
-      {/* Accounts strip */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Accounts</Text>
-        {accounts.length > 0 && (
-          <Pressable onPress={() => navigation.navigate('RecentActivity')}>
-            <Text style={styles.linkText}>View activity</Text>
-          </Pressable>
-        )}
-      </View>
-
-      {accounts.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No accounts yet</Text>
-          <Text style={styles.emptyText}>
-            Add an account to start tracking balances and activity.
+    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+      {/* ---------- Header with SETTINGS pill ---------- */}
+      <View style={styles.headerRow}>
+        <View>
+          <Text style={styles.h1}>Dashboard</Text>
+          <Text style={styles.subtle}>
+            Overview of your accounts & activity
           </Text>
         </View>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.accountRow}
-        >
-          {accounts.map((acc: any) => {
-            const bal = accountBalances.get(acc.id) || 0;
-            return (
-              <Pressable
-                key={acc.id}
-                style={styles.accountCard}
-                onPress={() =>
-                  navigation.navigate('Account', { accountId: acc.id })
-                }
-              >
-                <Text style={styles.accountName}>
-                  {acc.name || 'Account'}
-                </Text>
-                <Text
-                  style={[
-                    styles.accountBalance,
-                    bal >= 0 ? styles.incomeText : styles.expenseText,
-                  ]}
-                >
-                  £{bal.toFixed(2)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      )}
 
-      {/* Quick navigation buttons */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Quick actions</Text>
-      </View>
-
-      <View style={styles.buttonGrid}>
-        <DashboardButton
-          label="Add account"
-          onPress={() => navigation.navigate('AddAccount')}
-        />
-        <DashboardButton
-          label="Add transaction"
-          onPress={() => navigation.navigate('TxnEditor')}
-        />
-        <DashboardButton
-          label="Payments"
-          onPress={() => navigation.navigate('Payments')}
-        />
-        <DashboardButton
-          label="Recurring"
-          onPress={() => navigation.navigate('Recurring')}
-        />
-        <DashboardButton
-          label="Budgets"
-          onPress={() => navigation.navigate('Budgets')}
-        />
-        <DashboardButton
-          label="Reports"
-          onPress={() => navigation.navigate('Reports')}
-        />
-        <DashboardButton
-          label="Export / Import"
-          onPress={() => navigation.navigate('DataExportImport')}
-        />
-      </View>
-
-      {/* Recent activity */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Recent activity</Text>
         <Pressable
-          onPress={() => navigation.navigate('RecentActivity')}
+          style={styles.settingsPill}
+          onPress={() => navigation.navigate('Settings')}
         >
-          <Text style={styles.linkText}>View all</Text>
+          <Text style={styles.settingsPillText}>Settings</Text>
         </Pressable>
       </View>
 
-      {recentTxs.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No recent transactions</Text>
-          <Text style={styles.emptyText}>
-            Add a transaction to start building your history.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          {recentTxs.map((t) => {
-            const isIncome = t.type === 'income';
-            const sign = isIncome ? '+' : '-';
-            const amount = Number(t.amount) || 0;
-            const label = t.category || 'Uncategorised';
-            const note = t.description || '';
-            const dateLabel = t.date
-              ? new Date(t.date).toLocaleDateString()
-              : '';
+      {/* ---------- Accounts Summary ---------- */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Accounts</Text>
+        <Text style={styles.cardValue}>{accounts.length}</Text>
 
-            return (
-              <View key={t.id} style={styles.txRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.txLabel}>{label}</Text>
-                  {note ? (
-                    <Text style={styles.txNote}>{note}</Text>
-                  ) : null}
-                  {dateLabel ? (
-                    <Text style={styles.txMeta}>{dateLabel}</Text>
-                  ) : null}
-                </View>
-                <Text
-                  style={[
-                    styles.txAmount,
-                    isIncome ? styles.incomeText : styles.expenseText,
-                  ]}
-                >
-                  {sign}£{amount.toFixed(2)}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('AddAccount')}
+        >
+          <Text style={styles.cardBtnText}>Add Account</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('Payments')}
+        >
+          <Text style={styles.cardBtnText}>View Payments</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('RecentActivity')}
+        >
+          <Text style={styles.cardBtnText}>Recent Activity</Text>
+        </Pressable>
+      </View>
+
+      {/* ---------- Recurring ---------- */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Recurring Payments</Text>
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('Recurring')}
+        >
+          <Text style={styles.cardBtnText}>Manage Recurring</Text>
+        </Pressable>
+      </View>
+
+      {/* ---------- Budget ---------- */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Budgets</Text>
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('Budgets')}
+        >
+          <Text style={styles.cardBtnText}>Budget Overview</Text>
+        </Pressable>
+      </View>
+
+      {/* ---------- Reports ---------- */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Reports</Text>
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('Reports')}
+        >
+          <Text style={styles.cardBtnText}>View Reports</Text>
+        </Pressable>
+      </View>
+
+      {/* ---------- Notifications ---------- */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Notifications</Text>
+        <Pressable
+          style={styles.cardBtn}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Text style={styles.cardBtnText}>Open Notifications</Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
-};
-
-type DashboardButtonProps = {
-  label: string;
-  onPress: () => void;
-};
-
-const DashboardButton: React.FC<DashboardButtonProps> = ({
-  label,
-  onPress,
-}) => (
-  <Pressable style={styles.actionButton} onPress={onPress}>
-    <Text style={styles.actionButtonText}>{label}</Text>
-  </Pressable>
-);
+}
 
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    backgroundColor: '#050816',
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+
+  // HEADER
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   h1: {
-    color: '#ffffff',
-    fontSize: 24,
+    color: '#fff',
+    fontSize: 26,
     fontWeight: '800',
-    marginBottom: 4,
   },
   subtle: {
     color: '#9CA3AF',
-    marginBottom: 16,
-  },
-  card: {
-    backgroundColor: '#020617',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    padding: 14,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    color: '#F9FAFB',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  cardSubtitle: {
-    color: '#9CA3AF',
-    fontSize: 12,
     marginTop: 4,
   },
-  balanceValue: {
-    color: '#F9FAFB',
-    fontSize: 28,
-    fontWeight: '800',
-    marginTop: 8,
-  },
-  sectionHeader: {
-    marginTop: 8,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  linkText: {
-    color: '#93C5FD',
-    fontSize: 13,
-  },
-  // Accounts strip
-  accountRow: {
-    paddingVertical: 4,
-  },
-  accountCard: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginRight: 8,
-    minWidth: 140,
-  },
-  accountName: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  accountBalance: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
 
-  // Quick actions
-  buttonGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    columnGap: 8,
-    rowGap: 8,
-    marginBottom: 16,
-  },
-  actionButton: {
-    flexBasis: '48%',
-    paddingVertical: 12,
+  // SETTINGS PILL
+  settingsPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#2563EB',
-    backgroundColor: '#020617',
-    alignItems: 'center',
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
   },
-  actionButtonText: {
-    color: '#BFDBFE',
+  settingsPillText: {
+    color: '#E5E7EB',
+    fontSize: 13,
     fontWeight: '600',
-    fontSize: 14,
   },
 
-  // Empty / recent tx
-  emptyBox: {
-    marginTop: 4,
-    marginBottom: 12,
+  // CARDS
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
     padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
   },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
+  cardTitle: {
+    color: '#fff',
+    fontSize: 18,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 14,
-  },
-  txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#111827',
-  },
-  txLabel: {
-    color: '#F9FAFB',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  txNote: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  txMeta: {
-    color: '#6B7280',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  txAmount: {
-    fontSize: 15,
+  cardValue: {
+    color: '#F97316',
+    fontSize: 28,
     fontWeight: '800',
-    marginLeft: 12,
+    marginBottom: 10,
   },
-  incomeText: {
-    color: '#22C55E',
+
+  // BUTTONS INSIDE CARDS
+  cardBtn: {
+    backgroundColor: '#111827',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#1F2937',
   },
-  expenseText: {
-    color: '#F97373',
+  cardBtnText: {
+    color: '#E5E7EB',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
-
-export default DashboardScreen;
