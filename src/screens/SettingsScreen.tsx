@@ -80,10 +80,16 @@ export default function SettingsScreen({ navigation }: Props) {
 
         <Pressable
           style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-          onPress={() => navigation.navigate('ImportCSV')}
+          onPress={() => {
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          }}
         >
-          <Text style={styles.btnText}>Import from CSV</Text>
+          <Text style={styles.btnText}>Sign out</Text>
         </Pressable>
+
       </View>
     </View>
   );
