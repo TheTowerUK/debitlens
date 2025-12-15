@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#000', // ✅ black background
+    backgroundColor: '#050816',
   },
   h1: {
     fontSize: 26,
