@@ -211,18 +211,6 @@ export default function DashboardScreen({ navigation }: Props) {
         {/* ---------- Navigation Grid ---------- */}
         <View style={styles.grid}>
           {/* Accounts / Payments */}
-          <View style={styles.gridRow}>
-
-
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Payments')}
-            >
-              <Text style={styles.gridTitle}>Payments</Text>
-              <Text style={styles.gridSub}>Browse and edit transactions</Text>
-            </Pressable>
-          </View>
-
         {/* Accounts list (Dashboard) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -260,6 +248,18 @@ export default function DashboardScreen({ navigation }: Props) {
           )}
         </View>
 
+          <View style={styles.gridRow}>
+
+
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Payments')}
+            >
+              <Text style={styles.gridTitle}>Payments</Text>
+              <Text style={styles.gridSub}>Browse and edit transactions</Text>
+            </Pressable>
+          </View>
+          
           {/* Recurring / Budgets */}
           <View style={styles.gridRow}>
             <Pressable
