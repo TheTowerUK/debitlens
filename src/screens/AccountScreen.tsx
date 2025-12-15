@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#050816',
+    backgroundColor: '#0B1020',
   },
   h1: {
     fontSize: 26,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0b0b0b',
+    backgroundColor: '#111827',
   },
   summaryLabel: {
     opacity: 0.8,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0b0b0b',
+    backgroundColor: '#111827',
   },
   quickIncome: {},
   quickExpense: {},
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0b0b0b',
+    backgroundColor: '#111827',
   },
   emptyTitle: {
     fontWeight: '800',
