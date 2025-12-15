@@ -11,7 +11,7 @@ import RootNavigator, { RootStackParamList } from './src/navigations/RootNavigat
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-const SESSION_TIMEOUT_MS = 60_000; // 1 minute
+const SESSION_TIMEOUT_MS = 5 * 60_000; // 5 minute
 
 function SessionWatcher({ children }: { children: React.ReactNode }) {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
