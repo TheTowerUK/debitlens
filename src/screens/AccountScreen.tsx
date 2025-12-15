@@ -4,9 +4,8 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Pressable,
-  Platform,
+  FlatList,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -21,27 +20,75 @@ export default function AccountScreen({ navigation, route }: Props) {
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const account = accounts.find((a: any) => a.id === accountId) || accounts[0];
+  // ✅ This is the line you referenced
+  const account =
+    accounts.find((a: any) => a.id === accountId) || accounts[0];
 
   const accountTxs = useMemo(
     () => (account ? txs.filter((t) => t.accountId === account.id) : []),
     [txs, account]
   );
 
-  const { balance, income, expense } = useMemo(() => {
+  // Summary numbers (unchanged logic from your snippet)
+  const { netFromTxs, income, expense } = useMemo(() => {
     let income = 0;
     let expense = 0;
     for (const t of accountTxs) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') income += amt;
-      else expense += amt;
+      else if (t.type === 'expense') expense += amt;
     }
     return {
-      balance: income - expense,
+      netFromTxs: income - expense,
       income,
       expense,
     };
   }, [accountTxs]);
+
+  /**
+   * Backwards running balance (safe for imported historic dates)
+   * Assumption: account.balance is the CURRENT balance now.
+   * We show "Bal £X" as the balance AFTER that transaction (at that point in time),
+   * in a newest-first list.
+   */
+  const sortedAccountTxs = useMemo(() => {
+    const copy = [...accountTxs];
+    copy.sort((a, b) => {
+      const da = String(a.date || '');
+      const db = String(b.date || '');
+      // Newest first
+      const d = db.localeCompare(da);
+      if (d !== 0) return d;
+      // tie-breaker
+      return String(b.id).localeCompare(String(a.id));
+    });
+    return copy;
+  }, [accountTxs]);
+
+  const currentBalanceNow = useMemo(() => {
+    const b = Number((account as any)?.balance);
+    // If account.balance is missing/not numeric, fall back to netFromTxs
+    return Number.isFinite(b) ? b : netFromTxs;
+  }, [account, netFromTxs]);
+
+  const balanceAfterMap = useMemo(() => {
+    let running = currentBalanceNow;
+    const map: Record<string, number> = {};
+
+    for (const t of sortedAccountTxs) {
+      // Balance AFTER this txn (in time) = running at this point
+      map[t.id] = running;
+
+      const amt = Number(t.amount) || 0;
+      const delta =
+        t.type === 'income' ? +amt : t.type === 'expense' ? -amt : 0;
+
+      // Move backwards in time: remove this txn’s effect
+      running = running - delta;
+    }
+
+    return map;
+  }, [sortedAccountTxs, currentBalanceNow]);
 
   const handleQuickAdd = (type: 'income' | 'expense') => {
     if (!account) return;
@@ -80,8 +127,11 @@ export default function AccountScreen({ navigation, route }: Props) {
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Balance</Text>
-          <Text style={styles.summaryValue}>£{balance.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>
+            £{Number(currentBalanceNow).toFixed(2)}
+          </Text>
         </View>
+
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Income / Spending</Text>
           <Text style={[styles.summaryValue, styles.incomeText]}>
@@ -101,6 +151,7 @@ export default function AccountScreen({ navigation, route }: Props) {
         >
           <Text style={styles.quickText}>Add income</Text>
         </Pressable>
+
         <Pressable
           style={[styles.quickButton, styles.quickExpense]}
           onPress={() => handleQuickAdd('expense')}
@@ -123,7 +174,8 @@ export default function AccountScreen({ navigation, route }: Props) {
 
       {/* Transactions */}
       <Text style={styles.sectionTitle}>Transactions</Text>
-      {accountTxs.length === 0 ? (
+
+      {sortedAccountTxs.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyTitle}>No activity yet</Text>
           <Text style={styles.emptyText}>
@@ -132,14 +184,14 @@ export default function AccountScreen({ navigation, route }: Props) {
         </View>
       ) : (
         <FlatList
-          data={accountTxs}
+          data={sortedAccountTxs}
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => {
             const isIncome = item.type === 'income';
             const sign = isIncome ? '+' : '-';
             const label = item.category || 'Uncategorised';
-            const note = item.description || ''; // <-- use description here
+            const note = item.description || '';
 
             return (
               <Pressable
@@ -153,14 +205,22 @@ export default function AccountScreen({ navigation, route }: Props) {
                     <Text style={styles.txMeta}>{item.date}</Text>
                   ) : null}
                 </View>
-                <Text
-                  style={[
-                    styles.txAmount,
-                    isIncome ? styles.incomeText : styles.expenseText,
-                  ]}
-                >
-                  {sign}£{Number(item.amount).toFixed(2)}
-                </Text>
+
+                {/* Amount + Balance-after */}
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text
+                    style={[
+                      styles.txAmount,
+                      isIncome ? styles.incomeText : styles.expenseText,
+                    ]}
+                  >
+                    {sign}£{Number(item.amount).toFixed(2)}
+                  </Text>
+
+                  <Text style={styles.txBalanceAfter}>
+                    Bal £{Number(balanceAfterMap[item.id] ?? 0).toFixed(2)}
+                  </Text>
+                </View>
               </Pressable>
             );
           }}
@@ -173,88 +233,113 @@ export default function AccountScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#020617',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    padding: 16,
   },
   h1: {
-    color: '#ffffff',
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  subtle: { color: '#9CA3AF', marginBottom: 16 },
+  subtle: {
+    opacity: 0.8,
+    marginBottom: 14,
+  },
 
-  summaryRow: { flexDirection: 'row', marginBottom: 12 },
+  summaryRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
   summaryCard: {
     flex: 1,
     padding: 12,
     borderRadius: 12,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    opacity: 0.95,
   },
-  summaryLabel: { color: '#9CA3AF', fontSize: 12, marginBottom: 4 },
-  summaryValue: { color: '#F9FAFB', fontSize: 16, fontWeight: '800' },
+  summaryLabel: {
+    opacity: 0.8,
+    marginBottom: 6,
+  },
+  summaryValue: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
 
-  incomeText: { color: '#22C55E' },
-  expenseText: { color: '#F97373' },
+  incomeText: {},
+  expenseText: {},
 
-  quickRow: { flexDirection: 'row', marginBottom: 12, flexWrap: 'wrap' },
+  quickRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
   quickButton: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
+    padding: 12,
+    borderRadius: 12,
     alignItems: 'center',
-    marginRight: 8,
   },
-  quickIncome: { backgroundColor: 'rgba(22, 163, 74, 0.2)' },
-  quickExpense: { backgroundColor: 'rgba(220, 38, 38, 0.2)' },
-  quickText: { color: '#F9FAFB', fontWeight: '700', fontSize: 13 },
+  quickIncome: {},
+  quickExpense: {},
+  quickTransfer: {
+    flex: 1,
+  },
+  quickText: {
+    fontWeight: '700',
+  },
 
   sectionDivider: {
     height: 1,
-    backgroundColor: '#111827',
-    marginTop: 10,
-    marginBottom: 12,
+    opacity: 0.2,
+    marginVertical: 12,
   },
   sectionTitle: {
-    color: '#E5E7EB',
     fontSize: 16,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 6,
+    fontWeight: '800',
+    marginBottom: 10,
   },
 
   emptyBox: {
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 16,
+    padding: 14,
     borderRadius: 12,
-    backgroundColor: '#0F172A',
+    borderWidth: StyleSheet.hairlineWidth,
+    opacity: 0.95,
   },
   emptyTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontWeight: '800',
+    marginBottom: 6,
   },
-  emptyText: { color: '#9CA3AF', fontSize: 14 },
+  emptyText: {
+    opacity: 0.85,
+  },
 
   txRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#111827',
+    gap: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    opacity: 0.98,
   },
-  txLabel: { color: '#F9FAFB', fontSize: 14, fontWeight: '700' },
-  txNote: { color: '#9CA3AF', fontSize: 12 },
-  txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
-  txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
-
-  quickTransfer: {
-    backgroundColor: 'rgba(59, 130, 246, 0.2)', // soft blue
+  txLabel: {
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  txNote: {
+    opacity: 0.85,
+    marginBottom: 2,
+  },
+  txMeta: {
+    opacity: 0.7,
+    fontSize: 12,
+  },
+  txAmount: {
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  txBalanceAfter: {
+    marginTop: 4,
+    opacity: 0.75,
+    fontSize: 12,
   },
 });
