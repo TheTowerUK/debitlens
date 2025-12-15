@@ -212,15 +212,7 @@ export default function DashboardScreen({ navigation }: Props) {
         <View style={styles.grid}>
           {/* Accounts / Payments */}
           <View style={styles.gridRow}>
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('AddAccount')}
-            >
-              <Text style={styles.gridTitle}>Accounts</Text>
-              <Text style={styles.gridSub}>
-                Add / manage accounts ({accountCount})
-              </Text>
-            </Pressable>
+
 
             <Pressable
               style={styles.gridCard}
