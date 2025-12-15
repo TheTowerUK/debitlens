@@ -1,13 +1,20 @@
-// src/state/AppContext.tsx
-import React from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useState,
+  ReactNode,
+} from 'react';
 
-// ====== TYPES ======
+/* =====================
+   Types
+===================== */
 
 export type Account = {
   id: string;
   name: string;
   type: 'cash' | 'bank' | 'credit' | 'other';
-  balance: number;
+  balance: number; // opening balance
   archived?: boolean;
 };
 
@@ -15,32 +22,46 @@ export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export type Transaction = {
   id: string;
-  name: string;             // label/title for the transaction
+  name?: string;
   accountId: string;
-  date: string;             // ISO string: 'YYYY-MM-DD'
+  date: string; // YYYY-MM-DD
   type: TransactionType;
   category?: string;
   amount: number;
   description?: string;
 };
 
+/* ===== Recurring (match existing screens) ===== */
+
 export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
 
 export type RecurringItem = {
   id: string;
+
+  // Your screens use title (not name)
   title: string;
-  amount: number;
+
+  // Some screens expect active
+  active: boolean;
+
+  // Your screens use nextDueDate (not nextDate)
+  nextDueDate: string; // YYYY-MM-DD
+
+  // Frequency
   frequency: RecurringFrequency;
 
-  // Single-account recurring
+  // Amount/type
+  amount: number;
+  type: 'income' | 'expense';
+
+  // Optional details
+  category?: string;
+  description?: string;
+
+  // Non-transfer recurring uses accountId
   accountId?: string;
-  type?: 'income' | 'expense';
 
-  // Status / scheduling
-  active?: boolean;
-  nextDueDate?: string; // ISO datetime string
-
-  // Transfers
+  // Some screens expect transfer flags/fields
   isTransfer?: boolean;
   fromAccountId?: string;
   toAccountId?: string;
@@ -50,255 +71,130 @@ export type AppState = {
   accounts: Account[];
   transactions: Transaction[];
   recurring: RecurringItem[];
-  // You can extend this later (e.g. prefs, settings, etc.)
 };
 
 export type AppActions = {
-  // Accounts
-  addAccount: (input: Partial<Account>) => Account;
+  /* Accounts */
+  addAccount: (input: Omit<Account, 'id'>) => Account;
   updateAccount: (id: string, patch: Partial<Account>) => void;
   deleteAccount: (id: string) => void;
 
-  // Recurring
-  addRecurring: (item: RecurringItem) => void;
-  updateRecurring: (id: string, patch: Partial<RecurringItem>) => void;
-  deleteRecurring: (id: string) => void;
-
-  // Transactions
-  addTransaction: (tx: Omit<Transaction, 'id'>) => void;
+  /* Transactions */
+  addTransaction: (input: Omit<Transaction, 'id'>) => Transaction;
   updateTransaction: (id: string, patch: Partial<Transaction>) => void;
   deleteTransaction: (id: string) => void;
 
-  // Utilities
-  clearAllData: () => void;
+  /* Recurring */
+  addRecurring: (input: Omit<RecurringItem, 'id'>) => RecurringItem;
+  updateRecurring: (id: string, patch: Partial<RecurringItem>) => void;
+  deleteRecurring: (id: string) => void;
 
-  // Full backup restore
-  loadBackup: (backupState: Partial<AppState>) => void;
+  /* Full restore (Option 1) */
+  replaceAllData: (next: {
+    accounts: Account[];
+    transactions: Transaction[];
+    recurring?: RecurringItem[];
+  }) => void;
 };
-
-// ====== INITIAL STATE ======
-
-const INITIAL_STATE: AppState = {
-  accounts: [
-    {
-      id: 'acc-1',
-      name: 'Main account',
-      type: 'bank',
-      balance: 0,
-    },
-  ],
-  transactions: [],
-  recurring: [],
-};
-
-// ====== CONTEXT SETUP ======
 
 type AppContextValue = {
   state: AppState;
   actions: AppActions;
-  // PIN helpers for SplashAuthScreen
-  getPin: () => Promise<string | null>;
-  setPin: (pin: string) => Promise<void>;
+
+  // ✅ SplashAuthScreen expects these at top-level
+  getPin: () => string | null;
+  setPin: (pin: string | null) => void;
 };
 
-const AppContext = React.createContext<AppContextValue | undefined>(
-  undefined
-);
+const AppContext = createContext<AppContextValue | undefined>(undefined);
 
-// ====== PROVIDER ======
+function uuid() {
+  // crypto.randomUUID isn't always available in RN
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const g: any = globalThis as any;
+  if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = React.useState<AppState>(INITIAL_STATE);
+export function AppProvider({ children }: { children: ReactNode }) {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [recurring, setRecurring] = useState<RecurringItem[]>([]);
+  const [pin, setPinState] = useState<string | null>(null);
 
-  // Simple in-memory PIN (non-persisted for now)
-  const [pin, setPinState] = React.useState<string | null>(null);
-
-  const getPin = React.useCallback(async () => {
-    return pin;
-  }, [pin]);
-
-  const setPin = React.useCallback(async (newPin: string) => {
-    setPinState(newPin);
-  }, []);
-
-  // --- Account actions ---
-
-  const addAccount = React.useCallback(
-    (input: Partial<Account>): Account => {
-      const id = `acc-${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`;
-
-      const next: Account = {
-        id,
-        name: input.name ?? 'New account',
-        type: input.type ?? 'bank',
-        balance: input.balance ?? 0,
-        archived: input.archived ?? false,
-      };
-
-      setState((prev) => ({
-        ...prev,
-        accounts: [...prev.accounts, next],
-      }));
-
-      return next;
-    },
-    []
-  );
-
-  const updateAccount = React.useCallback(
-    (id: string, patch: Partial<Account>) => {
-      setState((prev) => ({
-        ...prev,
-        accounts: prev.accounts.map((a) =>
-          a.id === id ? { ...a, ...patch } : a
-        ),
-      }));
-    },
-    []
-  );
-
-  const deleteAccount = React.useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      accounts: prev.accounts.filter((a) => a.id !== id),
-      transactions: prev.transactions.filter((t) => t.accountId !== id),
-      // you could also remove related recurring items here if desired
-    }));
-  }, []);
-
-  // --- Recurring actions (stored inside state.recurring) ---
-
-  const addRecurring = React.useCallback((item: RecurringItem) => {
-    setState((prev) => ({
-      ...prev,
-      recurring: [...prev.recurring, item],
-    }));
-  }, []);
-
-  const updateRecurring = React.useCallback(
-    (id: string, patch: Partial<RecurringItem>) => {
-      setState((prev) => ({
-        ...prev,
-        recurring: prev.recurring.map((r) =>
-          r.id === id ? { ...r, ...patch } : r
-        ),
-      }));
-    },
-    []
-  );
-
-  const deleteRecurring = React.useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      recurring: prev.recurring.filter((r) => r.id !== id),
-    }));
-  }, []);
-
-  // --- Transaction actions ---
-
-  const addTransaction = React.useCallback(
-    (tx: Omit<Transaction, 'id'>) => {
-      const id = `tx-${Date.now()}-${Math.random()
-        .toString(16)
-        .slice(2)}`;
-      const next: Transaction = { id, ...tx };
-
-      setState((prev) => ({
-        ...prev,
-        transactions: [...prev.transactions, next],
-      }));
-    },
-    []
-  );
-
-  const updateTransaction = React.useCallback(
-    (id: string, patch: Partial<Transaction>) => {
-      setState((prev) => ({
-        ...prev,
-        transactions: prev.transactions.map((t) =>
-          t.id === id ? { ...t, ...patch } : t
-        ),
-      }));
-    },
-    []
-  );
-
-  const deleteTransaction = React.useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      transactions: prev.transactions.filter((t) => t.id !== id),
-    }));
-  }, []);
-
-  // --- Utilities ---
-
-  const clearAllData = React.useCallback(() => {
-    setState(INITIAL_STATE);
-  }, []);
-
-  // --- Full backup restore ---
-
-  const loadBackup = React.useCallback(
-    (backupState: Partial<AppState>) => {
-      if (!backupState || typeof backupState !== 'object') {
-        console.warn(
-          'loadBackup: backupState is not an object',
-          backupState
+  const actions = useMemo<AppActions>(
+    () => ({
+      /* Accounts */
+      addAccount: (input) => {
+        const account: Account = { ...input, id: uuid() };
+        setAccounts((prev) => [...prev, account]);
+        return account;
+      },
+      updateAccount: (id, patch) => {
+        setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+      },
+      deleteAccount: (id) => {
+        setAccounts((prev) => prev.filter((a) => a.id !== id));
+        setTransactions((prev) => prev.filter((t) => t.accountId !== id));
+        // remove recurring referencing account
+        setRecurring((prev) =>
+          prev.filter((r) => r.accountId !== id && r.fromAccountId !== id && r.toAccountId !== id)
         );
-        return;
-      }
+      },
 
-      setState((prev) => {
-        const merged: AppState = {
-          ...prev, // or ...INITIAL_STATE if you want a hard reset
-          ...backupState,
-        };
+      /* Transactions */
+      addTransaction: (input) => {
+        const txn: Transaction = { ...input, id: uuid() };
+        setTransactions((prev) => [...prev, txn]);
+        return txn;
+      },
+      updateTransaction: (id, patch) => {
+        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      },
+      deleteTransaction: (id) => {
+        setTransactions((prev) => prev.filter((t) => t.id !== id));
+      },
 
-        if (!Array.isArray(merged.accounts)) merged.accounts = [];
-        if (!Array.isArray(merged.transactions))
-          merged.transactions = [];
-        if (!Array.isArray(merged.recurring)) merged.recurring = [];
+      /* Recurring */
+      addRecurring: (input) => {
+        const item: RecurringItem = { ...input, id: uuid() };
+        setRecurring((prev) => [...prev, item]);
+        return item;
+      },
+      updateRecurring: (id, patch) => {
+        setRecurring((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+      },
+      deleteRecurring: (id) => {
+        setRecurring((prev) => prev.filter((r) => r.id !== id));
+      },
 
-        return merged;
-      });
-    },
+      /* Full restore */
+      replaceAllData: (next) => {
+        setAccounts(next.accounts || []);
+        setTransactions(next.transactions || []);
+        setRecurring(next.recurring || []);
+      },
+    }),
     []
   );
 
-  const actions: AppActions = {
-    addAccount,
-    updateAccount,
-    deleteAccount,
-    addRecurring,
-    updateRecurring,
-    deleteRecurring,
-    addTransaction,
-    updateTransaction,
-    deleteTransaction,
-    clearAllData,
-    loadBackup,
-  };
+  const state = useMemo<AppState>(
+    () => ({ accounts, transactions, recurring }),
+    [accounts, transactions, recurring]
+  );
 
-  const value: AppContextValue = {
-    state,
-    actions,
-    getPin,
-    setPin,
-  };
+  const getPin = () => pin;
+  const setPin = (nextPin: string | null) => setPinState(nextPin);
 
   return (
-    <AppContext.Provider value={value}>{children}</AppContext.Provider>
+    <AppContext.Provider value={{ state, actions, getPin, setPin }}>
+      {children}
+    </AppContext.Provider>
   );
 }
 
-// ====== HOOK ======
-
-export function useApp(): AppContextValue {
-  const ctx = React.useContext(AppContext);
-  if (!ctx) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+export function useApp() {
+  const ctx = useContext(AppContext);
+  if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 }
