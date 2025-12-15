@@ -1,12 +1,6 @@
 // src/screens/AccountScreen.tsx
 import React, { useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  FlatList,
-} from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
@@ -41,19 +35,20 @@ export default function AccountScreen({ navigation, route }: Props) {
     return { income, expense, netFromTxs: income - expense };
   }, [accountTxs]);
 
-  // Treat account.balance as the CURRENT balance "now" (after all txns)
+  // Treat account.balance as CURRENT balance now (after all txns).
+  // If missing, fallback to net (still works, but less meaningful).
   const currentBalanceNow = useMemo(() => {
     const b = Number((account as any)?.balance);
-    // fallback: if missing, show net (still works, but less meaningful)
     return Number.isFinite(b) ? b : netFromTxs;
   }, [account, netFromTxs]);
 
   /**
-   * ✅ Correct running balance:
-   * 1) Sort txns oldest -> newest
-   * 2) Compute net effect of all txns
-   * 3) openingBalance = currentBalanceNow - net
-   * 4) Run forward; map[txn.id] = balance AFTER txn
+   * ✅ Correct running balance for your example:
+   * - Build the "balance after txn" map in chronological order (oldest -> newest)
+   * - openingBalance = currentBalanceNow - netEffect(all txns)
+   * - running forward => map[txn.id] = balance AFTER txn
+   *
+   * This stays correct even if you import older history.
    */
   const balanceAfterMap = useMemo(() => {
     if (!account) return {};
@@ -61,7 +56,7 @@ export default function AccountScreen({ navigation, route }: Props) {
     const asc = [...accountTxs].sort((a, b) => {
       const da = String(a.date || '');
       const db = String(b.date || '');
-      const d = da.localeCompare(db);
+      const d = da.localeCompare(db); // oldest first
       if (d !== 0) return d;
       return String(a.id).localeCompare(String(b.id));
     });
@@ -71,7 +66,7 @@ export default function AccountScreen({ navigation, route }: Props) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') net += amt;
       else if (t.type === 'expense') net -= amt;
-      // transfers: ignored here unless you model them as +/- per account
+      // transfers: ignored unless you model them as +/- per account
     }
 
     let running = Number(currentBalanceNow) - net;
@@ -88,7 +83,7 @@ export default function AccountScreen({ navigation, route }: Props) {
     return map;
   }, [account, accountTxs, currentBalanceNow]);
 
-  // Display newest-first (common UX), but balances remain correct
+  // Display newest-first (common UX), but balances remain correct via the map above.
   const displayTxs = useMemo(() => {
     const copy = [...accountTxs];
     copy.sort((a, b) => {
@@ -103,10 +98,7 @@ export default function AccountScreen({ navigation, route }: Props) {
 
   const handleQuickAdd = (type: 'income' | 'expense') => {
     if (!account) return;
-    navigation.navigate('TxnEditor', {
-      accountId: account.id,
-      type,
-    });
+    navigation.navigate('TxnEditor', { accountId: account.id, type });
   };
 
   const handleTransfer = () => {
@@ -138,7 +130,9 @@ export default function AccountScreen({ navigation, route }: Props) {
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Current balance</Text>
-          <Text style={styles.summaryValue}>£{currentBalanceNow.toFixed(2)}</Text>
+          <Text style={styles.summaryValue}>
+            £{Number(currentBalanceNow).toFixed(2)}
+          </Text>
         </View>
 
         <View style={styles.summaryCard}>
@@ -211,9 +205,7 @@ export default function AccountScreen({ navigation, route }: Props) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txLabel}>{label}</Text>
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
-                  {item.date ? (
-                    <Text style={styles.txMeta}>{item.date}</Text>
-                  ) : null}
+                  {item.date ? <Text style={styles.txMeta}>{item.date}</Text> : null}
                 </View>
 
                 <View style={{ alignItems: 'flex-end' }}>
