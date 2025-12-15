@@ -1,6 +1,6 @@
 // src/screens/AccountScreen.tsx
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, FlatList, Switch } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
@@ -14,7 +14,6 @@ export default function AccountScreen({ navigation, route }: Props) {
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  // ✅ Where the find(...) lives
   const account =
     accounts.find((a: any) => a.id === accountId) || accounts[0];
 
@@ -23,7 +22,7 @@ export default function AccountScreen({ navigation, route }: Props) {
     [txs, account]
   );
 
-  // Income/expense totals (for summary)
+  // Summary totals
   const { income, expense, netFromTxs } = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -35,20 +34,16 @@ export default function AccountScreen({ navigation, route }: Props) {
     return { income, expense, netFromTxs: income - expense };
   }, [accountTxs]);
 
-  // Treat account.balance as CURRENT balance now (after all txns).
-  // If missing, fallback to net (still works, but less meaningful).
+  const [showRunningBalance, setShowRunningBalance] = useState(false);
+
+  // Treat account.balance as CURRENT balance now
   const currentBalanceNow = useMemo(() => {
     const b = Number((account as any)?.balance);
     return Number.isFinite(b) ? b : netFromTxs;
   }, [account, netFromTxs]);
 
   /**
-   * ✅ Correct running balance for your example:
-   * - Build the "balance after txn" map in chronological order (oldest -> newest)
-   * - openingBalance = currentBalanceNow - netEffect(all txns)
-   * - running forward => map[txn.id] = balance AFTER txn
-   *
-   * This stays correct even if you import older history.
+   * Forward-running balance (chronological, safe for imports)
    */
   const balanceAfterMap = useMemo(() => {
     if (!account) return {};
@@ -56,7 +51,7 @@ export default function AccountScreen({ navigation, route }: Props) {
     const asc = [...accountTxs].sort((a, b) => {
       const da = String(a.date || '');
       const db = String(b.date || '');
-      const d = da.localeCompare(db); // oldest first
+      const d = da.localeCompare(db);
       if (d !== 0) return d;
       return String(a.id).localeCompare(String(b.id));
     });
@@ -66,30 +61,28 @@ export default function AccountScreen({ navigation, route }: Props) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') net += amt;
       else if (t.type === 'expense') net -= amt;
-      // transfers: ignored unless you model them as +/- per account
     }
 
-    let running = Number(currentBalanceNow) - net;
+    let running = currentBalanceNow - net;
 
     const map: Record<string, number> = {};
     for (const t of asc) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') running += amt;
       else if (t.type === 'expense') running -= amt;
-
-      map[t.id] = running; // balance AFTER this txn
+      map[t.id] = running;
     }
 
     return map;
   }, [account, accountTxs, currentBalanceNow]);
 
-  // Display newest-first (common UX), but balances remain correct via the map above.
+  // Display newest-first
   const displayTxs = useMemo(() => {
     const copy = [...accountTxs];
     copy.sort((a, b) => {
       const da = String(a.date || '');
       const db = String(b.date || '');
-      const d = db.localeCompare(da); // newest first
+      const d = db.localeCompare(da);
       if (d !== 0) return d;
       return String(b.id).localeCompare(String(a.id));
     });
@@ -131,7 +124,7 @@ export default function AccountScreen({ navigation, route }: Props) {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Current balance</Text>
           <Text style={styles.summaryValue}>
-            £{Number(currentBalanceNow).toFixed(2)}
+            £{currentBalanceNow.toFixed(2)}
           </Text>
         </View>
 
@@ -174,6 +167,18 @@ export default function AccountScreen({ navigation, route }: Props) {
       </View>
 
       <View style={styles.sectionDivider} />
+
+      {/* Running balance toggle */}
+      <View style={styles.toggleRow}>
+        <Text style={styles.toggleLabel}>Show running balance</Text>
+        <Switch
+          value={showRunningBalance}
+          onValueChange={setShowRunningBalance}
+          trackColor={{ false: '#222', true: '#3ddc84' }}
+          thumbColor="#fff"
+        />
+      </View>
+
 
       {/* Transactions */}
       <Text style={styles.sectionTitle}>Transactions</Text>
@@ -218,9 +223,12 @@ export default function AccountScreen({ navigation, route }: Props) {
                     {sign}£{Number(item.amount).toFixed(2)}
                   </Text>
 
-                  <Text style={styles.txBalanceAfter}>
-                    Bal £{Number(balAfter ?? currentBalanceNow).toFixed(2)}
-                  </Text>
+                  {showRunningBalance ? (
+                    <Text style={styles.txBalanceAfter}>
+                      Balance £{Number(balAfter ?? currentBalanceNow).toFixed(2)}
+                    </Text>
+                  ) : null}
+
                 </View>
               </Pressable>
             );
@@ -366,4 +374,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#fff',
   },
+    toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  toggleLabel: {
+    color: '#fff',
+    fontWeight: '700',
+    opacity: 0.9,
+  },
+
 });
