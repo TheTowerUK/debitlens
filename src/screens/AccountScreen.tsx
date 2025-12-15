@@ -36,11 +36,17 @@ export default function AccountScreen({ navigation, route }: Props) {
 
   const [showRunningBalance, setShowRunningBalance] = useState(false);
 
-  // Treat account.balance as CURRENT balance now
-  const currentBalanceNow = useMemo(() => {
+  // Treat account.balance as OPENING balance for the account
+  const openingBalance = useMemo(() => {
     const b = Number((account as any)?.balance);
-    return Number.isFinite(b) ? b : netFromTxs;
-  }, [account, netFromTxs]);
+    return Number.isFinite(b) ? b : 0;
+  }, [account]);
+
+  // Current balance = opening + netFromTxs
+  const currentBalanceNow = useMemo(() => {
+    return openingBalance + netFromTxs;
+  }, [openingBalance, netFromTxs]);
+
 
   /**
    * Forward-running balance (chronological, safe for imports)
@@ -51,30 +57,25 @@ export default function AccountScreen({ navigation, route }: Props) {
     const asc = [...accountTxs].sort((a, b) => {
       const da = String(a.date || '');
       const db = String(b.date || '');
-      const d = da.localeCompare(db);
+      const d = da.localeCompare(db); // oldest first
       if (d !== 0) return d;
       return String(a.id).localeCompare(String(b.id));
     });
 
-    let net = 0;
-    for (const t of asc) {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') net += amt;
-      else if (t.type === 'expense') net -= amt;
-    }
-
-    let running = currentBalanceNow - net;
+    let running = openingBalance;
 
     const map: Record<string, number> = {};
     for (const t of asc) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') running += amt;
       else if (t.type === 'expense') running -= amt;
-      map[t.id] = running;
+
+      map[t.id] = running; // Balance AFTER this txn
     }
 
     return map;
-  }, [account, accountTxs, currentBalanceNow]);
+  }, [account, accountTxs, openingBalance]);
+
 
   // Display newest-first
   const displayTxs = useMemo(() => {
