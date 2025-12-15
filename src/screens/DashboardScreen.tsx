@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.tsx
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Pressable,
   Platform,
 } from 'react-native';
-import { useApp } from '../state/AppContext';
+import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 
@@ -18,95 +18,265 @@ export default function DashboardScreen({ navigation }: Props) {
   const { state } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
+  const recurring: RecurringItem[] = state.recurring || [];
+
+  // ---- Account balances (derived from transactions) ----
+  const { totalBalance, accountCount } = useMemo(() => {
+    const balanceById: Record<string, number> = {};
+
+    // start all at zero
+    for (const acc of accounts) {
+      if (acc && acc.id) {
+        balanceById[acc.id] = 0;
+      }
+    }
+
+    for (const t of txs) {
+      const id = t.accountId;
+      if (!id) continue;
+      const amt = Number(t.amount) || 0;
+      if (!balanceById.hasOwnProperty(id)) {
+        balanceById[id] = 0;
+      }
+
+      if (t.type === 'income') {
+        balanceById[id] += amt;
+      } else if (t.type === 'expense') {
+        balanceById[id] -= amt;
+      }
+    }
+
+    const total = Object.values(balanceById).reduce((sum, v) => sum + v, 0);
+
+    return {
+      totalBalance: total,
+      accountCount: accounts.length,
+    };
+  }, [accounts, txs]);
+
+  // ---- This month summary ----
+  const monthSummary = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    let income = 0;
+    let expense = 0;
+
+    for (const t of txs) {
+      if (!t.date) continue;
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income') income += amt;
+      else if (t.type === 'expense') expense += amt;
+    }
+
+    return {
+      income,
+      expense,
+      net: income - expense,
+    };
+  }, [txs]);
+
+  // ---- Upcoming recurring (next 30 days) ----
+  const upcomingRecurring = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const horizon = new Date(today);
+    horizon.setDate(horizon.getDate() + 30);
+
+    const items = recurring
+      .filter((r) => r.active !== false && r.nextDueDate)
+      .map((r) => {
+        const d = r.nextDueDate ? new Date(r.nextDueDate) : null;
+        if (!d || isNaN(d.getTime())) return null;
+        d.setHours(0, 0, 0, 0);
+        return { item: r, date: d };
+      })
+      .filter((x): x is { item: RecurringItem; date: Date } => !!x)
+      .filter(({ date }) => date >= today && date <= horizon)
+      .sort((a, b) => a.date.getTime() - b.date.getTime())
+      .slice(0, 3); // show top 3
+
+    return items;
+  }, [recurring]);
+
+  // ---- Logout handler: back to Login (PIN) ----
+  const handleLogout = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'Login' }],
+    });
+  };
+
+  const formatMoney = (v: number) => `£${v.toFixed(2)}`;
+
+  const monthNetColor =
+    monthSummary.net >= 0 ? styles.positiveText : styles.negativeText;
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      {/* ---------- Header with SETTINGS pill ---------- */}
+      {/* ---------- Header with SETTINGS + LOGOUT ---------- */}
       <View style={styles.headerRow}>
-        <View>
+        <View style={{ flexShrink: 1 }}>
           <Text style={styles.h1}>Dashboard</Text>
           <Text style={styles.subtle}>
-            Overview of your accounts & activity
+            Quick view of balances, activity & upcoming payments
           </Text>
         </View>
 
-        <Pressable
-          style={styles.settingsPill}
-          onPress={() => navigation.navigate('Settings')}
-        >
-          <Text style={styles.settingsPillText}>Settings</Text>
-        </Pressable>
+        <View style={styles.headerPillsRow}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Text style={styles.headerPillText}>Settings</Text>
+          </Pressable>
+
+            <Pressable
+              style={[styles.headerPill, styles.logoutPill]}
+              onPress={handleLogout}
+            >
+              <Text style={styles.headerPillText}>Logout</Text>
+            </Pressable>
+        </View>
       </View>
 
-      {/* ---------- Accounts Summary ---------- */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Accounts</Text>
-        <Text style={styles.cardValue}>{accounts.length}</Text>
+      {/* ---------- Summary Card ---------- */}
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>Overview</Text>
 
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('AddAccount')}
-        >
-          <Text style={styles.cardBtnText}>Add Account</Text>
-        </Pressable>
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Total balance</Text>
+            <Text style={styles.summaryValue}>{formatMoney(totalBalance)}</Text>
+            <Text style={styles.summarySub}>
+              Across {accountCount} account{accountCount === 1 ? '' : 's'}
+            </Text>
+          </View>
 
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('Payments')}
-        >
-          <Text style={styles.cardBtnText}>View Payments</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('RecentActivity')}
-        >
-          <Text style={styles.cardBtnText}>Recent Activity</Text>
-        </Pressable>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>This month</Text>
+            <Text style={[styles.summaryValue, monthNetColor]}>
+              {monthSummary.net >= 0 ? '+' : '-'}
+              {formatMoney(Math.abs(monthSummary.net))}
+            </Text>
+            <Text style={styles.summarySub}>
+              In: {formatMoney(monthSummary.income)} · Out:{' '}
+              {formatMoney(monthSummary.expense)}
+            </Text>
+          </View>
+        </View>
       </View>
 
-      {/* ---------- Recurring ---------- */}
+      {/* ---------- Upcoming Recurring ---------- */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Recurring Payments</Text>
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('Recurring')}
-        >
-          <Text style={styles.cardBtnText}>Manage Recurring</Text>
-        </Pressable>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Upcoming (next 30 days)</Text>
+          <Pressable onPress={() => navigation.navigate('Recurring')}>
+            <Text style={styles.cardLink}>Manage</Text>
+          </Pressable>
+        </View>
+
+        {upcomingRecurring.length === 0 ? (
+          <Text style={styles.subtle}>
+            No active recurring items due in the next 30 days.
+          </Text>
+        ) : (
+          upcomingRecurring.map(({ item, date }) => (
+            <View key={item.id} style={styles.upcomingRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.upcomingTitle}>
+                  {item.title || (item.isTransfer ? 'Recurring transfer' : 'Recurring payment')}
+                </Text>
+                <Text style={styles.upcomingSub}>
+                  {item.frequency.charAt(0).toUpperCase() +
+                    item.frequency.slice(1)}{' '}
+                  · {date.toLocaleDateString()}
+                </Text>
+              </View>
+              <Text style={styles.upcomingAmount}>
+                £{Number(item.amount || 0).toFixed(2)}
+              </Text>
+            </View>
+          ))
+        )}
       </View>
 
-      {/* ---------- Budget ---------- */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Budgets</Text>
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('Budgets')}
-        >
-          <Text style={styles.cardBtnText}>Budget Overview</Text>
-        </Pressable>
-      </View>
+      {/* ---------- Navigation Grid ---------- */}
+      <View style={styles.grid}>
+        {/* Accounts / Payments */}
+        <View style={styles.gridRow}>
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('AddAccount')}
+          >
+            <Text style={styles.gridTitle}>Accounts</Text>
+            <Text style={styles.gridSub}>
+              Add / manage accounts ({accountCount})
+            </Text>
+          </Pressable>
 
-      {/* ---------- Reports ---------- */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Reports</Text>
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('Reports')}
-        >
-          <Text style={styles.cardBtnText}>View Reports</Text>
-        </Pressable>
-      </View>
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('Payments')}
+          >
+            <Text style={styles.gridTitle}>Payments</Text>
+            <Text style={styles.gridSub}>Browse and edit transactions</Text>
+          </Pressable>
+        </View>
 
-      {/* ---------- Notifications ---------- */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Notifications</Text>
-        <Pressable
-          style={styles.cardBtn}
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Text style={styles.cardBtnText}>Open Notifications</Text>
-        </Pressable>
+        {/* Recurring / Budgets */}
+        <View style={styles.gridRow}>
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('Recurring')}
+          >
+            <Text style={styles.gridTitle}>Recurring</Text>
+            <Text style={styles.gridSub}>Direct debits & standing orders</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('Budgets')}
+          >
+            <Text style={styles.gridTitle}>Budgets</Text>
+            <Text style={styles.gridSub}>Plan spending by category</Text>
+          </Pressable>
+        </View>
+
+        {/* Reports / Notifications */}
+        <View style={styles.gridRow}>
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('Reports')}
+          >
+            <Text style={styles.gridTitle}>Reports</Text>
+            <Text style={styles.gridSub}>See trends & breakdowns</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.gridCard}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Text style={styles.gridTitle}>Notifications</Text>
+            <Text style={styles.gridSub}>Alerts & reminders</Text>
+          </Pressable>
+        </View>
+
+        {/* Data export/import */}
+        <View style={styles.gridRow}>
+          <Pressable
+            style={[styles.gridCard, { flex: 1 }]}
+            onPress={() => navigation.navigate('DataExportImport')}
+          >
+            <Text style={styles.gridTitle}>Data export / import</Text>
+            <Text style={styles.gridSub}>Backups, CSV import & export</Text>
+          </Pressable>
+        </View>
       </View>
     </ScrollView>
   );
@@ -118,8 +288,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#050816',
   },
   content: {
-    padding: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 16 : 8,
+    paddingBottom: 32,
   },
 
   // HEADER
@@ -130,7 +301,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   h1: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 26,
     fontWeight: '800',
   },
@@ -138,57 +309,145 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 4,
   },
-
-  // SETTINGS PILL
-  settingsPill: {
-    paddingHorizontal: 12,
+  headerPillsRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+  },
+  headerPill: {
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
     backgroundColor: '#0B1020',
   },
-  settingsPillText: {
+  logoutPill: {
+    borderColor: '#F97373',
+  },
+  headerPillText: {
     color: '#E5E7EB',
     fontSize: 13,
     fontWeight: '600',
   },
 
-  // CARDS
-  card: {
+  // SUMMARY CARD
+  summaryCard: {
     backgroundColor: '#0B1020',
     borderRadius: 14,
-    padding: 16,
+    padding: 14,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#1F2937',
   },
-  cardTitle: {
-    color: '#fff',
-    fontSize: 18,
+  summaryTitle: {
+    color: '#E5E7EB',
     fontWeight: '700',
     marginBottom: 6,
+    fontSize: 16,
   },
-  cardValue: {
-    color: '#F97316',
-    fontSize: 28,
+  summaryRow: {
+    flexDirection: 'row',
+    columnGap: 12,
+  },
+  summaryItem: {
+    flex: 1,
+  },
+  summaryLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  summaryValue: {
+    color: '#F9FAFB',
+    fontSize: 18,
     fontWeight: '800',
-    marginBottom: 10,
+  },
+  summarySub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  positiveText: {
+    color: '#22C55E',
+  },
+  negativeText: {
+    color: '#F97373',
   },
 
-  // BUTTONS INSIDE CARDS
-  cardBtn: {
-    backgroundColor: '#111827',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 6,
+  // CARD (for upcoming)
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#1F2937',
   },
-  cardBtnText: {
-    color: '#E5E7EB',
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cardLink: {
+    color: '#93C5FD',
+    fontSize: 13,
     fontWeight: '600',
-    textAlign: 'center',
+  },
+
+  // UPCOMING ROWS
+  upcomingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#111827',
+    marginTop: 4,
+  },
+  upcomingTitle: {
+    color: '#F9FAFB',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  upcomingSub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+  },
+  upcomingAmount: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+
+  // GRID
+  grid: {
+    marginTop: 4,
+  },
+  gridRow: {
+    flexDirection: 'row',
+    columnGap: 10,
+    marginBottom: 10,
+  },
+  gridCard: {
+    flex: 1,
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  gridTitle: {
+    color: '#F9FAFB',
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  gridSub: {
+    color: '#9CA3AF',
+    fontSize: 12,
   },
 });
