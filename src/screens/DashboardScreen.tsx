@@ -231,6 +231,43 @@ export default function DashboardScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
+        {/* Accounts list (Dashboard) */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Your accounts</Text>
+
+            <Pressable
+              style={styles.smallBtn}
+              onPress={() => navigation.navigate('AddAccount')}
+              hitSlop={8}
+            >
+              <Text style={styles.smallBtnText}>Add</Text>
+            </Pressable>
+          </View>
+
+          {accounts.length === 0 ? (
+            <Text style={styles.emptyText}>No accounts yet.</Text>
+          ) : (
+            <View style={{ marginTop: 10 }}>
+              {accounts.map((a) => (
+                <Pressable
+                  key={a.id}
+                  style={styles.accountRow}
+                  onPress={() => navigation.navigate('Account', { accountId: a.id })}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.accountName}>{a.name || 'Account'}</Text>
+                    <Text style={styles.accountMeta}>
+                      {String(a.type || 'account').toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={styles.accountChevron}>›</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </View>
+
           {/* Recurring / Budgets */}
           <View style={styles.gridRow}>
             <Pressable
@@ -457,4 +494,44 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 12,
   },
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  smallBtnText: {
+    color: '#BFDBFE',
+    fontWeight: '700',
+  },
+
+  emptyText: {
+    color: '#9CA3AF',
+    marginTop: 10,
+  },
+
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1F2937',
+  },
+  accountName: {
+    color: '#F9FAFB',
+    fontWeight: '800',
+  },
+  accountMeta: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  accountChevron: {
+    color: '#93C5FD',
+    fontSize: 22,
+    paddingLeft: 10,
+  },
+
 });
