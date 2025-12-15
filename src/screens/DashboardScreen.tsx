@@ -208,107 +208,106 @@ export default function DashboardScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* ---------- Navigation Grid ---------- */}
-        <View style={styles.grid}>
-          {/* Accounts / Payments */}
-          <View style={styles.gridRow}>
+{/* ---------- Accounts list (Dashboard) ---------- */}
+<View style={styles.card}>
+  <View style={styles.cardHeaderRow}>
+    <Text style={styles.cardTitle}>Your accounts</Text>
 
+    <Pressable
+      style={styles.smallBtn}
+      onPress={() => navigation.navigate('AddAccount')}
+      hitSlop={8}
+    >
+      <Text style={styles.smallBtnText}>Add</Text>
+    </Pressable>
+  </View>
 
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Payments')}
-            >
-              <Text style={styles.gridTitle}>Payments</Text>
-              <Text style={styles.gridSub}>Browse and edit transactions</Text>
-            </Pressable>
+  {accounts.length === 0 ? (
+    <Text style={styles.emptyText}>No accounts yet.</Text>
+  ) : (
+    <View style={{ marginTop: 10 }}>
+      {accounts.map((a) => (
+        <Pressable
+          key={a.id}
+          style={styles.accountRow}
+          onPress={() => navigation.navigate('Account', { accountId: a.id })}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.accountName}>{a.name || 'Account'}</Text>
+            <Text style={styles.accountMeta}>
+              {String(a.type || 'account').toUpperCase()}
+            </Text>
           </View>
+          <Text style={styles.accountChevron}>›</Text>
+        </Pressable>
+      ))}
+    </View>
+  )}
+</View>
 
-        {/* Accounts list (Dashboard) */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>Your accounts</Text>
+{/* ---------- Navigation Grid ---------- */}
+<View style={styles.grid}>
+  {/* Payments */}
+  <View style={styles.gridRow}>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Payments')}
+    >
+      <Text style={styles.gridTitle}>Payments</Text>
+      <Text style={styles.gridSub}>Browse and edit transactions</Text>
+    </Pressable>
+  </View>
 
-            <Pressable
-              style={styles.smallBtn}
-              onPress={() => navigation.navigate('AddAccount')}
-              hitSlop={8}
-            >
-              <Text style={styles.smallBtnText}>Add</Text>
-            </Pressable>
-          </View>
+  {/* Recurring / Budgets */}
+  <View style={styles.gridRow}>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Recurring')}
+    >
+      <Text style={styles.gridTitle}>Recurring</Text>
+      <Text style={styles.gridSub}>Direct debits & standing orders</Text>
+    </Pressable>
 
-          {accounts.length === 0 ? (
-            <Text style={styles.emptyText}>No accounts yet.</Text>
-          ) : (
-            <View style={{ marginTop: 10 }}>
-              {accounts.map((a) => (
-                <Pressable
-                  key={a.id}
-                  style={styles.accountRow}
-                  onPress={() => navigation.navigate('Account', { accountId: a.id })}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.accountName}>{a.name || 'Account'}</Text>
-                    <Text style={styles.accountMeta}>
-                      {String(a.type || 'account').toUpperCase()}
-                    </Text>
-                  </View>
-                  <Text style={styles.accountChevron}>›</Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-        </View>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Budgets')}
+    >
+      <Text style={styles.gridTitle}>Budgets</Text>
+      <Text style={styles.gridSub}>Plan spending by category</Text>
+    </Pressable>
+  </View>
 
-          {/* Recurring / Budgets */}
-          <View style={styles.gridRow}>
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Recurring')}
-            >
-              <Text style={styles.gridTitle}>Recurring</Text>
-              <Text style={styles.gridSub}>Direct debits & standing orders</Text>
-            </Pressable>
+  {/* Reports / Notifications */}
+  <View style={styles.gridRow}>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Reports')}
+    >
+      <Text style={styles.gridTitle}>Reports</Text>
+      <Text style={styles.gridSub}>See trends & breakdowns</Text>
+    </Pressable>
 
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Budgets')}
-            >
-              <Text style={styles.gridTitle}>Budgets</Text>
-              <Text style={styles.gridSub}>Plan spending by category</Text>
-            </Pressable>
-          </View>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Notifications')}
+    >
+      <Text style={styles.gridTitle}>Notifications</Text>
+      <Text style={styles.gridSub}>Alerts & reminders</Text>
+    </Pressable>
+  </View>
 
-          {/* Reports / Notifications */}
-          <View style={styles.gridRow}>
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Reports')}
-            >
-              <Text style={styles.gridTitle}>Reports</Text>
-              <Text style={styles.gridSub}>See trends & breakdowns</Text>
-            </Pressable>
+  {/* Data export/import */}
+  <View style={styles.gridRow}>
+    <Pressable
+      style={[styles.gridCard, { flex: 1 }]}
+      onPress={() => navigation.navigate('DataExportImport')}
+    >
+      <Text style={styles.gridTitle}>Data export / import</Text>
+      <Text style={styles.gridSub}>Backups, CSV import & export</Text>
+    </Pressable>
+  </View>
+</View>
 
-            <Pressable
-              style={styles.gridCard}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <Text style={styles.gridTitle}>Notifications</Text>
-              <Text style={styles.gridSub}>Alerts & reminders</Text>
-            </Pressable>
-          </View>
-
-          {/* Data export/import */}
-          <View style={styles.gridRow}>
-            <Pressable
-              style={[styles.gridCard, { flex: 1 }]}
-              onPress={() => navigation.navigate('DataExportImport')}
-            >
-              <Text style={styles.gridTitle}>Data export / import</Text>
-              <Text style={styles.gridSub}>Backups, CSV import & export</Text>
-            </Pressable>
-          </View>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
