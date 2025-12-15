@@ -7,6 +7,8 @@ import {
   Pressable,
   Alert,
   Platform,
+  SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -34,7 +36,6 @@ export default function SettingsScreen({ navigation }: Props) {
       if (typeof FS.writeAsStringAsync === 'function') {
         await FS.writeAsStringAsync(path, CSV_TEMPLATE, { encoding });
       } else {
-        // fallback if options signature isn’t available
         await FS.writeAsStringAsync(path, CSV_TEMPLATE);
       }
 
@@ -52,7 +53,6 @@ export default function SettingsScreen({ navigation }: Props) {
     try {
       await resetDatabase();
       Alert.alert('Database reset', 'The local database file was deleted.');
-      // After a reset, you typically restart the app or re-run migrations on next launch.
     } catch (e) {
       console.warn('[settings] reset DB failed', e);
       Alert.alert('Error', 'Could not reset the database.');
@@ -60,67 +60,66 @@ export default function SettingsScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.h1}>Settings</Text>
-      <Text style={styles.subtle}>Minimal screen for isolation testing</Text>
+    <SafeAreaView style={styles.safeWrap}>
+      <ScrollView
+        style={styles.wrap}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.h1}>Settings</Text>
+        <Text style={styles.subtle}>Minimal screen for isolation testing</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Data</Text>
-
-        <Pressable style={[styles.btn, styles.btnGhost]} onPress={exportTemplate}>
-          <Text style={styles.btnText}>Export CSV template</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.btn, styles.btnDanger, { marginTop: 8 }]}
-          onPress={onResetDb}
-        >
-          <Text style={styles.btnText}>Reset local database</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-          onPress={() => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Login' }],
-            });
-          }}
-        >
-          <Text style={styles.btnText}>Sign out</Text>
-        </Pressable>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Security</Text>
+          <Text style={styles.sectionTitle}>Data</Text>
 
           <Pressable
-            style={[styles.btn, styles.btnDanger]}
-            onPress={() => {
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
-            }}
+            style={[styles.btn, styles.btnGhost]}
+            onPress={exportTemplate}
           >
-            <Text style={styles.btnText}>Sign out</Text>
+            <Text style={styles.btnText}>Export CSV template</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.btn, styles.btnDanger, { marginTop: 8 }]}
+            onPress={onResetDb}
+          >
+            <Text style={styles.btnText}>Reset local database</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
+            onPress={() => navigation.navigate('ImportCSV')}
+          >
+            <Text style={styles.btnText}>Import from CSV</Text>
           </Pressable>
         </View>
-
-      </View>
-    </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  safeWrap: {
     flex: 1,
     backgroundColor: '#0B0D13',
-    padding: 16,
-    paddingTop: Platform.OS === 'ios' ? 44 : 16,
   },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800' },
-  subtle: { color: '#9CA3AF' },
+  wrap: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingTop: Platform.OS === 'ios' ? 8 : 16,
+    paddingBottom: 24,
+  },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 4 },
+  subtle: { color: '#9CA3AF', marginBottom: 12 },
 
-  card: { backgroundColor: '#111827', borderRadius: 16, padding: 16, marginTop: 12 },
+  card: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 4,
+  },
 
   sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
 

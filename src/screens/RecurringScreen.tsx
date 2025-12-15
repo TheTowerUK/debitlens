@@ -24,10 +24,7 @@ const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
   yearly: 'Yearly',
 };
 
-const advanceDate = (
-  date: Date,
-  frequency: RecurringFrequency
-): Date => {
+const advanceDate = (date: Date, frequency: RecurringFrequency): Date => {
   const d = new Date(date.getTime());
   switch (frequency) {
     case 'daily':
@@ -45,97 +42,6 @@ const advanceDate = (
   }
   return d;
 };
-
-type RecurringSuggestion = {
-  key: string;
-  title: string;
-  amount: number;
-  frequency: RecurringFrequency;
-  accountId: string;
-  type: 'income' | 'expense';
-  lastDate: Date;
-};
-
-/**
- * Simple recurring detector:
- * - Group by (accountId, description/category, rounded amount, type)
- * - Require at least 3 occurrences
- * - Look at average days between transactions to guess frequency
- */
-function detectRecurringSuggestions(
-  txs: Transaction[]
-): RecurringSuggestion[] {
-  const dated = txs.filter((t) => t.date && t.accountId);
-  const groups = new Map<string, Transaction[]>();
-
-  for (const t of dated) {
-    const baseTitle =
-      (t.description || (t as any).note || t.category || '').trim();
-    if (!baseTitle) continue;
-
-    const amountAbs = Math.round(Math.abs(Number(t.amount) || 0));
-    if (!amountAbs) continue;
-
-    const key = `${t.accountId}|${baseTitle.toLowerCase()}|${amountAbs}|${t.type}`;
-    const arr = groups.get(key) || [];
-    arr.push(t);
-    groups.set(key, arr);
-  }
-
-  const suggestions: RecurringSuggestion[] = [];
-
-  for (const [key, list] of groups.entries()) {
-    if (list.length < 3) continue;
-
-    const sorted = list
-      .map((t) => ({
-        t,
-        d: new Date(t.date as string),
-      }))
-      .filter((x) => !isNaN(x.d.getTime()))
-      .sort((a, b) => a.d.getTime() - b.d.getTime());
-
-    if (sorted.length < 3) continue;
-
-    const intervals: number[] = [];
-    for (let i = 1; i < sorted.length; i++) {
-      const msDiff = sorted[i].d.getTime() - sorted[i - 1].d.getTime();
-      intervals.push(msDiff / (1000 * 60 * 60 * 24)); // days
-    }
-
-    if (!intervals.length) continue;
-
-    const avg =
-      intervals.reduce((sum, v) => sum + v, 0) / intervals.length;
-
-    let frequency: RecurringFrequency | null = null;
-    if (avg > 360 && avg < 370) frequency = 'yearly';
-    else if (avg > 27 && avg < 32) frequency = 'monthly';
-    else if (avg > 6 && avg < 8) frequency = 'weekly';
-    else if (avg > 0.9 && avg < 1.1) frequency = 'daily';
-
-    if (!frequency) continue;
-
-    const last = sorted[sorted.length - 1].d;
-    const sampleTitle =
-      (sorted[0].t.description ||
-        (sorted[0].t as any).note ||
-        sorted[0].t.category ||
-        '').trim() || 'Recurring payment';
-
-    suggestions.push({
-      key,
-      title: sampleTitle,
-      amount: Math.abs(Number(sorted[0].t.amount) || 0),
-      frequency,
-      accountId: sorted[0].t.accountId,
-      type: sorted[0].t.type === 'income' ? 'income' : 'expense',
-      lastDate: last,
-    });
-  }
-
-  return suggestions;
-}
 
 const RecurringScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -161,71 +67,6 @@ const RecurringScreen: React.FC = () => {
     navigation.navigate('RecurringEditor');
   };
 
-  const handleDetectFromHistory = () => {
-    if (!txs.length) {
-      Alert.alert(
-        'No transactions',
-        'You need some history before detecting recurring items.'
-      );
-      return;
-    }
-
-    const suggestions = detectRecurringSuggestions(txs);
-
-    if (!suggestions.length) {
-      Alert.alert(
-        'No recurring patterns found',
-        'No clear repeating payments were detected yet.'
-      );
-      return;
-    }
-
-    let created = 0;
-
-    for (const s of suggestions) {
-      // Skip if a very similar recurring item already exists
-      const already = recurring.find(
-        (r) =>
-          r.accountId === s.accountId &&
-          Math.abs(r.amount - s.amount) < 0.01 &&
-          (r.title || '').toLowerCase() === s.title.toLowerCase()
-      );
-      if (already) continue;
-
-      // Use last transaction date + one interval as the next due date
-      const next = advanceDate(s.lastDate, s.frequency);
-
-      const item: RecurringItem = {
-        id: `auto_${Date.now()}_${created}`,
-        title: s.title,
-        amount: s.amount,
-        frequency: s.frequency,
-        accountId: s.accountId,
-        type: s.type,
-        active: true,
-        nextDueDate: next.toISOString(),
-        isTransfer: false,
-        fromAccountId: undefined,
-        toAccountId: undefined,
-      };
-
-      actions.addRecurring(item);
-      created++;
-    }
-
-    if (created === 0) {
-      Alert.alert(
-        'Nothing new',
-        'Detected recurring patterns already exist as recurring items.'
-      );
-    } else {
-      Alert.alert(
-        'Recurring detected',
-        `Added ${created} recurring item${created === 1 ? '' : 's'} from your history.`
-      );
-    }
-  };
-
   const handleApplyDueNow = () => {
     if (!accounts.length) {
       Alert.alert(
@@ -243,9 +84,7 @@ const RecurringScreen: React.FC = () => {
     recurring.forEach((r) => {
       if (r.active === false) return;
 
-      const nextDate = r.nextDueDate
-        ? new Date(r.nextDueDate)
-        : today;
+      const nextDate = r.nextDueDate ? new Date(r.nextDueDate) : today;
       nextDate.setHours(0, 0, 0, 0);
 
       if (nextDate > today) return;
@@ -275,8 +114,8 @@ const RecurringScreen: React.FC = () => {
           type: 'expense',
           date: isoDate,
           category: 'Transfer',
-          note: outNote,
-        } as any);
+          description: outNote,
+        } as Transaction);
 
         // Incoming (income)
         actions.addTransaction({
@@ -285,8 +124,8 @@ const RecurringScreen: React.FC = () => {
           type: 'income',
           date: isoDate,
           category: 'Transfer',
-          note: inNote,
-        } as any);
+          description: inNote,
+        } as Transaction);
 
         const newNext = advanceDate(nextDate, r.frequency);
         actions.updateRecurring(r.id, {
@@ -307,9 +146,9 @@ const RecurringScreen: React.FC = () => {
         amount: amountNum,
         type: txType,
         date: new Date().toISOString(),
-        note: r.title,
-        category: null,
-      } as any);
+        description: r.title,
+        category: r.type === 'income' ? 'Recurring income' : 'Recurring payment',
+      } as Transaction);
 
       const newNext = advanceDate(nextDate, r.frequency);
       actions.updateRecurring(r.id, {
@@ -324,9 +163,132 @@ const RecurringScreen: React.FC = () => {
     } else {
       Alert.alert(
         'Recurring applied',
-        `Created ${created} transaction${
+        `Created ${created} transaction${created === 1 ? '' : 's'}.`
+      );
+    }
+  };
+
+  /**
+   * Detect recurring payments from history, focusing on
+   * transactions whose category is "Direct Debit".
+   */
+  const handleDetectFromHistory = () => {
+    if (!txs.length) {
+      Alert.alert('No transactions', 'There are no transactions to analyse.');
+      return;
+    }
+
+    // 1) Filter: expenses with category "Direct Debit" (case-insensitive)
+    const ddCandidates = txs.filter((t) => {
+      if (!t.category || !t.accountId) return false;
+      const cat = String(t.category).trim().toLowerCase();
+      return t.type === 'expense' && cat === 'direct debit';
+    });
+
+    if (!ddCandidates.length) {
+      Alert.alert(
+        'No Direct Debits found',
+        'No expense transactions with category "Direct Debit" were found.'
+      );
+      return;
+    }
+
+    // 2) Group by account + title + amount
+    //    Title derived from description || category.
+    type GroupKey = string;
+    const groups: Record<GroupKey, Transaction[]> = {};
+
+    for (const t of ddCandidates) {
+      const titleSource =
+        (t.description || t.category || '').trim() || 'Direct Debit';
+      const amountAbs = Math.abs(Number(t.amount) || 0);
+      if (!t.accountId || !amountAbs) continue;
+
+      const key: GroupKey = `${t.accountId}||${titleSource.toLowerCase()}||${amountAbs.toFixed(
+        2
+      )}`;
+
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    }
+
+    let created = 0;
+
+    // 3) For each group, create a monthly recurring if not already present
+    Object.entries(groups).forEach(([key, list]) => {
+      if (!list.length) return;
+
+      // Take the latest transaction as the template
+      const sorted = list
+        .filter((t) => !!t.date)
+        .slice()
+        .sort((a, b) => {
+          const da = a.date ? Date.parse(a.date) : 0;
+          const db = b.date ? Date.parse(b.date) : 0;
+          return db - da;
+        });
+
+      const sample = sorted[0] ?? list[0];
+      if (!sample.accountId) return;
+
+      const amountAbs = Math.abs(Number(sample.amount) || 0);
+      if (!amountAbs) return;
+
+      const titleSource =
+        (sample.description || sample.category || '').trim() || 'Direct Debit';
+
+      // Avoid duplicates: check if similar recurring already exists
+      const exists = recurring.some((r) => {
+        if (r.isTransfer) return false;
+        if (!r.accountId) return false;
+
+        const rTitle = (r.title || '').trim().toLowerCase();
+        const sTitle = titleSource.toLowerCase();
+        const rAmt = Math.abs(Number(r.amount) || 0);
+
+        return (
+          r.accountId === sample.accountId &&
+          rTitle === sTitle &&
+          rAmt === amountAbs
+        );
+      });
+
+      if (exists) return;
+
+      const nextDueDate =
+        sample.date && typeof sample.date === 'string'
+          ? sample.date
+          : new Date().toISOString();
+
+      const item: RecurringItem = {
+        id: `rec_auto_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        title: titleSource,
+        amount: amountAbs,
+        frequency: 'monthly', // assume monthly for Direct Debits
+        accountId: sample.accountId,
+        type: 'expense',
+        active: true,
+        nextDueDate,
+        isTransfer: false,
+        fromAccountId: undefined,
+        toAccountId: undefined,
+      };
+
+      actions.addRecurring(item);
+      created++;
+    });
+
+    if (created === 0) {
+      Alert.alert(
+        'Already covered',
+        'No new recurring items were created. Existing recurring items already cover these Direct Debits.'
+      );
+    } else {
+      Alert.alert(
+        'Recurring detected',
+        `Created ${created} recurring Direct Debit item${
           created === 1 ? '' : 's'
-        }.`
+        } from history.`
       );
     }
   };
@@ -338,26 +300,20 @@ const RecurringScreen: React.FC = () => {
     >
       <Text style={styles.h1}>Recurring Payments</Text>
 
-      <Pressable
-        style={styles.applyButton}
-        onPress={handleApplyDueNow}
-      >
+      <Pressable style={styles.applyButton} onPress={handleApplyDueNow}>
         <Text style={styles.applyButtonText}>Apply due now</Text>
       </Pressable>
 
       <Pressable
-        style={styles.detectButton}
+        style={[styles.applyButton, styles.detectButton]}
         onPress={handleDetectFromHistory}
       >
-        <Text style={styles.detectButtonText}>
-          Detect recurring from history
-        </Text>
+        <Text style={styles.applyButtonText}>Detect from history</Text>
       </Pressable>
 
       {recurring.length === 0 && (
         <Text style={styles.subtle}>
-          No recurring items yet. Tap &quot;Add Recurring&quot; to
-          create one, or detect patterns from your history.
+          No recurring items yet. Tap &quot;Add Recurring&quot; to create one.
         </Text>
       )}
 
@@ -368,12 +324,8 @@ const RecurringScreen: React.FC = () => {
 
         let extraStr = '';
         if (isTransfer && r.fromAccountId && r.toAccountId) {
-          const fromAcc = accounts.find(
-            (a: any) => a.id === r.fromAccountId
-          );
-          const toAcc = accounts.find(
-            (a: any) => a.id === r.toAccountId
-          );
+          const fromAcc = accounts.find((a: any) => a.id === r.fromAccountId);
+          const toAcc = accounts.find((a: any) => a.id === r.toAccountId);
           const fromName = fromAcc?.name || 'From';
           const toName = toAcc?.name || 'To';
           extraStr = `Transfer ${fromName} → ${toName}`;
@@ -390,29 +342,22 @@ const RecurringScreen: React.FC = () => {
             <Pressable onPress={() => handleEdit(r)}>
               <Text style={styles.itemTitle}>
                 {r.title ||
-                  (isTransfer
-                    ? 'Recurring transfer'
-                    : 'Recurring item')}
+                  (isTransfer ? 'Recurring transfer' : 'Recurring item')}
               </Text>
               <Text style={styles.itemSubtitle}>{subtitle}</Text>
               {r.nextDueDate && (
                 <Text style={styles.subtle}>
-                  Next due:{' '}
-                  {formatDateDDMMYYYY(r.nextDueDate)}
+                  Next due: {formatDateDDMMYYYY(r.nextDueDate)}
                 </Text>
               )}
             </Pressable>
 
             <View style={styles.rowActions}>
-              <Pressable
-                onPress={() => handleToggleActive(r)}
-              >
+              <Pressable onPress={() => handleToggleActive(r)}>
                 <Text
                   style={[
                     styles.badge,
-                    r.active !== false
-                      ? styles.badgeActive
-                      : styles.badgePaused,
+                    r.active !== false ? styles.badgeActive : styles.badgePaused,
                   ]}
                 >
                   {r.active !== false ? 'Active' : 'Paused'}
@@ -459,24 +404,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#2563eb',
-    marginBottom: 12,
+    marginBottom: 8,
+  },
+  detectButton: {
+    borderColor: '#4b5563',
   },
   applyButtonText: {
     color: '#bfdbfe',
-    fontWeight: '600',
-  },
-  detectButton: {
-    backgroundColor: '#0b1120',
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#4b5563',
-    marginBottom: 16,
-  },
-  detectButtonText: {
-    color: '#e5e7eb',
     fontWeight: '600',
   },
   card: {

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Pressable,
   Platform,
+  SafeAreaView,
 } from 'react-native';
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -24,7 +25,6 @@ export default function DashboardScreen({ navigation }: Props) {
   const { totalBalance, accountCount } = useMemo(() => {
     const balanceById: Record<string, number> = {};
 
-    // start all at zero
     for (const acc of accounts) {
       if (acc && acc.id) {
         balanceById[acc.id] = 0;
@@ -99,7 +99,7 @@ export default function DashboardScreen({ navigation }: Props) {
       .filter((x): x is { item: RecurringItem; date: Date } => !!x)
       .filter(({ date }) => date >= today && date <= horizon)
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-      .slice(0, 3); // show top 3
+      .slice(0, 3);
 
     return items;
   }, [recurring]);
@@ -118,23 +118,24 @@ export default function DashboardScreen({ navigation }: Props) {
     monthSummary.net >= 0 ? styles.positiveText : styles.negativeText;
 
   return (
-    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      {/* ---------- Header with SETTINGS + LOGOUT ---------- */}
-      <View style={styles.headerRow}>
-        <View style={{ flexShrink: 1 }}>
-          <Text style={styles.h1}>Dashboard</Text>
-          <Text style={styles.subtle}>
-            Quick view of balances, activity & upcoming payments
-          </Text>
-        </View>
+    <SafeAreaView style={styles.safeWrap}>
+      <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+        {/* ---------- Header with SETTINGS + LOGOUT ---------- */}
+        <View style={styles.headerRow}>
+          <View style={{ flexShrink: 1 }}>
+            <Text style={styles.h1}>Dashboard</Text>
+            <Text style={styles.subtle}>
+              Quick view of balances, activity & upcoming payments
+            </Text>
+          </View>
 
-        <View style={styles.headerPillsRow}>
-          <Pressable
-            style={styles.headerPill}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Text style={styles.headerPillText}>Settings</Text>
-          </Pressable>
+          <View style={styles.headerPillsRow}>
+            <Pressable
+              style={styles.headerPill}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Text style={styles.headerPillText}>Settings</Text>
+            </Pressable>
 
             <Pressable
               style={[styles.headerPill, styles.logoutPill]}
@@ -142,154 +143,160 @@ export default function DashboardScreen({ navigation }: Props) {
             >
               <Text style={styles.headerPillText}>Logout</Text>
             </Pressable>
-        </View>
-      </View>
-
-      {/* ---------- Summary Card ---------- */}
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Overview</Text>
-
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Total balance</Text>
-            <Text style={styles.summaryValue}>{formatMoney(totalBalance)}</Text>
-            <Text style={styles.summarySub}>
-              Across {accountCount} account{accountCount === 1 ? '' : 's'}
-            </Text>
-          </View>
-
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>This month</Text>
-            <Text style={[styles.summaryValue, monthNetColor]}>
-              {monthSummary.net >= 0 ? '+' : '-'}
-              {formatMoney(Math.abs(monthSummary.net))}
-            </Text>
-            <Text style={styles.summarySub}>
-              In: {formatMoney(monthSummary.income)} · Out:{' '}
-              {formatMoney(monthSummary.expense)}
-            </Text>
           </View>
         </View>
-      </View>
 
-      {/* ---------- Upcoming Recurring ---------- */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>Upcoming (next 30 days)</Text>
-          <Pressable onPress={() => navigation.navigate('Recurring')}>
-            <Text style={styles.cardLink}>Manage</Text>
-          </Pressable>
-        </View>
+        {/* ---------- Summary Card ---------- */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Overview</Text>
 
-        {upcomingRecurring.length === 0 ? (
-          <Text style={styles.subtle}>
-            No active recurring items due in the next 30 days.
-          </Text>
-        ) : (
-          upcomingRecurring.map(({ item, date }) => (
-            <View key={item.id} style={styles.upcomingRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.upcomingTitle}>
-                  {item.title || (item.isTransfer ? 'Recurring transfer' : 'Recurring payment')}
-                </Text>
-                <Text style={styles.upcomingSub}>
-                  {item.frequency.charAt(0).toUpperCase() +
-                    item.frequency.slice(1)}{' '}
-                  · {date.toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={styles.upcomingAmount}>
-                £{Number(item.amount || 0).toFixed(2)}
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Total balance</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totalBalance)}</Text>
+              <Text style={styles.summarySub}>
+                Across {accountCount} account{accountCount === 1 ? '' : 's'}
               </Text>
             </View>
-          ))
-        )}
-      </View>
 
-      {/* ---------- Navigation Grid ---------- */}
-      <View style={styles.grid}>
-        {/* Accounts / Payments */}
-        <View style={styles.gridRow}>
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('AddAccount')}
-          >
-            <Text style={styles.gridTitle}>Accounts</Text>
-            <Text style={styles.gridSub}>
-              Add / manage accounts ({accountCount})
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>This month</Text>
+              <Text style={[styles.summaryValue, monthNetColor]}>
+                {monthSummary.net >= 0 ? '+' : '-'}
+                {formatMoney(Math.abs(monthSummary.net))}
+              </Text>
+              <Text style={styles.summarySub}>
+                In: {formatMoney(monthSummary.income)} · Out:{' '}
+                {formatMoney(monthSummary.expense)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ---------- Upcoming Recurring ---------- */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Upcoming (next 30 days)</Text>
+            <Pressable onPress={() => navigation.navigate('Recurring')}>
+              <Text style={styles.cardLink}>Manage</Text>
+            </Pressable>
+          </View>
+
+          {upcomingRecurring.length === 0 ? (
+            <Text style={styles.subtle}>
+              No active recurring items due in the next 30 days.
             </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('Payments')}
-          >
-            <Text style={styles.gridTitle}>Payments</Text>
-            <Text style={styles.gridSub}>Browse and edit transactions</Text>
-          </Pressable>
+          ) : (
+            upcomingRecurring.map(({ item, date }) => (
+              <View key={item.id} style={styles.upcomingRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.upcomingTitle}>
+                    {item.title ||
+                      (item.isTransfer ? 'Recurring transfer' : 'Recurring item')}
+                  </Text>
+                  <Text style={styles.upcomingSub}>
+                    {item.frequency.charAt(0).toUpperCase() +
+                      item.frequency.slice(1)}{' '}
+                    · {date.toLocaleDateString()}
+                  </Text>
+                </View>
+                <Text style={styles.upcomingAmount}>
+                  £{Number(item.amount || 0).toFixed(2)}
+                </Text>
+              </View>
+            ))
+          )}
         </View>
 
-        {/* Recurring / Budgets */}
-        <View style={styles.gridRow}>
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('Recurring')}
-          >
-            <Text style={styles.gridTitle}>Recurring</Text>
-            <Text style={styles.gridSub}>Direct debits & standing orders</Text>
-          </Pressable>
+        {/* ---------- Navigation Grid ---------- */}
+        <View style={styles.grid}>
+          {/* Accounts / Payments */}
+          <View style={styles.gridRow}>
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('AddAccount')}
+            >
+              <Text style={styles.gridTitle}>Accounts</Text>
+              <Text style={styles.gridSub}>
+                Add / manage accounts ({accountCount})
+              </Text>
+            </Pressable>
 
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('Budgets')}
-          >
-            <Text style={styles.gridTitle}>Budgets</Text>
-            <Text style={styles.gridSub}>Plan spending by category</Text>
-          </Pressable>
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Payments')}
+            >
+              <Text style={styles.gridTitle}>Payments</Text>
+              <Text style={styles.gridSub}>Browse and edit transactions</Text>
+            </Pressable>
+          </View>
+
+          {/* Recurring / Budgets */}
+          <View style={styles.gridRow}>
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Recurring')}
+            >
+              <Text style={styles.gridTitle}>Recurring</Text>
+              <Text style={styles.gridSub}>Direct debits & standing orders</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Budgets')}
+            >
+              <Text style={styles.gridTitle}>Budgets</Text>
+              <Text style={styles.gridSub}>Plan spending by category</Text>
+            </Pressable>
+          </View>
+
+          {/* Reports / Notifications */}
+          <View style={styles.gridRow}>
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Reports')}
+            >
+              <Text style={styles.gridTitle}>Reports</Text>
+              <Text style={styles.gridSub}>See trends & breakdowns</Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.gridCard}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Text style={styles.gridTitle}>Notifications</Text>
+              <Text style={styles.gridSub}>Alerts & reminders</Text>
+            </Pressable>
+          </View>
+
+          {/* Data export/import */}
+          <View style={styles.gridRow}>
+            <Pressable
+              style={[styles.gridCard, { flex: 1 }]}
+              onPress={() => navigation.navigate('DataExportImport')}
+            >
+              <Text style={styles.gridTitle}>Data export / import</Text>
+              <Text style={styles.gridSub}>Backups, CSV import & export</Text>
+            </Pressable>
+          </View>
         </View>
-
-        {/* Reports / Notifications */}
-        <View style={styles.gridRow}>
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('Reports')}
-          >
-            <Text style={styles.gridTitle}>Reports</Text>
-            <Text style={styles.gridSub}>See trends & breakdowns</Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.gridCard}
-            onPress={() => navigation.navigate('Notifications')}
-          >
-            <Text style={styles.gridTitle}>Notifications</Text>
-            <Text style={styles.gridSub}>Alerts & reminders</Text>
-          </Pressable>
-        </View>
-
-        {/* Data export/import */}
-        <View style={styles.gridRow}>
-          <Pressable
-            style={[styles.gridCard, { flex: 1 }]}
-            onPress={() => navigation.navigate('DataExportImport')}
-          >
-            <Text style={styles.gridTitle}>Data export / import</Text>
-            <Text style={styles.gridSub}>Backups, CSV import & export</Text>
-          </Pressable>
-        </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
+  safeWrap: {
     flex: 1,
     backgroundColor: '#050816',
   },
+  wrap: {
+    flex: 1,
+  },
   content: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 16 : 8,
+    // a bit of extra top space on iOS to sit comfortably below status bar
+    paddingTop: Platform.OS === 'ios' ? 8 : 8,
     paddingBottom: 32,
   },
 
