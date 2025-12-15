@@ -29,6 +29,46 @@ export default function AccountScreen({ navigation, route }: Props) {
     [txs, account]
   );
 
+const forwardBalanceAfterMap = useMemo(() => {
+  if (!account) return {};
+
+  // Current balance now (after all txns). Fallback if missing.
+  const currentBalanceNow = Number(account.balance);
+  const current = Number.isFinite(currentBalanceNow) ? currentBalanceNow : 0;
+
+  // Sort oldest → newest for correct running balance
+  const asc = [...accountTxs].sort((a, b) => {
+    const da = String(a.date || '');
+    const db = String(b.date || '');
+    const d = da.localeCompare(db);
+    if (d !== 0) return d;
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  // Net effect of all txns (income adds, expense subtracts)
+  let net = 0;
+  for (const t of asc) {
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'income') net += amt;
+    else if (t.type === 'expense') net -= amt;
+  }
+
+  // Opening balance before earliest txn
+  let running = current - net;
+
+  const map: Record<string, number> = {};
+  for (const t of asc) {
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'income') running += amt;
+    else if (t.type === 'expense') running -= amt;
+
+    map[t.id] = running; // balance AFTER this txn
+  }
+
+  return map;
+}, [account, accountTxs]);
+
+
   // Summary numbers (unchanged logic from your snippet)
   const { netFromTxs, income, expense } = useMemo(() => {
     let income = 0;
@@ -217,9 +257,9 @@ export default function AccountScreen({ navigation, route }: Props) {
                     {sign}£{Number(item.amount).toFixed(2)}
                   </Text>
 
-                  <Text style={styles.txBalanceAfter}>
-                    Bal £{Number(balanceAfterMap[item.id] ?? 0).toFixed(2)}
-                  </Text>
+                <Text style={styles.txBalanceAfter}>
+                  Bal £{Number(forwardBalanceAfterMap[item.id] ?? 0).toFixed(2)}
+                </Text>
                 </View>
               </Pressable>
             );
