@@ -210,7 +210,10 @@ export default function DashboardScreen({ navigation }: Props) {
 
         {/* ---------- Navigation Grid ---------- */}
         <View style={styles.grid}>
-          {/* Primary actions */}
+          {/* Accounts / Payments */}
+          <View style={styles.gridRow}>
+
+
             <Pressable
               style={styles.gridCard}
               onPress={() => navigation.navigate('Payments')}
@@ -218,7 +221,8 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.gridTitle}>Payments</Text>
               <Text style={styles.gridSub}>Browse and edit transactions</Text>
             </Pressable>
-          </View>          
+          </View>
+
         {/* Accounts list (Dashboard) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -256,7 +260,6 @@ export default function DashboardScreen({ navigation }: Props) {
           )}
         </View>
 
-          <View style={styles.gridRow}>
           {/* Recurring / Budgets */}
           <View style={styles.gridRow}>
             <Pressable
