@@ -337,6 +337,10 @@ const RecurringScreen: React.FC = () => {
         if (extraStr) subtitleParts.push(extraStr);
         const subtitle = subtitleParts.join(' • ');
 
+        <Pressable style={styles.button} onPress={handleAddNew}>
+            <Text style={styles.buttonText}>Add Recurring</Text>
+        </Pressable>
+        
         return (
           <View key={r.id} style={styles.card}>
             <Pressable onPress={() => handleEdit(r)}>
@@ -351,11 +355,7 @@ const RecurringScreen: React.FC = () => {
                 </Text>
               )}
             </Pressable>
-            
-            <Pressable style={styles.button} onPress={handleAddNew}>
-              <Text style={styles.buttonText}>Add Recurring</Text>
-            </Pressable>
-            
+           
             <View style={styles.rowActions}>
               <Pressable onPress={() => handleToggleActive(r)}>
                 <Text
