@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+// src/screens/BackupRestoreScreen.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Switch } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -7,9 +8,13 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../state/AppContext';
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
 
-const FS: any = FileSystem as any;
+import {
+  getSavedBackupReminderMode,
+  setBackupReminderMode,
+  type BackupReminderMode,
+} from '../utils/backupReminder';
 
-const [preview, setPreview] = useState<BackupLatest | null>(null);
+const FS: any = FileSystem as any;
 
 export default function BackupRestoreScreen() {
   const { state, actions } = useApp();
@@ -21,6 +26,40 @@ export default function BackupRestoreScreen() {
   const [preview, setPreview] = useState<BackupLatest | null>(null);
   const [status, setStatus] = useState<string>('');
   const [replaceMode, setReplaceMode] = useState(true);
+
+  const [reminderMode, setReminderModeState] = useState<BackupReminderMode>('off');
+  const [reminderStatus, setReminderStatus] = useState<string>('');
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const mode = await getSavedBackupReminderMode();
+        setReminderModeState(mode);
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  const applyReminderMode = async (mode: BackupReminderMode) => {
+    try {
+      setReminderStatus('');
+      await setBackupReminderMode(mode);
+      setReminderModeState(mode);
+
+      if (mode === 'off') setReminderStatus('Backup reminder turned off.');
+      if (mode === 'weekly') setReminderStatus('Weekly reminder set (Sunday 18:00).');
+      if (mode === 'monthly') setReminderStatus('Monthly reminder set (1st at 18:00).');
+    } catch (e: any) {
+      setReminderStatus(e?.message || 'Could not set reminder.');
+      try {
+        const modeNow = await getSavedBackupReminderMode();
+        setReminderModeState(modeNow);
+      } catch {
+        // ignore
+      }
+    }
+  };
 
   const counts = useMemo(
     () => ({
@@ -49,9 +88,7 @@ export default function BackupRestoreScreen() {
       const uri = baseDir + filename;
 
       if (!FS.writeAsStringAsync) {
-        throw new Error(
-          'expo-file-system is not available at runtime. Ensure expo-file-system is installed.'
-        );
+        throw new Error('expo-file-system is not available at runtime.');
       }
 
       await FS.writeAsStringAsync(uri, json);
@@ -87,19 +124,14 @@ export default function BackupRestoreScreen() {
       if (!asset?.uri) throw new Error('No file selected.');
 
       if (!FS.readAsStringAsync) {
-        throw new Error(
-          'expo-file-system is not available at runtime. Ensure expo-file-system is installed.'
-        );
+        throw new Error('expo-file-system is not available at runtime.');
       }
 
       const text = await FS.readAsStringAsync(asset.uri);
-
       const parsed = parseAndValidateBackup(text);
-      setPreview(parsed);
 
-      setStatus(
-        `Loaded backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)})`
-      );
+      setPreview(parsed);
+      setStatus(`Loaded backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)})`);
     } catch (e: any) {
       setStatus(e?.message || 'Import failed.');
     }
@@ -125,9 +157,10 @@ export default function BackupRestoreScreen() {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>Backup & Restore</Text>
+      <Text style={styles.h1}>Backup &amp; Restore</Text>
       <Text style={styles.subtle}>
-        Export a full backup of accounts + transactions (and recurring), or restore from a backup file.
+        Export a full backup of accounts + transactions (and recurring), or restore from a backup
+        file.
       </Text>
 
       <View style={styles.card}>
@@ -139,6 +172,33 @@ export default function BackupRestoreScreen() {
         <Pressable style={styles.btn} onPress={handleExportBackup}>
           <Text style={styles.btnText}>Export full backup (JSON)</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Backup reminder</Text>
+        <Text style={styles.cardLine}>Get a notification reminder to export a backup to Files.</Text>
+
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Weekly (Sun 18:00)</Text>
+          <Switch
+            value={reminderMode === 'weekly'}
+            onValueChange={(v) => applyReminderMode(v ? 'weekly' : 'off')}
+            trackColor={{ false: '#222', true: '#3ddc84' }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>Monthly (1st 18:00)</Text>
+          <Switch
+            value={reminderMode === 'monthly'}
+            onValueChange={(v) => applyReminderMode(v ? 'monthly' : 'off')}
+            trackColor={{ false: '#222', true: '#3ddc84' }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {reminderStatus ? <Text style={styles.status}>{reminderStatus}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -163,15 +223,11 @@ export default function BackupRestoreScreen() {
             <Text style={styles.previewTitle}>Preview</Text>
             <Text style={styles.previewLine}>Version: {preview.version}</Text>
             <Text style={styles.previewLine}>Exported: {preview.exportedAt}</Text>
-            <Text style={styles.previewLine}>
-              Accounts: {preview.app.accounts.length}
-            </Text>
+            <Text style={styles.previewLine}>Accounts: {preview.app.accounts.length}</Text>
             <Text style={styles.previewLine}>
               Transactions: {preview.app.transactions.length}
             </Text>
-            <Text style={styles.previewLine}>
-              Recurring: {preview.app.recurring.length}
-            </Text>
+            <Text style={styles.previewLine}>Recurring: {preview.app.recurring.length}</Text>
 
             <Pressable style={styles.btnDanger} onPress={handleApplyRestore}>
               <Text style={styles.btnText}>Apply restore</Text>
