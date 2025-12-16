@@ -311,6 +311,10 @@ const RecurringScreen: React.FC = () => {
         <Text style={styles.applyButtonText}>Detect from history</Text>
       </Pressable>
 
+      <Pressable style={styles.button} onPress={handleAddNew}>
+        <Text style={styles.buttonText}>Add Recurring</Text>
+      </Pressable>
+
       {recurring.length === 0 && (
         <Text style={styles.subtle}>
           No recurring items yet. Tap &quot;Add Recurring&quot; to create one.
@@ -336,11 +340,7 @@ const RecurringScreen: React.FC = () => {
         const subtitleParts = [amountStr, freqStr];
         if (extraStr) subtitleParts.push(extraStr);
         const subtitle = subtitleParts.join(' • ');
-
-        <Pressable style={styles.button} onPress={handleAddNew}>
-            <Text style={styles.buttonText}>Add Recurring</Text>
-        </Pressable>
-        
+     
         return (
           <View key={r.id} style={styles.card}>
             <Pressable onPress={() => handleEdit(r)}>
