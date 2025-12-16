@@ -1,0 +1,309 @@
+
+TheTower UK <thetoweruk@gmail.com>
+21:58 (0 minutes ago)
+to me
+
+{
+"version": 1,
+"exportedAt": "2025-12-15T21:58:06.986Z",
+"accounts": [
+{
+"name": "First Direct",
+"id": "1765832403996-4737d17326c00c"
+},
+{
+"name": "Revolut",
+"id": "1765832403996-712e63df9d8b98"
+}
+],
+"transactions": [
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 2500,
+"type": "income",
+"date": "2025-12-05",
+"description": "Transfer In",
+"category": "Opening Balance",
+"id": "1765832403996-9259628aa25608"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 600,
+"type": "income",
+"date": "2025-12-05",
+"description": "STERLING SOLUTIONSSOLP5926671",
+"category": "Salary",
+"id": "1765832403996-9b421649842d2"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 3.2,
+"type": "expense",
+"date": "2025-12-04",
+"description": "MARKS&SPENCER PLC ST ALBANS",
+"category": "Food Shopping",
+"id": "1765832403996-3cadc23fe38246"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 25,
+"type": "expense",
+"date": "2025-12-04",
+"description": "AMZNMktplace*Z19AHLONDON",
+"category": "General",
+"id": "1765832403996-229ff97bdfb69"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 16,
+"type": "expense",
+"date": "2025-12-04",
+"description": "Netflix.com Los Gatos",
+"category": "Direct Debit",
+"id": "1765832403996-a621b693d53a"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 29,
+"type": "expense",
+"date": "2025-12-04",
+"description": "HOMESERVE GB LIMIT",
+"category": "General",
+"id": "1765832403996-34486646a245c2"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 66,
+"type": "expense",
+"date": "2025-12-02",
+"description": "MARKS&SPENCER PLC ST ALBANS",
+"category": "Food Shopping",
+"id": "1765832403996-209533e50e5982"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 5.65,
+"type": "expense",
+"date": "2025-12-02",
+"description": "MARKS&SPENCER PLC ST ALBANS",
+"category": "Food Shopping",
+"id": "1765832403996-caf835ea8e99b8"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 75.68,
+"type": "income",
+"date": "2025-12-02",
+"description": "AMZNMktplace LONDON",
+"category": "General",
+"id": "1765832403996-81f02851705f9"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 1.6,
+"type": "expense",
+"date": "2025-12-01",
+"description": "B & Q 1322 STEVENAGE",
+"category": "DIY",
+"id": "1765832403996-1e4c483ae48a0c"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 1.6,
+"type": "expense",
+"date": "2025-12-01",
+"description": "B & Q 1322 STEVENAGE",
+"category": "DIY",
+"id": "1765832403996-ab1bcd6b998b4"
+},
+{
+"accountId": "1765832403996-712e63df9d8b98",
+"amount": 19.65,
+"type": "expense",
+"date": "2025-12-01",
+"description": "MARKS&SPENCER PLC HERTFORDSHIRE",
+"category": "Food Shopping",
+"id": "1765832403996-b6e352cea73f68"
+},
+{
+"accountId": "1765832403996-712e63df9d8b98",
+"amount": 11.5,
+"type": "expense",
+"date": "2025-12-01",
+"description": "AMZNMktplace*ZX5E0LONDON",
+"category": "General",
+"id": "1765832403997-8496fd27963fb8"
+},
+{
+"accountId": "1765832403996-712e63df9d8b98",
+"amount": 24.99,
+"type": "expense",
+"date": "2025-12-01",
+"description": "AMZNMktplace*ZR5STLONDON",
+"category": "General",
+"id": "1765832403997-083f2fe03937bd8"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 147.11,
+"type": "expense",
+"date": "2025-12-02",
+"description": "SAINSBURYS.CO.UK 0800 328 1700",
+"category": "Food Shopping",
+"id": "1765832403997-767cece8a09a04"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 17,
+"type": "income",
+"date": "2025-12-03",
+"description": "KERR M M&S",
+"category": "Food Shopping",
+"id": "1765832403997-c3dec76aab8d7"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 8.79,
+"type": "expense",
+"date": "2025-12-04",
+"description": "BG SERVICES",
+"category": "Direct Debit",
+"id": "1765832403997-5ae10f525b701"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 70,
+"type": "expense",
+"date": "2025-12-05",
+"description": "AFFINITY WATER",
+"category": "Direct Debit",
+"id": "1765832403997-5599e235d9144c"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 12,
+"type": "expense",
+"date": "2025-12-06",
+"description": "EYEPLAN",
+"category": "Direct Debit",
+"id": "1765832403997-ed32587c24fdf"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 47.46,
+"type": "expense",
+"date": "2025-12-07",
+"description": "BEAGLE ST",
+"category": "Direct Debit",
+"id": "1765832403997-11191231581e55"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 37.62,
+"type": "expense",
+"date": "2025-12-01",
+"description": "DVLA-LT16GKP",
+"category": "Direct Debit",
+"id": "1765832403997-20aae1c34de19e"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 16.62,
+"type": "expense",
+"date": "2025-12-01",
+"description": "DVLA-WO21TKZ",
+"category": "Direct Debit",
+"id": "1765832403997-10030d02582a7f"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 3.06,
+"type": "expense",
+"date": "2025-12-01",
+"description": "DVLA-KN59BWK",
+"category": "Direct Debit",
+"id": "1765832403997-58e01a367725cc"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 100,
+"type": "expense",
+"date": "2025-11-30",
+"description": "VIRGIN MONEY CARD VM0000******0",
+"category": "Payment",
+"id": "1765832403997-f7cc96697d43c8"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 39.32,
+"type": "expense",
+"date": "2025-11-28",
+"description": "AMZNMktplace*ZR7ZMLONDON",
+"category": "General",
+"id": "1765832403997-01fc4fcbf42b917"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 86.67,
+"type": "expense",
+"date": "2025-11-28",
+"description": "AMZNMktplace*ZR8EZLONDON",
+"category": "General",
+"id": "1765832403997-3bc8f18c24cb5"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 52.91,
+"type": "income",
+"date": "2025-11-28",
+"description": "AMZNMktplace LONDON",
+"category": "General",
+"id": "1765832403997-adfcb7be712748"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 133,
+"type": "expense",
+"date": "2025-11-28",
+"description": "JENNY KERR 4751300150609904",
+"category": "Transfer",
+"id": "1765832403997-0a6e056a54ffec"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 1404.98,
+"type": "income",
+"date": "2025-11-28",
+"description": "STERLING SOLUTIONSSOLP5924033",
+"category": "Salary",
+"id": "1765832403997-b6be91a307cf7"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 1233.38,
+"type": "expense",
+"date": "2025-11-28",
+"description": "NATWEST BANK",
+"category": "Transfer",
+"id": "1765832403997-55b0fbfd36abcc"
+},
+{
+"accountId": "1765832403996-4737d17326c00c",
+"amount": 409.82,
+"type": "expense",
+"date": "2025-11-28",
+"description": "MBNA LOANS",
+"category": "Payment",
+"id": "1765832403997-b2ca52e4912588"
+},
+{
+"accountId": "1765832403996-712e63df9d8b98",
+"amount": 300,
+"type": "income",
+"date": "2025-11-27",
+"description": "KERR J H FIRST DIRECT",
+"category": "Transfer",
+"id": "1765832403997-ef7913720e27f8"
+}
+]
+}

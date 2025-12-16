@@ -18,6 +18,29 @@ import { useApp } from '../state/AppContext';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 
+import * as Sharing from 'expo-sharing';
+
+const FS: any = FileSystem as any;
+
+async function writeAndShareFile(filename: string, contents: string, mimeType: string) {
+  const baseDir: string | undefined = FS.documentDirectory;
+  if (!baseDir) throw new Error('File system directory not available.');
+
+  const uri = baseDir + filename;
+
+  if (!FS.writeAsStringAsync) {
+    throw new Error('expo-file-system is not available. Install expo-file-system.');
+  }
+
+  await FS.writeAsStringAsync(uri, contents);
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType, dialogTitle: 'Save / Share file' });
+  } else {
+    throw new Error('Sharing is not available on this device.');
+  }
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
 /**

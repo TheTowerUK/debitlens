@@ -1,11 +1,49 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Switch } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useApp } from '../state/AppContext';
 import { createBackupV1, parseAndValidateBackup, type BackupV1 } from '../utils/backup';
+
+const FS: any = FileSystem as any;
+
+async function pickAndRestoreJson(actions: any, setStatus: (s: string) => void) {
+  try {
+    setStatus('');
+
+    const res = await DocumentPicker.getDocumentAsync({
+      type: ['application/json', 'text/json', 'text/plain'],
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (res.canceled) return;
+
+    const asset = res.assets?.[0];
+    if (!asset?.uri) throw new Error('No file selected.');
+
+    if (!FS.readAsStringAsync) {
+      throw new Error('expo-file-system is not available. Install expo-file-system.');
+    }
+
+    const text = await FS.readAsStringAsync(asset.uri);
+    const backup = parseAndValidateBackup(text);
+
+    // Full restore (replace)
+    actions.replaceAllData({
+      accounts: backup.app.accounts,
+      transactions: backup.app.transactions,
+      recurring: backup.app.recurring,
+    });
+
+    setStatus('Restore applied (JSON backup replaced your data).');
+  } catch (e: any) {
+    setStatus(e?.message || 'Restore failed.');
+  }
+}
+
 
 export default function BackupRestoreScreen() {
   const { state, actions } = useApp();
