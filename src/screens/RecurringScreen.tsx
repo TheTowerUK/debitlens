@@ -351,7 +351,11 @@ const RecurringScreen: React.FC = () => {
                 </Text>
               )}
             </Pressable>
-
+            
+            <Pressable style={styles.button} onPress={handleAddNew}>
+              <Text style={styles.buttonText}>Add Recurring</Text>
+            </Pressable>
+            
             <View style={styles.rowActions}>
               <Pressable onPress={() => handleToggleActive(r)}>
                 <Text
@@ -372,9 +376,7 @@ const RecurringScreen: React.FC = () => {
         );
       })}
 
-      <Pressable style={styles.button} onPress={handleAddNew}>
-        <Text style={styles.buttonText}>Add Recurring</Text>
-      </Pressable>
+
     </ScrollView>
   );
 };
