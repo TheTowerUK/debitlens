@@ -28,9 +28,12 @@ const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
     }
 
     // We only pass the fields that actually exist on Account.
-    actions.addAccount({
-      name: trimmedName,
-    });
+  actions.addAccount({
+    name: trimmedName,
+    type: 'bank',   // sensible default
+    balance: 0,     // opening balance
+  });
+
 
     navigation.goBack();
   };
