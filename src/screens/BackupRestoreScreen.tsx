@@ -5,45 +5,13 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useApp } from '../state/AppContext';
-import { createBackupV1, parseAndValidateBackup, type BackupV1 } from '../utils/backup';
+import {
+  createBackupV1,
+  parseAndValidateBackup,
+  type BackupV1,
+} from '../utils/backup';
 
 const FS: any = FileSystem as any;
-
-async function pickAndRestoreJson(actions: any, setStatus: (s: string) => void) {
-  try {
-    setStatus('');
-
-    const res = await DocumentPicker.getDocumentAsync({
-      type: ['application/json', 'text/json', 'text/plain'],
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-
-    if (res.canceled) return;
-
-    const asset = res.assets?.[0];
-    if (!asset?.uri) throw new Error('No file selected.');
-
-    if (!FS.readAsStringAsync) {
-      throw new Error('expo-file-system is not available. Install expo-file-system.');
-    }
-
-    const text = await FS.readAsStringAsync(asset.uri);
-    const backup = parseAndValidateBackup(text);
-
-    // Full restore (replace)
-    actions.replaceAllData({
-      accounts: backup.app.accounts,
-      transactions: backup.app.transactions,
-      recurring: backup.app.recurring,
-    });
-
-    setStatus('Restore applied (JSON backup replaced your data).');
-  } catch (e: any) {
-    setStatus(e?.message || 'Restore failed.');
-  }
-}
-
 
 export default function BackupRestoreScreen() {
   const { state, actions } = useApp();
@@ -55,9 +23,6 @@ export default function BackupRestoreScreen() {
   const [preview, setPreview] = useState<BackupV1 | null>(null);
   const [status, setStatus] = useState<string>('');
   const [replaceMode, setReplaceMode] = useState(true);
-
-  // TS-escape hatch for mismatched typings
-  const FS: any = FileSystem as any;
 
   const counts = useMemo(
     () => ({
@@ -71,6 +36,7 @@ export default function BackupRestoreScreen() {
   const handleExportBackup = async () => {
     try {
       setStatus('');
+
       const backup = createBackupV1({ accounts, transactions, recurring });
       const json = JSON.stringify(backup, null, 2);
 
@@ -95,8 +61,9 @@ export default function BackupRestoreScreen() {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: 'application/json',
-          dialogTitle: 'Share backup file',
+          dialogTitle: 'Save / Share backup file',
         });
+        setStatus('Backup ready to save/share.');
       } else {
         setStatus(`Backup saved to: ${uri}`);
       }
@@ -132,7 +99,9 @@ export default function BackupRestoreScreen() {
       const parsed = parseAndValidateBackup(text);
       setPreview(parsed);
 
-      setStatus(`Loaded backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)})`);
+      setStatus(
+        `Loaded backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)})`
+      );
     } catch (e: any) {
       setStatus(e?.message || 'Import failed.');
     }
@@ -141,18 +110,19 @@ export default function BackupRestoreScreen() {
   const handleApplyRestore = () => {
     if (!preview) return;
 
-    if (replaceMode) {
-      actions.replaceAllData({
-        accounts: preview.app.accounts,
-        transactions: preview.app.transactions,
-        recurring: (preview as any).app.recurring || [],
-      });
-      setPreview(null);
-      setStatus('Restore applied (data replaced).');
+    if (!replaceMode) {
+      setStatus('Merge mode not implemented yet (turn on Replace).');
       return;
     }
 
-    setStatus('Merge mode not implemented (using Replace for safety).');
+    actions.replaceAllData({
+      accounts: preview.app.accounts,
+      transactions: preview.app.transactions,
+      recurring: preview.app.recurring,
+    });
+
+    setPreview(null);
+    setStatus('Restore applied (data replaced).');
   };
 
   return (
@@ -200,6 +170,9 @@ export default function BackupRestoreScreen() {
             </Text>
             <Text style={styles.previewLine}>
               Transactions: {preview.app.transactions.length}
+            </Text>
+            <Text style={styles.previewLine}>
+              Recurring: {preview.app.recurring.length}
             </Text>
 
             <Pressable style={styles.btnDanger} onPress={handleApplyRestore}>

@@ -10,19 +10,31 @@ import {
   Text,
   TextInput,
   View,
-
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp } from '../state/AppContext';
+import { useApp,
+  type Account,
+  type Transaction,
+ } from '../state/AppContext';
+
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-
 import * as Sharing from 'expo-sharing';
+
+import {
+  createBackupV1,
+  parseAndValidateBackup,
+  type BackupV1,
+} from '../utils/backup';
 
 const FS: any = FileSystem as any;
 
-async function writeAndShareFile(filename: string, contents: string, mimeType: string) {
+async function writeAndShareFile(
+  filename: string,
+  contents: string,
+  mimeType: string
+) {
   const baseDir: string | undefined = FS.documentDirectory;
   if (!baseDir) throw new Error('File system directory not available.');
 
@@ -43,32 +55,6 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
-/**
- * Very loose shapes because different parts of the app may evolve over time.
- */
-type Account = {
-  id: string;
-  name?: string;
-  [key: string]: any;
-};
-
-type Transaction = {
-  id?: string;
-  accountId: string;
-  amount: number;
-  type?: 'income' | 'expense' | string;
-  date?: string;
-  description?: string;
-  categoryId?: string | null;
-  [key: string]: any;
-};
-
-type BackupPayload = {
-  version: number;
-  exportedAt: string;
-  accounts: Account[];
-  transactions: Transaction[];
-};
 
 /**
  * Small CSV helper – deliberately simple / conservative.
@@ -107,7 +93,6 @@ function parseCsvLines(raw: string): string[][] {
       const ch = line[i];
       if (ch === '"') {
         if (inQuotes && line[i + 1] === '"') {
-          // Escaped quote
           current += '"';
           i++;
         } else {
@@ -128,45 +113,113 @@ function parseCsvLines(raw: string): string[][] {
 }
 
 export default function DataExportImportScreen({ navigation }: Props) {
-  // Cast to any to avoid TS complaining about actions types that may not be fully defined.
+  // Keep as-any because you already chose this for flexibility
   const { state, actions } = useApp() as any;
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
   const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
+  const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
 
   const [lastStatus, setLastStatus] = useState<string>('');
 
-  // ----- JSON BACKUP (EXPORT ONLY) -----
-  const [exportJsonText, setExportJsonText] = useState<string>('');
+  /* ===========================
+     JSON BACKUP (EXPORT + RESTORE)
+  =========================== */
 
-  const handleGenerateBackupJson = () => {
+  const [jsonPreview, setJsonPreview] = useState<BackupV1 | null>(null);
+
+  const handleExportJsonFile = async () => {
     try {
-      const backup: BackupPayload = {
-        version: 1,
-        exportedAt: new Date().toISOString(),
+      const backup = createBackupV1({
         accounts,
         transactions: txs,
-      };
+        recurring,
+      });
+
       const json = JSON.stringify(backup, null, 2);
-      setExportJsonText(json);
-      setLastStatus('Backup JSON generated. You can copy it from the box below.');
-    } catch (err) {
+
+      const filename = `DebitLens_Backup_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, '-')}.json`;
+
+      await writeAndShareFile(filename, json, 'application/json');
+      setLastStatus('Backup JSON exported to Files (via Share).');
+    } catch (err: any) {
       console.error(err);
-      Alert.alert('Error', 'Failed to generate backup JSON.');
-      setLastStatus('Failed to generate backup JSON.');
+      setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
+      Alert.alert('Export failed', 'Could not export JSON backup.');
     }
   };
 
-  // ----- CSV EXPORT -----
+  const handlePickJsonBackup = async () => {
+    try {
+      setJsonPreview(null);
+      setLastStatus('');
+
+      const res = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/json', 'text/plain'],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (res.canceled) return;
+
+      const asset = res.assets?.[0];
+      if (!asset?.uri) throw new Error('No file selected.');
+
+      if (!FS.readAsStringAsync) {
+        throw new Error('expo-file-system is not available. Install expo-file-system.');
+      }
+
+      const text = await FS.readAsStringAsync(asset.uri);
+      const parsed = parseAndValidateBackup(text);
+
+      setJsonPreview(parsed);
+      setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
+    } catch (err: any) {
+      console.error(err);
+      setLastStatus(`JSON import failed: ${String(err?.message ?? err)}`);
+      Alert.alert('Import failed', 'Could not read/parse JSON backup.');
+    }
+  };
+
+  const handleApplyJsonRestore = () => {
+    if (!jsonPreview) return;
+
+    Alert.alert(
+      'Confirm restore',
+      'This will REPLACE your current accounts, transactions, and recurring items. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: () => {
+            actions.replaceAllData({
+              accounts: jsonPreview.app.accounts,
+              transactions: jsonPreview.app.transactions,
+              recurring: jsonPreview.app.recurring,
+            });
+            setJsonPreview(null);
+            setLastStatus('JSON restore applied (data replaced).');
+          },
+        },
+      ]
+    );
+  };
+
+  /* ===========================
+     CSV EXPORT
+  =========================== */
+
   const [csvIncludeDescription, setCsvIncludeDescription] = useState<boolean>(true);
   const [csvIncludeAccountName, setCsvIncludeAccountName] = useState<boolean>(true);
 
   const accountNameById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const a of accounts) {
-      if (a && a.id) {
-        map[a.id] = a.name ?? a.id;
-      }
+      if (a && a.id) map[a.id] = a.name ?? a.id;
     }
     return map;
   }, [accounts]);
@@ -195,21 +248,41 @@ export default function DataExportImportScreen({ navigation }: Props) {
       row.push(t.date ?? '');
       row.push(t.type ?? '');
       row.push(t.amount ?? 0);
-      if (csvIncludeAccountName) {
-        row.push(accountNameById[t.accountId] ?? '');
-      }
-      if (csvIncludeDescription) {
-        row.push(t.description ?? '');
-      }
+      if (csvIncludeAccountName) row.push(accountNameById[t.accountId] ?? '');
+      if (csvIncludeDescription) row.push(t.description ?? '');
       lines.push(row.map(csvEscape).join(','));
     }
 
     const csv = lines.join('\n');
     setExportCsvText(csv);
-    setLastStatus('CSV text generated. You can copy it from the box below.');
+    setLastStatus('CSV generated. You can export it to Files below.');
   };
 
-  // ----- CSV IMPORT -----
+  const handleExportCsvFile = async () => {
+    try {
+      if (!exportCsvText.trim()) {
+        Alert.alert('CSV not ready', 'Generate the CSV first.');
+        return;
+      }
+
+      const filename = `DebitLens_Transactions_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, '-')}.csv`;
+
+      await writeAndShareFile(filename, exportCsvText, 'text/csv');
+      setLastStatus('CSV exported to Files (via Share).');
+    } catch (err: any) {
+      console.error(err);
+      setLastStatus(`CSV export failed: ${String(err?.message ?? err)}`);
+      Alert.alert('Export failed', 'Could not export CSV file.');
+    }
+  };
+
+  /* ===========================
+     CSV IMPORT (your existing flow)
+  =========================== */
+
   const [importCsvText, setImportCsvText] = useState<string>('');
   const [csvHasHeaderRow, setCsvHasHeaderRow] = useState<boolean>(true);
   const [csvPreview, setCsvPreview] = useState<string>('');
@@ -228,9 +301,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
     [accounts]
   );
 
-  /**
-   * Pick a CSV file from device and load its contents into importCsvText.
-   */
   const handlePickCsvFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -249,25 +319,25 @@ export default function DataExportImportScreen({ navigation }: Props) {
         return;
       }
 
-      const fs: any = FileSystem;
-      const fileContents = await fs.readAsStringAsync(asset.uri);
+      if (!FS.readAsStringAsync) {
+        throw new Error('expo-file-system is not available. Install expo-file-system.');
+      }
+
+      const fileContents = await FS.readAsStringAsync(asset.uri);
 
       setImportCsvText(fileContents);
-      setImportSource('file');              // 👈 mark as file-imported
-      setCsvPreview('');                    // optional: clear old preview
+      setImportSource('file');
+      setCsvPreview('');
       setCsvPreviewSourceName('');
       setLastImportSummary('');
 
-      setLastStatus(
-        `Loaded CSV from file: ${asset.name ?? 'selected file'}. You can now preview or import it.`
-      );
+      setLastStatus(`Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview or import it.`);
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
       setLastStatus(`File error: ${String(err?.message ?? err)}`);
     }
   };
-
 
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
@@ -298,27 +368,19 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const maxPreviewRows = 10;
       const previewRows = dataRows.slice(0, maxPreviewRows);
 
-      // Simple preview string
       const previewLines: string[] = [];
-      if (headerRow) {
-        previewLines.push('HEADER: ' + headerRow.join(' | '));
-      } else {
-        previewLines.push('No header row (First row is header = OFF)');
-      }
+      if (headerRow) previewLines.push('HEADER: ' + headerRow.join(' | '));
+      else previewLines.push('No header row (First row is header = OFF)');
 
       previewLines.push('--- Sample rows ---');
-      for (const row of previewRows) {
-        previewLines.push(row.join(' | '));
-      }
+      for (const row of previewRows) previewLines.push(row.join(' | '));
       if (dataRows.length > maxPreviewRows) {
         previewLines.push(`…plus ${dataRows.length - maxPreviewRows} more rows`);
       }
 
       setCsvPreview(previewLines.join('\n'));
 
-      // Quick look at account name matching (if we detect an account column).
       let accountColIndex = -1;
-
       if (headerRow) {
         const headerLower = headerRow.map((h) => h.toLowerCase());
         accountColIndex = headerLower.findIndex(
@@ -344,7 +406,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
             `Rows with unknown accounts: ${unknownCount}. ` +
             (createMissingAccounts
               ? 'Unknown accounts will be created during import.'
-              : 'Unknown accounts will be skipped (no new accounts created).')
+              : 'Unknown accounts will be skipped.')
         );
       } else {
         setCsvPreviewSourceName(
@@ -354,7 +416,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       }
 
       setLastImportSummary('');
-      setLastStatus('CSV parsed successfully. Review the preview, then tap "Apply CSV import" if happy.');
+      setLastStatus('CSV parsed successfully. Review the preview, then apply import.');
     } catch (err: any) {
       console.error(err);
       Alert.alert('CSV parse error', 'Something went wrong while parsing the CSV text.');
@@ -365,22 +427,22 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   };
 
-const handleApplyCsvImportPress = () => {
-  if (!importCsvText.trim()) {
-    setLastStatus('Paste CSV text or pick a file first.');
-    return;
-  }
+  const handleApplyCsvImportPress = () => {
+    if (!importCsvText.trim()) {
+      setLastStatus('Paste CSV text or pick a file first.');
+      return;
+    }
 
-  Alert.alert(
-    'Confirm CSV import',
-    createMissingAccounts
-      ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
-      : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Import',
-        style: 'destructive',
+    Alert.alert(
+      'Confirm CSV import',
+      createMissingAccounts
+        ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
+        : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Import',
+          style: 'destructive',
           onPress: () => {
             try {
               const rows = parseCsvLines(importCsvText);
@@ -398,8 +460,7 @@ const handleApplyCsvImportPress = () => {
                 dataRows = restRows;
               }
 
-              // 💡 DEFAULT COLUMN ORDER (your exact CSV layout)
-              // date, account, amount, type, description, category
+              // Default order: date, account, amount, type, description, category
               let dateCol = 0;
               let accountCol = 1;
               let amountCol = 2;
@@ -451,12 +512,8 @@ const handleApplyCsvImportPress = () => {
                   continue;
                 }
 
-                // Find or create account
                 let accountForRow: Account | undefined = accounts.find(
-                  (a) =>
-                    a &&
-                    typeof a.name === 'string' &&
-                    a.name.trim() === accountName
+                  (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
                 );
 
                 if (!accountForRow && createdAccountByName[accountName]) {
@@ -471,9 +528,8 @@ const handleApplyCsvImportPress = () => {
 
                   let newAccount: Account | undefined;
                   try {
-                    newAccount = actions.addAccount({
-                      name: accountName,
-                    }) as Account | undefined;
+                    // keep minimal: your addAccount may accept partial
+                    newAccount = actions.addAccount({ name: accountName }) as Account | undefined;
                   } catch (err) {
                     console.error('Error creating account from CSV row', err);
                   }
@@ -488,22 +544,16 @@ const handleApplyCsvImportPress = () => {
                   accountForRow = newAccount;
                 }
 
-                // Amount handling (supports negative values)
                 const amountNum = Number(String(amountRaw).replace(/,/g, ''));
                 if (!isFinite(amountNum) || isNaN(amountNum)) {
                   skippedBadAmount++;
                   continue;
                 }
 
-                // Normalise type from CSV "type" column (optional)
                 let csvType: 'income' | 'expense' | null = null;
                 const typeLower = String(typeStrRaw).toLowerCase();
 
-                if (
-                  typeLower === 'credit' ||
-                  typeLower === 'income' ||
-                  typeLower === 'in'
-                ) {
+                if (typeLower === 'credit' || typeLower === 'income' || typeLower === 'in') {
                   csvType = 'income';
                 } else if (
                   typeLower === 'debit' ||
@@ -515,23 +565,12 @@ const handleApplyCsvImportPress = () => {
 
                 const rawAmount = amountNum;
 
-                if (rawAmount == null || isNaN(rawAmount)) {
-                  skippedBadAmount++;
-                  continue;
-                }
-
-                // Always store a positive amount
                 const amount = Math.abs(rawAmount);
 
-                // Decide final type from sign (+ header as hint)
                 let finalType: 'income' | 'expense';
-                if (rawAmount < 0) {
-                  finalType = 'expense';
-                } else if (rawAmount > 0) {
-                  finalType = 'income';
-                } else {
-                  finalType = csvType ?? 'expense';
-                }
+                if (rawAmount < 0) finalType = 'expense';
+                else if (rawAmount > 0) finalType = 'income';
+                else finalType = csvType ?? 'expense';
 
                 actions.addTransaction({
                   accountId: accountForRow.id,
@@ -540,25 +579,19 @@ const handleApplyCsvImportPress = () => {
                   date: dateStr || new Date().toISOString().slice(0, 10),
                   description,
                   category: category || undefined,
-                } as Transaction);
+                });
 
                 importedCount++;
               }
 
               const summaryLines: string[] = [];
               summaryLines.push(`Imported transactions: ${importedCount}`);
-              summaryLines.push(
-                `New accounts created from CSV: ${createdAccountsCount}`
-              );
+              summaryLines.push(`New accounts created from CSV: ${createdAccountsCount}`);
               summaryLines.push(
                 `Skipped rows with unknown account (when account creation disabled): ${skippedUnknownAccount}`
               );
-              summaryLines.push(
-                `Skipped rows with invalid amount: ${skippedBadAmount}`
-              );
-              summaryLines.push(
-                `Skipped rows missing account name: ${skippedMissingAccountName}`
-              );
+              summaryLines.push(`Skipped rows with invalid amount: ${skippedBadAmount}`);
+              summaryLines.push(`Skipped rows missing account name: ${skippedMissingAccountName}`);
               summaryLines.push(
                 `Rows where account creation failed (no usable ID): ${skippedCouldNotCreateAccount}`
               );
@@ -568,27 +601,20 @@ const handleApplyCsvImportPress = () => {
               setLastStatus('CSV import completed. See summary below.');
             } catch (err: any) {
               console.error(err);
-              Alert.alert(
-                'Import error',
-                'Something went wrong during CSV import.'
-              );
+              Alert.alert('Import error', 'Something went wrong during CSV import.');
               setLastStatus(`Import error: ${String(err?.message ?? err)}`);
             }
           },
-
-      },
-    ]
-  );
-};
-
+        },
+      ]
+    );
+  };
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
-        Export your data as JSON/CSV, or import transactions from a CSV file. You
-        can paste CSV text or pick a CSV file. You can also choose whether missing
-        accounts should be created automatically during import.
+        Export JSON/CSV to Files, restore from a JSON backup, or import transactions from CSV.
       </Text>
 
       {/* CURRENT SNAPSHOT */}
@@ -596,28 +622,37 @@ const handleApplyCsvImportPress = () => {
         <Text style={styles.sectionTitle}>Current data snapshot</Text>
         <Text style={styles.statLine}>Accounts: {accounts.length}</Text>
         <Text style={styles.statLine}>Transactions: {txs.length}</Text>
+        <Text style={styles.statLine}>Recurring: {recurring.length}</Text>
       </View>
 
-      {/* JSON BACKUP (EXPORT ONLY) */}
+      {/* JSON BACKUP (EXPORT + RESTORE) */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>JSON backup (export)</Text>
+        <Text style={styles.sectionTitle}>JSON backup (export / restore)</Text>
         <Text style={styles.sectionText}>
-          Generate a JSON backup of your current data. You can copy this and keep
-          it somewhere safe. (Restore wiring can be added later if needed.)
+          Export a full backup to Files and restore it later if needed.
         </Text>
 
-        <Pressable style={styles.btnPrimary} onPress={handleGenerateBackupJson}>
-          <Text style={styles.btnPrimaryText}>Generate backup JSON</Text>
+        <Pressable style={styles.btnPrimary} onPress={handleExportJsonFile}>
+          <Text style={styles.btnPrimaryText}>Export full backup as JSON (Files)</Text>
         </Pressable>
 
-        {exportJsonText ? (
-          <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>Backup JSON</Text>
-            <ScrollView style={styles.textBoxScroll}>
-              <Text selectable style={styles.monoText}>
-                {exportJsonText}
-              </Text>
-            </ScrollView>
+        <Pressable style={styles.btnSecondary} onPress={handlePickJsonBackup}>
+          <Text style={styles.btnSecondaryText}>Select JSON backup to restore</Text>
+        </Pressable>
+
+        {jsonPreview ? (
+          <View style={styles.previewBox}>
+            <Text style={styles.sectionTitle}>JSON preview</Text>
+            <Text style={styles.previewMeta}>
+              Exported: {jsonPreview.exportedAt}
+            </Text>
+            <Text style={styles.statLine}>Accounts: {jsonPreview.app.accounts.length}</Text>
+            <Text style={styles.statLine}>Transactions: {jsonPreview.app.transactions.length}</Text>
+            <Text style={styles.statLine}>Recurring: {jsonPreview.app.recurring.length}</Text>
+
+            <Pressable style={styles.btnDestructive} onPress={handleApplyJsonRestore}>
+              <Text style={styles.btnDestructiveText}>Apply JSON restore (replace)</Text>
+            </Pressable>
           </View>
         ) : null}
       </View>
@@ -626,8 +661,7 @@ const handleApplyCsvImportPress = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV export</Text>
         <Text style={styles.sectionText}>
-          Export your transactions as CSV. You can copy the CSV text and save it
-          as a `.csv` file via your file system.
+          Generate CSV, then export it to Files.
         </Text>
 
         <View style={styles.optionsBox}>
@@ -635,30 +669,26 @@ const handleApplyCsvImportPress = () => {
 
           <View style={styles.optionRow}>
             <Text style={styles.optionLabel}>Include description</Text>
-            <Switch
-              value={csvIncludeDescription}
-              onValueChange={setCsvIncludeDescription}
-            />
+            <Switch value={csvIncludeDescription} onValueChange={setCsvIncludeDescription} />
           </View>
 
           <View style={styles.optionRow}>
             <Text style={styles.optionLabel}>Include account name</Text>
-            <Switch
-              value={csvIncludeAccountName}
-              onValueChange={setCsvIncludeAccountName}
-            />
+            <Switch value={csvIncludeAccountName} onValueChange={setCsvIncludeAccountName} />
           </View>
         </View>
 
         <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
-          <Text style={styles.btnSecondaryText}>
-            Export transactions as CSV (text)
-          </Text>
+          <Text style={styles.btnSecondaryText}>Generate CSV (text)</Text>
+        </Pressable>
+
+        <Pressable style={styles.btnPrimary} onPress={handleExportCsvFile}>
+          <Text style={styles.btnPrimaryText}>Export CSV file (Files)</Text>
         </Pressable>
 
         {exportCsvText ? (
           <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>Exported CSV</Text>
+            <Text style={styles.textBoxLabel}>Generated CSV (for reference)</Text>
             <ScrollView style={styles.textBoxScroll}>
               <Text selectable style={styles.monoText}>
                 {exportCsvText}
@@ -672,8 +702,7 @@ const handleApplyCsvImportPress = () => {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV import</Text>
         <Text style={styles.sectionText}>
-          You can either pick a CSV file or paste CSV text below. We&apos;ll parse
-          it and then import rows as transactions.
+          Pick a CSV file or paste CSV text below. Preview it, then import rows as transactions.
         </Text>
 
         <View style={styles.optionRow}>
@@ -683,10 +712,7 @@ const handleApplyCsvImportPress = () => {
 
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>Create missing accounts from CSV</Text>
-          <Switch
-            value={createMissingAccounts}
-            onValueChange={setCreateMissingAccounts}
-          />
+          <Switch value={createMissingAccounts} onValueChange={setCreateMissingAccounts} />
         </View>
 
         <View style={styles.rowButtons}>
@@ -702,15 +728,14 @@ const handleApplyCsvImportPress = () => {
           value={importCsvText}
           onChangeText={(text) => {
             setImportCsvText(text);
-            setImportSource('manual');       // 👈 user is editing manually
+            setImportSource('manual');
           }}
           placeholder="Paste CSV text…"
           textAlignVertical="top"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={importSource !== 'file'} // 👈 lock if it came from file
+          editable={importSource !== 'file'}
         />
-
 
         <View style={styles.rowButtons}>
           <Pressable style={styles.btnSecondary} onPress={handleParseCsvPress}>
@@ -722,7 +747,6 @@ const handleApplyCsvImportPress = () => {
           </Pressable>
         </View>
 
-        {/* CSV PREVIEW (read-only) */}
         {csvPreview ? (
           <View style={styles.previewBox}>
             <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
@@ -739,14 +763,13 @@ const handleApplyCsvImportPress = () => {
           </View>
         ) : null}
 
+        {lastStatus ? (
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>Status</Text>
+            <Text style={styles.statusText}>{lastStatus}</Text>
+          </View>
+        ) : null}
 
-      {/* GLOBAL STATUS */}
-      {lastStatus ? (
-        <View style={styles.statusBox}>
-          <Text style={styles.statusLabel}>Status</Text>
-          <Text style={styles.statusText}>{lastStatus}</Text>
-        </View>
-      ) : null}
         {lastImportSummary ? (
           <View style={styles.statusBox}>
             <Text style={styles.statusLabel}>Import summary</Text>
@@ -754,7 +777,6 @@ const handleApplyCsvImportPress = () => {
           </View>
         ) : null}
       </View>
-
     </ScrollView>
   );
 }
@@ -778,10 +800,6 @@ const styles = StyleSheet.create({
   subtle: {
     color: '#9CA3AF',
     marginBottom: 16,
-  },
-  strong: {
-    fontWeight: '700',
-    color: '#F97316',
   },
   card: {
     backgroundColor: '#0B1020',
@@ -816,6 +834,7 @@ const styles = StyleSheet.create({
   btnPrimaryText: {
     color: 'white',
     fontWeight: '600',
+    textAlign: 'center',
   },
   btnSecondary: {
     flex: 1,
@@ -846,6 +865,7 @@ const styles = StyleSheet.create({
   btnDestructiveText: {
     color: 'white',
     fontWeight: '600',
+    textAlign: 'center',
   },
   rowButtons: {
     flexDirection: 'row',
@@ -947,8 +967,7 @@ const styles = StyleSheet.create({
   },
   previewText: {
     color: '#E5E7EB',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
+    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
     fontSize: 12,
   },
 });
-
