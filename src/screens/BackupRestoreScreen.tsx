@@ -5,13 +5,11 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useApp } from '../state/AppContext';
-import {
-  createBackupV1,
-  parseAndValidateBackup,
-  type BackupV1,
-} from '../utils/backup';
+import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
 
 const FS: any = FileSystem as any;
+
+const [preview, setPreview] = useState<BackupLatest | null>(null);
 
 export default function BackupRestoreScreen() {
   const { state, actions } = useApp();
@@ -20,7 +18,7 @@ export default function BackupRestoreScreen() {
   const transactions = state.transactions || [];
   const recurring = state.recurring || [];
 
-  const [preview, setPreview] = useState<BackupV1 | null>(null);
+  const [preview, setPreview] = useState<BackupLatest | null>(null);
   const [status, setStatus] = useState<string>('');
   const [replaceMode, setReplaceMode] = useState(true);
 

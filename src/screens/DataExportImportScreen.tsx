@@ -1,5 +1,5 @@
 // src/screens/DataExportImportScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -13,19 +13,23 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp,
+
+import {
+  useApp,
   type Account,
   type Transaction,
- } from '../state/AppContext';
+} from '../state/AppContext';
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import {
-  createBackupV1,
-  parseAndValidateBackup,
-  type BackupV1,
+  createBackupV1, // now creates latest (v2) via backup.ts
+  parseAndValidateBackup, // returns latest (v2)
+  type BackupLatest,
 } from '../utils/backup';
 
 const FS: any = FileSystem as any;
@@ -54,7 +58,6 @@ async function writeAndShareFile(
 }
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
-
 
 /**
  * Small CSV helper – deliberately simple / conservative.
@@ -112,8 +115,25 @@ function parseCsvLines(raw: string): string[][] {
   return rows;
 }
 
+/* ===========================
+   CSV import stats persistence
+=========================== */
+
+type CsvImportStats = {
+  importedCount: number;
+  createdAccountsCount: number;
+  skippedUnknownAccount: number;
+  skippedBadAmount: number;
+  skippedMissingAccountName: number;
+  skippedCouldNotCreateAccount: number;
+  finishedAt: string; // ISO
+  source: 'file' | 'manual';
+};
+
+const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
+
 export default function DataExportImportScreen({ navigation }: Props) {
-  // Keep as-any because you already chose this for flexibility
+  // keep as-any for actions flexibility, but state will still be typed
   const { state, actions } = useApp() as any;
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
@@ -126,7 +146,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
      JSON BACKUP (EXPORT + RESTORE)
   =========================== */
 
-  const [jsonPreview, setJsonPreview] = useState<BackupV1 | null>(null);
+  const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
+  const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
 
   const handleExportJsonFile = async () => {
     try {
@@ -184,29 +205,60 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   };
 
+  const applyJsonReplace = () => {
+    if (!jsonPreview) return;
+    actions.replaceAllData({
+      accounts: jsonPreview.app.accounts,
+      transactions: jsonPreview.app.transactions,
+      recurring: jsonPreview.app.recurring,
+    });
+  };
+
+  const applyJsonMerge = () => {
+    if (!jsonPreview) return;
+
+    const existingAccounts = Array.isArray(state.accounts) ? state.accounts : [];
+    const existingTxs = Array.isArray(state.transactions) ? state.transactions : [];
+    const existingRecurring = Array.isArray(state.recurring) ? state.recurring : [];
+
+    const accIds = new Set(existingAccounts.map((a: any) => a.id));
+    const txIds = new Set(existingTxs.map((t: any) => t.id));
+    const recIds = new Set(existingRecurring.map((r: any) => r.id));
+
+    const addAccounts = jsonPreview.app.accounts.filter((a) => a?.id && !accIds.has(a.id));
+    const addTxs = jsonPreview.app.transactions.filter((t) => t?.id && !txIds.has(t.id));
+    const addRecurring = jsonPreview.app.recurring.filter((r) => r?.id && !recIds.has(r.id));
+
+    actions.replaceAllData({
+      accounts: [...existingAccounts, ...addAccounts],
+      transactions: [...existingTxs, ...addTxs],
+      recurring: [...existingRecurring, ...addRecurring],
+    });
+  };
+
   const handleApplyJsonRestore = () => {
     if (!jsonPreview) return;
 
-    Alert.alert(
-      'Confirm restore',
-      'This will REPLACE your current accounts, transactions, and recurring items. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Restore',
-          style: 'destructive',
-          onPress: () => {
-            actions.replaceAllData({
-              accounts: jsonPreview.app.accounts,
-              transactions: jsonPreview.app.transactions,
-              recurring: jsonPreview.app.recurring,
-            });
-            setJsonPreview(null);
-            setLastStatus('JSON restore applied (data replaced).');
-          },
+    const modeLabel = jsonRestoreMode === 'replace' ? 'REPLACE' : 'MERGE';
+    const body =
+      jsonRestoreMode === 'replace'
+        ? 'This will REPLACE your current accounts, transactions, and recurring items.'
+        : 'This will MERGE by adding only items with NEW ids. Existing items are kept (no overwrites).';
+
+    Alert.alert('Confirm restore', `${body}\n\nMode: ${modeLabel}\nContinue?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Restore',
+        style: 'destructive',
+        onPress: () => {
+          if (jsonRestoreMode === 'replace') applyJsonReplace();
+          else applyJsonMerge();
+
+          setJsonPreview(null);
+          setLastStatus(`JSON restore applied (${jsonRestoreMode}).`);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   /* ===========================
@@ -226,17 +278,14 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   const [exportCsvText, setExportCsvText] = useState<string>('');
 
-  const handleExportCsvPress = () => {
+  const handleGenerateCsv = () => {
     if (!txs.length) {
       Alert.alert('No transactions', 'There are no transactions to export.');
       setLastStatus('No transactions to export.');
       return;
     }
 
-    const headers: string[] = [];
-    headers.push('date');
-    headers.push('type');
-    headers.push('amount');
+    const headers: string[] = ['date', 'type', 'amount'];
     if (csvIncludeAccountName) headers.push('account_name');
     if (csvIncludeDescription) headers.push('description');
 
@@ -249,7 +298,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       row.push(t.type ?? '');
       row.push(t.amount ?? 0);
       if (csvIncludeAccountName) row.push(accountNameById[t.accountId] ?? '');
-      if (csvIncludeDescription) row.push(t.description ?? '');
+      if (csvIncludeDescription) row.push((t as any).description ?? '');
       lines.push(row.map(csvEscape).join(','));
     }
 
@@ -280,7 +329,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
   };
 
   /* ===========================
-     CSV IMPORT (your existing flow)
+     CSV IMPORT (existing flow + persisted stats)
   =========================== */
 
   const [importCsvText, setImportCsvText] = useState<string>('');
@@ -290,6 +339,19 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
   const [importSource, setImportSource] = useState<'manual' | 'file' | null>(null);
+
+  const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(CSV_STATS_KEY);
+        if (raw) setLastCsvStats(JSON.parse(raw));
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
 
   const knownAccountNames = useMemo(
     () =>
@@ -402,21 +464,17 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
         setCsvPreviewSourceName(
           `Detected account column at index ${accountColIndex}. ` +
-            `Rows with known accounts: ${matchedCount}. ` +
-            `Rows with unknown accounts: ${unknownCount}. ` +
-            (createMissingAccounts
-              ? 'Unknown accounts will be created during import.'
-              : 'Unknown accounts will be skipped.')
+            `Known accounts: ${matchedCount}. Unknown: ${unknownCount}. ` +
+            (createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.')
         );
       } else {
         setCsvPreviewSourceName(
-          'No obvious account column detected in header. ' +
-            'You can still import, but rows must map correctly by column order.'
+          'No obvious account column detected in header. You can still import, but rows must map correctly by column order.'
         );
       }
 
       setLastImportSummary('');
-      setLastStatus('CSV parsed successfully. Review the preview, then apply import.');
+      setLastStatus('CSV parsed successfully. Review preview, then apply import.');
     } catch (err: any) {
       console.error(err);
       Alert.alert('CSV parse error', 'Something went wrong while parsing the CSV text.');
@@ -436,14 +494,14 @@ export default function DataExportImportScreen({ navigation }: Props) {
     Alert.alert(
       'Confirm CSV import',
       createMissingAccounts
-        ? 'This will import new transactions. If an account name does not exist, a new account will be created for it. Continue?'
-        : 'This will import new transactions only for existing accounts. Unknown accounts are skipped and NOT created. Continue?',
+        ? 'This will import new transactions. If an account name does not exist, a new account will be created. Continue?'
+        : 'This will import new transactions only for existing accounts. Unknown accounts are skipped. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Import',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             try {
               const rows = parseCsvLines(importCsvText);
               if (!rows.length) {
@@ -495,7 +553,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
               let createdAccountsCount = 0;
               let skippedCouldNotCreateAccount = 0;
 
-              const createdAccountByName: Record<string, Account> = {};
+              const createdAccountByName: Record<string, any> = {};
 
               for (const row of dataRows) {
                 if (!row.length) continue;
@@ -512,7 +570,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   continue;
                 }
 
-                let accountForRow: Account | undefined = accounts.find(
+                let accountForRow: any = accounts.find(
                   (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
                 );
 
@@ -526,10 +584,14 @@ export default function DataExportImportScreen({ navigation }: Props) {
                     continue;
                   }
 
-                  let newAccount: Account | undefined;
+                  let newAccount: any;
                   try {
-                    // keep minimal: your addAccount may accept partial
-                    newAccount = actions.addAccount({ name: accountName }) as Account | undefined;
+                    // Provide required fields if your AppContext enforces them
+                    newAccount = actions.addAccount({
+                      name: accountName,
+                      type: 'bank',
+                      balance: 0,
+                    });
                   } catch (err) {
                     console.error('Error creating account from CSV row', err);
                   }
@@ -555,16 +617,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
                 if (typeLower === 'credit' || typeLower === 'income' || typeLower === 'in') {
                   csvType = 'income';
-                } else if (
-                  typeLower === 'debit' ||
-                  typeLower === 'expense' ||
-                  typeLower === 'out'
-                ) {
+                } else if (typeLower === 'debit' || typeLower === 'expense' || typeLower === 'out') {
                   csvType = 'expense';
                 }
 
                 const rawAmount = amountNum;
-
                 const amount = Math.abs(rawAmount);
 
                 let finalType: 'income' | 'expense';
@@ -587,18 +644,28 @@ export default function DataExportImportScreen({ navigation }: Props) {
               const summaryLines: string[] = [];
               summaryLines.push(`Imported transactions: ${importedCount}`);
               summaryLines.push(`New accounts created from CSV: ${createdAccountsCount}`);
-              summaryLines.push(
-                `Skipped rows with unknown account (when account creation disabled): ${skippedUnknownAccount}`
-              );
-              summaryLines.push(`Skipped rows with invalid amount: ${skippedBadAmount}`);
-              summaryLines.push(`Skipped rows missing account name: ${skippedMissingAccountName}`);
-              summaryLines.push(
-                `Rows where account creation failed (no usable ID): ${skippedCouldNotCreateAccount}`
-              );
+              summaryLines.push(`Skipped unknown accounts: ${skippedUnknownAccount}`);
+              summaryLines.push(`Skipped invalid amount: ${skippedBadAmount}`);
+              summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
+              summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
 
               const summary = summaryLines.join('\n');
               setLastImportSummary(summary);
               setLastStatus('CSV import completed. See summary below.');
+
+              // Persist stats
+              const stats: CsvImportStats = {
+                importedCount,
+                createdAccountsCount,
+                skippedUnknownAccount,
+                skippedBadAmount,
+                skippedMissingAccountName,
+                skippedCouldNotCreateAccount,
+                finishedAt: new Date().toISOString(),
+                source: importSource === 'file' ? 'file' : 'manual',
+              };
+              setLastCsvStats(stats);
+              await AsyncStorage.setItem(CSV_STATS_KEY, JSON.stringify(stats));
             } catch (err: any) {
               console.error(err);
               Alert.alert('Import error', 'Something went wrong during CSV import.');
@@ -617,7 +684,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         Export JSON/CSV to Files, restore from a JSON backup, or import transactions from CSV.
       </Text>
 
-      {/* CURRENT SNAPSHOT */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Current data snapshot</Text>
         <Text style={styles.statLine}>Accounts: {accounts.length}</Text>
@@ -625,11 +691,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
         <Text style={styles.statLine}>Recurring: {recurring.length}</Text>
       </View>
 
-      {/* JSON BACKUP (EXPORT + RESTORE) */}
+      {/* JSON BACKUP */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>JSON backup (export / restore)</Text>
         <Text style={styles.sectionText}>
-          Export a full backup to Files and restore it later if needed.
+          Export a full backup to Files and restore it later. Restore supports Replace or Merge.
         </Text>
 
         <Pressable style={styles.btnPrimary} onPress={handleExportJsonFile}>
@@ -640,18 +706,28 @@ export default function DataExportImportScreen({ navigation }: Props) {
           <Text style={styles.btnSecondaryText}>Select JSON backup to restore</Text>
         </Pressable>
 
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>
+            Restore mode: {jsonRestoreMode === 'replace' ? 'Replace' : 'Merge'}
+          </Text>
+          <Switch
+            value={jsonRestoreMode === 'merge'}
+            onValueChange={(v) => setJsonRestoreMode(v ? 'merge' : 'replace')}
+          />
+        </View>
+
         {jsonPreview ? (
           <View style={styles.previewBox}>
             <Text style={styles.sectionTitle}>JSON preview</Text>
-            <Text style={styles.previewMeta}>
-              Exported: {jsonPreview.exportedAt}
-            </Text>
+            <Text style={styles.previewMeta}>Exported: {jsonPreview.exportedAt}</Text>
             <Text style={styles.statLine}>Accounts: {jsonPreview.app.accounts.length}</Text>
             <Text style={styles.statLine}>Transactions: {jsonPreview.app.transactions.length}</Text>
             <Text style={styles.statLine}>Recurring: {jsonPreview.app.recurring.length}</Text>
 
             <Pressable style={styles.btnDestructive} onPress={handleApplyJsonRestore}>
-              <Text style={styles.btnDestructiveText}>Apply JSON restore (replace)</Text>
+              <Text style={styles.btnDestructiveText}>
+                Apply JSON restore ({jsonRestoreMode})
+              </Text>
             </Pressable>
           </View>
         ) : null}
@@ -660,9 +736,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       {/* CSV EXPORT */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV export</Text>
-        <Text style={styles.sectionText}>
-          Generate CSV, then export it to Files.
-        </Text>
+        <Text style={styles.sectionText}>Generate CSV, then export it to Files.</Text>
 
         <View style={styles.optionsBox}>
           <Text style={styles.optionsTitle}>CSV export options</Text>
@@ -678,7 +752,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <Pressable style={styles.btnSecondary} onPress={handleExportCsvPress}>
+        <Pressable style={styles.btnSecondary} onPress={handleGenerateCsv}>
           <Text style={styles.btnSecondaryText}>Generate CSV (text)</Text>
         </Pressable>
 
@@ -760,6 +834,20 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 {csvPreview}
               </Text>
             </View>
+          </View>
+        ) : null}
+
+        {lastCsvStats ? (
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>Last CSV import (persisted)</Text>
+            <Text style={styles.statusText}>
+              {new Date(lastCsvStats.finishedAt).toLocaleString()} ({lastCsvStats.source})
+            </Text>
+            <Text style={styles.statusText}>Imported: {lastCsvStats.importedCount}</Text>
+            <Text style={styles.statusText}>Accounts created: {lastCsvStats.createdAccountsCount}</Text>
+            <Text style={styles.statusText}>Skipped unknown: {lastCsvStats.skippedUnknownAccount}</Text>
+            <Text style={styles.statusText}>Bad amount: {lastCsvStats.skippedBadAmount}</Text>
+            <Text style={styles.statusText}>Missing account: {lastCsvStats.skippedMissingAccountName}</Text>
           </View>
         ) : null}
 
@@ -967,7 +1055,11 @@ const styles = StyleSheet.create({
   },
   previewText: {
     color: '#E5E7EB',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
+    fontFamily: Platform.select({
+      ios: 'Menlo',
+      android: 'monospace',
+      default: 'monospace',
+    }),
     fontSize: 12,
   },
 });
