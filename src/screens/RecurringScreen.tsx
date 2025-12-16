@@ -316,7 +316,8 @@ const RecurringScreen: React.FC = () => {
         <Text style={styles.buttonText}>Add Recurring</Text>
       </Pressable>
 
-      <View style={{ height: 1, backgroundColor: '#1F2937', opacity: 0.8, marginBottom: 16 }} />
+      <View style={styles.divider} />
+
 
       {recurring.length === 0 && (
         <Text style={styles.subtle}>
@@ -475,6 +476,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
+  divider: { 
+    height: 1, 
+    backgroundColor: '#1F2937', 
+    opacity: 0.8, 
+    marginBottom: 16 },
 });
 
 export default RecurringScreen;

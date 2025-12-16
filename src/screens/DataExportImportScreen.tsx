@@ -14,11 +14,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 
-import {
-  useApp,
-  type Account,
-  type Transaction,
-} from '../state/AppContext';
+import { useApp, type Account, type Transaction } from '../state/AppContext';
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -116,6 +112,48 @@ function parseCsvLines(raw: string): string[][] {
 }
 
 /* ===========================
+   CSV restore helpers
+=========================== */
+
+type RestoreMode = 'merge' | 'replace';
+
+function makeId(prefix: string) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeDateToISODate(input: string): string {
+  const s = String(input || '').trim();
+  if (!s) return new Date().toISOString().slice(0, 10);
+
+  // already ISO date
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
+  // DD/MM/YY or DD/MM/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+  if (m) {
+    const dd = m[1].padStart(2, '0');
+    const mm = m[2].padStart(2, '0');
+    const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  const parsed = Date.parse(s);
+  if (!Number.isNaN(parsed)) return new Date(parsed).toISOString().slice(0, 10);
+
+  return new Date().toISOString().slice(0, 10);
+}
+
+function normalizeType(typeRaw: string, amountRaw: number): 'income' | 'expense' {
+  const t = String(typeRaw || '').trim().toLowerCase();
+  if (t === 'income' || t === 'credit' || t === 'in') return 'income';
+  if (t === 'expense' || t === 'debit' || t === 'out') return 'expense';
+
+  if (amountRaw < 0) return 'expense';
+  if (amountRaw > 0) return 'income';
+  return 'expense';
+}
+
+/* ===========================
    CSV import stats persistence
 =========================== */
 
@@ -128,6 +166,10 @@ type CsvImportStats = {
   skippedCouldNotCreateAccount: number;
   finishedAt: string; // ISO
   source: 'file' | 'manual';
+
+  // optional additions (backwards-compatible)
+  operation?: 'import' | 'restore';
+  mode?: RestoreMode;
 };
 
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
@@ -340,6 +382,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
   const [importSource, setImportSource] = useState<'manual' | 'file' | null>(null);
 
+  // NEW: CSV Restore mode
+  const [csvRestoreMode, setCsvRestoreMode] = useState<RestoreMode>('merge');
+
   const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
 
   useEffect(() => {
@@ -393,7 +438,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setCsvPreviewSourceName('');
       setLastImportSummary('');
 
-      setLastStatus(`Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview or import it.`);
+      setLastStatus(`Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview, import, or restore it.`);
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
@@ -469,12 +514,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
         );
       } else {
         setCsvPreviewSourceName(
-          'No obvious account column detected in header. You can still import, but rows must map correctly by column order.'
+          'No obvious account column detected in header. You can still import/restore, but rows must map correctly by column order.'
         );
       }
 
       setLastImportSummary('');
-      setLastStatus('CSV parsed successfully. Review preview, then apply import.');
+      setLastStatus('CSV parsed successfully. Review preview, then apply import or restore.');
     } catch (err: any) {
       console.error(err);
       Alert.alert('CSV parse error', 'Something went wrong while parsing the CSV text.');
@@ -482,6 +527,15 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setCsvPreview('');
       setCsvPreviewSourceName('');
       setLastImportSummary('');
+    }
+  };
+
+  const persistCsvStats = async (stats: CsvImportStats) => {
+    try {
+      setLastCsvStats(stats);
+      await AsyncStorage.setItem(CSV_STATS_KEY, JSON.stringify(stats));
+    } catch {
+      // ignore
     }
   };
 
@@ -586,7 +640,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
                   let newAccount: any;
                   try {
-                    // Provide required fields if your AppContext enforces them
                     newAccount = actions.addAccount({
                       name: accountName,
                       type: 'bank',
@@ -633,7 +686,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   accountId: accountForRow.id,
                   amount,
                   type: finalType,
-                  date: dateStr || new Date().toISOString().slice(0, 10),
+                  date: normalizeDateToISODate(dateStr || ''),
                   description,
                   category: category || undefined,
                 });
@@ -654,7 +707,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
               setLastStatus('CSV import completed. See summary below.');
 
               // Persist stats
-              const stats: CsvImportStats = {
+              await persistCsvStats({
                 importedCount,
                 createdAccountsCount,
                 skippedUnknownAccount,
@@ -663,9 +716,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 skippedCouldNotCreateAccount,
                 finishedAt: new Date().toISOString(),
                 source: importSource === 'file' ? 'file' : 'manual',
-              };
-              setLastCsvStats(stats);
-              await AsyncStorage.setItem(CSV_STATS_KEY, JSON.stringify(stats));
+                operation: 'import',
+              });
             } catch (err: any) {
               console.error(err);
               Alert.alert('Import error', 'Something went wrong during CSV import.');
@@ -677,11 +729,229 @@ export default function DataExportImportScreen({ navigation }: Props) {
     );
   };
 
+  /* ===========================
+     CSV RESTORE (NEW)
+     - Merge: append CSV txs
+     - Replace: replace ALL txs with CSV txs
+     Accounts are preserved, plus optional new accounts from CSV.
+  =========================== */
+
+  const buildCsvTransactions = (csvText: string) => {
+    const rows = parseCsvLines(csvText);
+    if (!rows.length) throw new Error('CSV parsed but contains no rows.');
+
+    const [firstRow, ...restRows] = rows;
+    let dataRows = rows;
+    let headerRow: string[] | null = null;
+
+    if (csvHasHeaderRow) {
+      headerRow = firstRow;
+      dataRows = restRows;
+    }
+
+    // Default order: date, account, amount, type, description, category
+    let dateCol = 0;
+    let accountCol = 1;
+    let amountCol = 2;
+    let typeCol = 3;
+    let descriptionCol = 4;
+    let categoryCol = 5;
+
+    if (headerRow) {
+      const headerLower = headerRow.map((h) => h.toLowerCase());
+      const findIndex = (names: string[]) =>
+        headerLower.findIndex((h) => names.includes(h));
+
+      const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
+      const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
+      const amountIdx = findIndex(['amount', 'value']);
+      const accIdx = findIndex(['account', 'account_name', 'account name']);
+      const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+      const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
+
+      if (dateIdx >= 0) dateCol = dateIdx;
+      if (accIdx >= 0) accountCol = accIdx;
+      if (amountIdx >= 0) amountCol = amountIdx;
+      if (typeIdx >= 0) typeCol = typeIdx;
+      if (descIdx >= 0) descriptionCol = descIdx;
+      if (catIdx >= 0) categoryCol = catIdx;
+    }
+
+    // Account lookup (by name)
+    const accountByName: Record<string, Account> = {};
+    for (const a of accounts) {
+      if (a?.name) accountByName[String(a.name).trim()] = a;
+    }
+
+    const newAccounts: Account[] = [...accounts];
+    const builtTxs: Transaction[] = [];
+
+    let importedCount = 0;
+    let skippedUnknownAccount = 0;
+    let skippedBadAmount = 0;
+    let skippedMissingAccountName = 0;
+    let createdAccountsCount = 0;
+    let skippedCouldNotCreateAccount = 0;
+
+    for (const row of dataRows) {
+      if (!row.length) continue;
+
+      const rawDate = row[dateCol] ?? '';
+      const rawType = row[typeCol] ?? '';
+      const rawAmountStr = row[amountCol] ?? '';
+      const accountName = String(row[accountCol] ?? '').trim();
+      const description = String(row[descriptionCol] ?? '').trim();
+      const category = String(row[categoryCol] ?? '').trim();
+
+      if (!accountName) {
+        skippedMissingAccountName++;
+        continue;
+      }
+
+      const amountNum = Number(String(rawAmountStr).replace(/,/g, ''));
+      if (!isFinite(amountNum) || isNaN(amountNum)) {
+        skippedBadAmount++;
+        continue;
+      }
+
+      let acct = accountByName[accountName];
+
+      if (!acct) {
+        if (!createMissingAccounts) {
+          skippedUnknownAccount++;
+          continue;
+        }
+
+        // Create locally-valid account (required fields)
+        try {
+          // Prefer actions.addAccount so it stays consistent with app behavior
+          const created = actions.addAccount({
+            name: accountName,
+            type: 'bank',
+            balance: 0,
+          }) as Account;
+
+          if (!created?.id) {
+            skippedCouldNotCreateAccount++;
+            continue;
+          }
+
+          acct = created;
+        } catch (e) {
+          console.error('CSV restore: could not create account', e);
+          skippedCouldNotCreateAccount++;
+          continue;
+        }
+
+        accountByName[accountName] = acct;
+        newAccounts.push(acct);
+        createdAccountsCount++;
+      }
+
+      const finalType = normalizeType(rawType, amountNum);
+      const amount = Math.abs(amountNum);
+      const isoDate = normalizeDateToISODate(String(rawDate));
+
+      const name = description || category || 'Imported';
+
+      builtTxs.push({
+        id: makeId('tx'),
+        name,
+        accountId: acct.id,
+        date: isoDate,
+        type: finalType,
+        amount,
+        category: category || undefined,
+        description: description || undefined,
+      });
+
+      importedCount++;
+    }
+
+    return {
+      newAccounts,
+      builtTxs,
+      stats: {
+        importedCount,
+        createdAccountsCount,
+        skippedUnknownAccount,
+        skippedBadAmount,
+        skippedMissingAccountName,
+        skippedCouldNotCreateAccount,
+      },
+    };
+  };
+
+  const handleApplyCsvRestore = () => {
+    if (!importCsvText.trim()) {
+      setLastStatus('Pick a CSV file or paste CSV text first.');
+      return;
+    }
+
+    const modeText = csvRestoreMode === 'replace' ? 'REPLACE' : 'MERGE';
+    const warning =
+      csvRestoreMode === 'replace'
+        ? 'This will REPLACE ALL existing transactions with the CSV transactions.\n\nAccounts are kept (and missing accounts can be created).'
+        : 'This will MERGE by APPENDING CSV transactions to your existing transactions.\n\nAccounts are kept (and missing accounts can be created).';
+
+    Alert.alert('Confirm CSV restore', `${warning}\n\nMode: ${modeText}\nContinue?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Continue',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const built = buildCsvTransactions(importCsvText);
+
+            const finalTxs =
+              csvRestoreMode === 'replace'
+                ? built.builtTxs
+                : [...txs, ...built.builtTxs];
+
+            actions.replaceAllData({
+              accounts: built.newAccounts,
+              transactions: finalTxs,
+              recurring, // unchanged
+            });
+
+            const summaryLines: string[] = [];
+            summaryLines.push(
+              csvRestoreMode === 'replace'
+                ? 'CSV restore complete (transactions REPLACED).'
+                : 'CSV merge complete (transactions APPENDED).'
+            );
+            summaryLines.push(`Imported transactions: ${built.stats.importedCount}`);
+            summaryLines.push(`New accounts created: ${built.stats.createdAccountsCount}`);
+            summaryLines.push(`Skipped unknown accounts: ${built.stats.skippedUnknownAccount}`);
+            summaryLines.push(`Skipped invalid amount: ${built.stats.skippedBadAmount}`);
+            summaryLines.push(`Skipped missing account name: ${built.stats.skippedMissingAccountName}`);
+            summaryLines.push(`Account creation failed: ${built.stats.skippedCouldNotCreateAccount}`);
+
+            setLastImportSummary(summaryLines.join('\n'));
+            setLastStatus('CSV restore/merge completed.');
+
+            await persistCsvStats({
+              ...built.stats,
+              finishedAt: new Date().toISOString(),
+              source: importSource === 'file' ? 'file' : 'manual',
+              operation: 'restore',
+              mode: csvRestoreMode,
+            });
+          } catch (err: any) {
+            console.error(err);
+            setLastStatus(`CSV restore failed: ${String(err?.message ?? err)}`);
+            Alert.alert('Restore failed', 'Could not restore from CSV.');
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       <Text style={styles.h1}>Data export &amp; import</Text>
       <Text style={styles.subtle}>
-        Export JSON/CSV to Files, restore from a JSON backup, or import transactions from CSV.
+        Export JSON/CSV to Files, restore from a JSON backup, or import/restore transactions from CSV.
       </Text>
 
       <View style={styles.card}>
@@ -772,11 +1042,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
         ) : null}
       </View>
 
-      {/* CSV IMPORT */}
+      {/* CSV IMPORT + RESTORE */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>CSV import</Text>
+        <Text style={styles.sectionTitle}>CSV import / restore</Text>
         <Text style={styles.sectionText}>
-          Pick a CSV file or paste CSV text below. Preview it, then import rows as transactions.
+          Pick a CSV file or paste CSV text below. Preview it, then import (append) or restore (replace/merge).
         </Text>
 
         <View style={styles.optionRow}>
@@ -789,9 +1059,43 @@ export default function DataExportImportScreen({ navigation }: Props) {
           <Switch value={createMissingAccounts} onValueChange={setCreateMissingAccounts} />
         </View>
 
+        {/* CSV Restore Mode */}
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>
+            CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
+          </Text>
+          <View style={styles.modePillRow}>
+            <Pressable
+              style={[
+                styles.modePill,
+                csvRestoreMode === 'merge' ? styles.modePillOn : null,
+              ]}
+              onPress={() => setCsvRestoreMode('merge')}
+            >
+              <Text style={styles.modePillText}>Merge</Text>
+            </Pressable>
+
+            <Pressable
+              style={[
+                styles.modePill,
+                csvRestoreMode === 'replace' ? styles.modePillOnDanger : null,
+              ]}
+              onPress={() => setCsvRestoreMode('replace')}
+            >
+              <Text style={styles.modePillText}>Replace</Text>
+            </Pressable>
+          </View>
+        </View>
+
         <View style={styles.rowButtons}>
           <Pressable style={styles.btnSecondary} onPress={handlePickCsvFile}>
             <Text style={styles.btnSecondaryText}>Pick CSV file</Text>
+          </Pressable>
+
+          <Pressable style={styles.btnDestructive} onPress={handleApplyCsvRestore}>
+            <Text style={styles.btnDestructiveText}>
+              {csvRestoreMode === 'replace' ? 'Restore from CSV' : 'Merge CSV into data'}
+            </Text>
           </Pressable>
         </View>
 
@@ -839,9 +1143,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
         {lastCsvStats ? (
           <View style={styles.statusBox}>
-            <Text style={styles.statusLabel}>Last CSV import (persisted)</Text>
+            <Text style={styles.statusLabel}>
+              Last CSV {lastCsvStats.operation === 'restore' ? 'restore' : 'import'} (persisted)
+            </Text>
             <Text style={styles.statusText}>
-              {new Date(lastCsvStats.finishedAt).toLocaleString()} ({lastCsvStats.source})
+              {new Date(lastCsvStats.finishedAt).toLocaleString()} ({lastCsvStats.source}
+              {lastCsvStats.mode ? ` • ${lastCsvStats.mode}` : ''})
             </Text>
             <Text style={styles.statusText}>Imported: {lastCsvStats.importedCount}</Text>
             <Text style={styles.statusText}>Accounts created: {lastCsvStats.createdAccountsCount}</Text>
@@ -860,7 +1167,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
         {lastImportSummary ? (
           <View style={styles.statusBox}>
-            <Text style={styles.statusLabel}>Import summary</Text>
+            <Text style={styles.statusLabel}>Summary</Text>
             <Text style={styles.statusText}>{lastImportSummary}</Text>
           </View>
         ) : null}
@@ -984,6 +1291,34 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
+
+  modePillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modePill: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#020617',
+    marginLeft: 8,
+  },
+  modePillOn: {
+    borderColor: '#2563EB',
+    backgroundColor: '#0B1020',
+  },
+  modePillOnDanger: {
+    borderColor: '#B91C1C',
+    backgroundColor: '#0B1020',
+  },
+  modePillText: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+
   textBox: {
     marginTop: 10,
     maxHeight: 260,
