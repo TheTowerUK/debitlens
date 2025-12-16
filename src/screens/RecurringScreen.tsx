@@ -311,9 +311,12 @@ const RecurringScreen: React.FC = () => {
         <Text style={styles.applyButtonText}>Detect from history</Text>
       </Pressable>
 
-      <Pressable style={styles.button} onPress={handleAddNew}>
+
+      <Pressable style={[styles.button, styles.primaryButton]} onPress={handleAddNew}>
         <Text style={styles.buttonText}>Add Recurring</Text>
       </Pressable>
+
+      <View style={{ height: 1, backgroundColor: '#1F2937', opacity: 0.8, marginBottom: 16 }} />
 
       {recurring.length === 0 && (
         <Text style={styles.subtle}>
@@ -455,13 +458,19 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 24,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#0f172a',        // base (secondary look)
     borderRadius: 999,
     paddingVertical: 14,
     alignItems: 'center',
     marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#4b5563',
   },
-  buttonText: {
+  primaryButton: {
+    backgroundColor: '#2563EB',        // primary look
+    borderColor: '#2563EB',
+  },
+    buttonText: {
     color: '#f9fafb',
     fontWeight: '600',
     fontSize: 16,
