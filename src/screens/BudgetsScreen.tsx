@@ -206,76 +206,108 @@ export default function BudgetsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingBottom: 32, backgroundColor: '#0b0b0b', flexGrow: 1 },
-  h1: { fontSize: 26, fontWeight: '800', color: '#fff' },
-  subtle: { marginTop: 6, opacity: 0.75, color: 'rgba(255,255,255,0.8)' },
-  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 10, color: '#fff' },
-  label: { marginTop: 10, marginBottom: 6, opacity: 0.85, color: 'rgba(255,255,255,0.85)' },
-  budgetTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  kpi: { opacity: 0.85, color: 'rgba(255,255,255,0.85)' },
-  status: { marginTop: 8, fontWeight: '700', opacity: 0.9, color: 'rgba(255,255,255,0.9)' },
-  help: { marginTop: 6, opacity: 0.65, fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  wrap: {
+    padding: 16,
+    paddingBottom: 32,
+    backgroundColor: '#0B1020',
+    flexGrow: 1,
+  },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  h1: { fontSize: 26, fontWeight: '800', color: '#E5E7EB' },
+  subtle: { marginTop: 6, color: '#9CA3AF' },
 
   card: {
     marginTop: 14,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
   },
+
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 10,
+    color: '#E5E7EB',
+  },
+
+  label: { marginTop: 10, marginBottom: 6, color: '#E5E7EB' },
 
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#374151',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 6,
-    color: '#fff', // ✅ add
+    color: '#E5E7EB',
+    backgroundColor: '#0B1020',
   },
 
-  btnText: { fontWeight: '700', color: '#fff' },
-  btnSecondaryText: { fontWeight: '700', opacity: 0.9, color: 'rgba(255,255,255,0.9)' },
   btn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
+    borderColor: '#1F2937',
+    backgroundColor: '#0B1020',
     alignSelf: 'flex-start',
   },
-
+  btnText: { fontWeight: '700', color: '#E5E7EB' },
 
   btnSecondary: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
     alignSelf: 'flex-start',
   },
+  btnSecondaryText: { fontWeight: '700', color: '#E5E7EB' },
 
+  budgetRow: {
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#1F2937',
+  },
 
-  budgetRow: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
+  budgetTitle: { fontSize: 16, fontWeight: '800', color: '#E5E7EB' },
 
-  kpiRow: { marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  kpiRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+
+  kpi: { color: '#9CA3AF' },
 
   progressOuter: {
     marginTop: 10,
     height: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#374151',
     overflow: 'hidden',
   },
   progressInner: {
     height: '100%',
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: '#4B5563',
   },
 
- 
+  status: { marginTop: 8, fontWeight: '700', color: '#E5E7EB' },
+
   inlineRow: { flexDirection: 'row', alignItems: 'center' },
 
+  help: { marginTop: 6, fontSize: 12, color: '#9CA3AF' },
 });
+

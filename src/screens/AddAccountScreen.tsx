@@ -49,7 +49,7 @@ const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
         value={name}
         onChangeText={setName}
         placeholder="e.g. Main Current Account"
-        placeholderTextColor="#7a7a7a"
+        placeholderTextColor="#6B7280"
       />
 
       <View style={styles.buttonRow}>
@@ -71,59 +71,62 @@ export default AddAccountScreen;
 
 const styles = StyleSheet.create({
   container: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 32,
-    backgroundColor: '#0b0b0b',
-    flexGrow: 1,
+    backgroundColor: '#0B1020',
   },
   heading: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
     marginBottom: 16,
-    color: '#fff',
+    color: '#E5E7EB',
   },
   label: {
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 6,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#E5E7EB',
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#374151',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
-    color: '#fff',
+    color: '#E5E7EB',
+    backgroundColor: '#111827',
   },
   buttonRow: {
-    marginTop: 8,
+    marginTop: 10,
   },
   btnPrimary: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    backgroundColor: '#111827',
     borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderColor: '#1F2937',
     alignItems: 'center',
   },
   btnPrimaryText: {
+    color: '#E5E7EB',
     fontWeight: '800',
-    color: '#fff',
   },
   btnSecondary: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
     borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.14)',
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
     alignItems: 'center',
   },
   btnSecondaryText: {
+    color: '#E5E7EB',
     fontWeight: '800',
-    color: 'rgba(255,255,255,0.9)',
   },
 });
+
 
