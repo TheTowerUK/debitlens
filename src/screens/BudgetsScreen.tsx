@@ -206,10 +206,16 @@ export default function BudgetsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, paddingBottom: 32 },
+  wrap: { padding: 16, paddingBottom: 32, backgroundColor: '#0b0b0b', flexGrow: 1 },
+  h1: { fontSize: 26, fontWeight: '800', color: '#fff' },
+  subtle: { marginTop: 6, opacity: 0.75, color: 'rgba(255,255,255,0.8)' },
+  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 10, color: '#fff' },
+  label: { marginTop: 10, marginBottom: 6, opacity: 0.85, color: 'rgba(255,255,255,0.85)' },
+  budgetTitle: { fontSize: 16, fontWeight: '800', color: '#fff' },
+  kpi: { opacity: 0.85, color: 'rgba(255,255,255,0.85)' },
+  status: { marginTop: 8, fontWeight: '700', opacity: 0.9, color: 'rgba(255,255,255,0.9)' },
+  help: { marginTop: 6, opacity: 0.65, fontSize: 12, color: 'rgba(255,255,255,0.7)' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  h1: { fontSize: 26, fontWeight: '800' },
-  subtle: { marginTop: 6, opacity: 0.75 },
 
   card: {
     marginTop: 14,
@@ -218,9 +224,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
   },
-  sectionTitle: { fontSize: 16, fontWeight: '800', marginBottom: 10 },
 
-  label: { marginTop: 10, marginBottom: 6, opacity: 0.85 },
   input: {
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.14)',
@@ -228,8 +232,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 6,
+    color: '#fff', // ✅ add
   },
 
+  btnText: { fontWeight: '700', color: '#fff' },
+  btnSecondaryText: { fontWeight: '700', opacity: 0.9, color: 'rgba(255,255,255,0.9)' },
   btn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -238,7 +245,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
     alignSelf: 'flex-start',
   },
-  btnText: { fontWeight: '700' },
+
 
   btnSecondary: {
     paddingHorizontal: 12,
@@ -248,13 +255,11 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.14)',
     alignSelf: 'flex-start',
   },
-  btnSecondaryText: { fontWeight: '700', opacity: 0.9 },
+
 
   budgetRow: { paddingVertical: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.08)' },
-  budgetTitle: { fontSize: 16, fontWeight: '800' },
 
   kpiRow: { marginTop: 6, flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  kpi: { opacity: 0.85 },
 
   progressOuter: {
     marginTop: 10,
@@ -270,7 +275,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
 
-  status: { marginTop: 8, fontWeight: '700', opacity: 0.9 },
+ 
   inlineRow: { flexDirection: 'row', alignItems: 'center' },
-  help: { marginTop: 6, opacity: 0.65, fontSize: 12 },
+
 });

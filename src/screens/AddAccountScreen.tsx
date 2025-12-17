@@ -7,6 +7,7 @@ import {
   Button,
   StyleSheet,
   ScrollView,
+  Pressable,
 } from 'react-native';
 import { useApp } from '../state/AppContext';
 
@@ -48,14 +49,19 @@ const AddAccountScreen: React.FC<Props> = ({ navigation }) => {
         value={name}
         onChangeText={setName}
         placeholder="e.g. Main Current Account"
+        placeholderTextColor="#7a7a7a"
       />
 
       <View style={styles.buttonRow}>
-        <Button title="Save account" onPress={handleSave} />
+        <Pressable style={styles.btnPrimary} onPress={handleSave}>
+          <Text style={styles.btnPrimaryText}>Save account</Text>
+        </Pressable>
       </View>
 
       <View style={styles.buttonRow}>
-        <Button title="Cancel" onPress={() => navigation.goBack()} />
+        <Pressable style={styles.btnSecondary} onPress={() => navigation.goBack()}>
+          <Text style={styles.btnSecondaryText}>Cancel</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );
@@ -66,25 +72,58 @@ export default AddAccountScreen;
 const styles = StyleSheet.create({
   container: {
     padding: 16,
+    paddingBottom: 32,
+    backgroundColor: '#0b0b0b',
+    flexGrow: 1,
   },
   heading: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     marginBottom: 16,
+    color: '#fff',
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontWeight: '700',
+    marginBottom: 6,
+    color: 'rgba(255,255,255,0.85)',
   },
   input: {
     borderWidth: 1,
-    borderRadius: 6,
-    padding: 8,
+    borderColor: 'rgba(255,255,255,0.14)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginBottom: 12,
+    color: '#fff',
   },
   buttonRow: {
     marginTop: 8,
-    marginBottom: 8,
+  },
+  btnPrimary: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+  },
+  btnPrimaryText: {
+    fontWeight: '800',
+    color: '#fff',
+  },
+  btnSecondary: {
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center',
+  },
+  btnSecondaryText: {
+    fontWeight: '800',
+    color: 'rgba(255,255,255,0.9)',
   },
 });
+
