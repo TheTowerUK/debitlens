@@ -5,6 +5,8 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useApp } from '../state/AppContext';
 import type { RootStackParamList } from '../navigations/types';
 
+const [editLimitById, setEditLimitById] = useState<Record<string, string>>({});
+
 type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
 function monthKey(d = new Date()) {
@@ -176,21 +178,37 @@ export default function BudgetsScreen({ navigation }: Props) {
                   <Text style={styles.status}>Status: {statusText}</Text>
 
                   <Text style={[styles.label, { marginTop: 8 }]}>Edit monthly limit</Text>
+
                   <View style={styles.inlineRow}>
                     <TextInput
-                      defaultValue={String(b.limit)}
+                      value={editLimitById[b.id] ?? String(b.limit)}
+                      onChangeText={(v) => setEditLimitById((p) => ({ ...p, [b.id]: v }))}
                       keyboardType="numeric"
+                      placeholder="e.g. 300"
+                      placeholderTextColor="#6B7280"
                       style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                      onSubmitEditing={(e) => {
-                        const n = Number(e.nativeEvent.text);
+                    />
+
+                    <Pressable
+                      style={[styles.btn, { marginLeft: 10 }]}
+                      onPress={() => {
+                        const raw = editLimitById[b.id] ?? String(b.limit);
+                        const n = Number(raw);
                         if (!Number.isFinite(n) || n <= 0) return;
                         actions.updateBudget(b.id, { limit: n });
                       }}
-                    />
-                    <Pressable style={[styles.btnSecondary, { marginLeft: 10 }]} onPress={() => handleDelete(b.id)}>
+                    >
+                      <Text style={styles.btnText}>Save</Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.btnSecondary, { marginLeft: 10 }]}
+                      onPress={() => handleDelete(b.id)}
+                    >
                       <Text style={styles.btnSecondaryText}>Delete</Text>
                     </Pressable>
                   </View>
+
 
                   <Text style={styles.help}>
                     Tip: press “Enter” after changing the limit to save.
