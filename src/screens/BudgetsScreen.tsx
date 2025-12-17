@@ -26,8 +26,10 @@ export default function BudgetsScreen({ navigation }: Props) {
   const budgets = state.budgets || [];
   const txs = state.transactions || [];
   const [editLimitById, setEditLimitById] = useState<Record<string, string>>({});
+  const [savedBudgetId, setSavedBudgetId] = useState<string | null>(null);
   const [newCategory, setNewCategory] = useState('');
   const [newLimit, setNewLimit] = useState('');
+
 
   const thisMonth = monthKey();
 
@@ -187,17 +189,34 @@ export default function BudgetsScreen({ navigation }: Props) {
                       style={[styles.input, { flex: 1, marginBottom: 0 }]}
                     />
 
+                  {/* Budget Change Save */}
                     <Pressable
                       style={[styles.btn, { marginLeft: 10 }]}
                       onPress={() => {
                         const raw = editLimitById[b.id] ?? String(b.limit);
                         const n = Number(raw);
                         if (!Number.isFinite(n) || n <= 0) return;
+
                         actions.updateBudget(b.id, { limit: n });
+
+                        setSavedBudgetId(b.id);
+
+                        // clear the edit buffer for this row
+                        setEditLimitById((p) => {
+                          const next = { ...p };
+                          delete next[b.id];
+                          return next;
+                        });
+
+                        // auto-hide confirmation after 2 seconds
+                        setTimeout(() => {
+                          setSavedBudgetId((current) => (current === b.id ? null : current));
+                        }, 2000);
                       }}
                     >
                       <Text style={styles.btnText}>Save</Text>
                     </Pressable>
+
 
                     <Pressable
                       style={[styles.btnSecondary, { marginLeft: 10 }]}
@@ -205,6 +224,11 @@ export default function BudgetsScreen({ navigation }: Props) {
                     >
                       <Text style={styles.btnSecondaryText}>Delete</Text>
                     </Pressable>
+                    {savedBudgetId === b.id && (
+                    <Text style={styles.confirm}>
+                      ✓ Budget updated
+                    </Text>
+                  )}
                   </View>
                   <Text style={styles.help}>Tip: tap “Save” to apply the new limit.</Text>
                 </View>
@@ -315,6 +339,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#4B5563',
   },
+  confirm: {
+  marginTop: 6,
+  fontSize: 12,
+  color: '#A7F3D0', // soft green, readable on your palette
+  fontWeight: '600',
+},
+
 
   status: { marginTop: 8, fontWeight: '700', color: '#E5E7EB' },
 
