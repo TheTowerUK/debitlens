@@ -320,38 +320,23 @@ export default function DashboardScreen({ navigation }: Props) {
 
   {/* Budgets */}
   <View style={styles.gridRow}>
-    <Pressable
-      style={styles.gridCard}
-      onPress={() => navigation.navigate('Budgets')}
-    >
-      <Text style={styles.gridTitle}>Budgets</Text>
+    <Pressable style={styles.gridCard} onPress={() => navigation.navigate('Budgets')}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={styles.gridTitle}>Budgets</Text>
 
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <Text style={styles.gridTitle}>Budgets</Text>
+        {budgetSummary.exceeded > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{budgetSummary.exceeded}</Text>
+          </View>
+        )}
+      </View>
 
-      {budgetSummary.exceeded > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{budgetSummary.exceeded}</Text>
-        </View>
-      )}
-    </View>
-
-    <Text style={styles.gridSub}>
-      {budgets.length === 0
-        ? 'No budgets set yet'
-        : `${budgetSummary.warning} near limit • Remaining ${Math.round(budgetSummary.totalRemaining)}`
-      }
-    </Text>
-
-
-      {budgets.length === 0 ? (
-        <Text style={styles.gridSub}>No budgets set yet</Text>
-      ) : (
-        <Text style={styles.gridSub}>
-          {budgetSummary.exceeded} exceeded • {budgetSummary.warning} near limit • Remaining:{' '}
-          {Math.round(budgetSummary.totalRemaining)}
-        </Text>
-      )}
+      <Text style={styles.gridSub}>
+        {budgets.length === 0
+          ? 'No budgets set yet'
+          : `${budgetSummary.warning} near limit • Remaining ${Math.round(budgetSummary.totalRemaining)}`
+        }
+      </Text>
     </Pressable>
   </View>
 
