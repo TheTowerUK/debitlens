@@ -198,6 +198,7 @@ export default function BudgetsScreen({ navigation }: Props) {
                         if (!Number.isFinite(n) || n <= 0) return;
 
                         actions.updateBudget(b.id, { limit: n });
+                        Alert.alert('Saved', 'Budget updated successfully.');
 
                         setSavedBudgetId(b.id);
 
@@ -226,7 +227,7 @@ export default function BudgetsScreen({ navigation }: Props) {
                     </Pressable>
                     {savedBudgetId === b.id && (
                     <Text style={styles.confirm}>
-                      ✓ Budget updated
+
                     </Text>
                   )}
                   </View>
