@@ -20,7 +20,6 @@ export default function DashboardScreen({ navigation }: Props) {
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
   const recurring: RecurringItem[] = state.recurring || [];
-
   const budgets = state.budgets || [];
 
   // ---- Month range (used by monthSummary + budgets) ----
@@ -327,6 +326,24 @@ export default function DashboardScreen({ navigation }: Props) {
     >
       <Text style={styles.gridTitle}>Budgets</Text>
 
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <Text style={styles.gridTitle}>Budgets</Text>
+
+      {budgetSummary.exceeded > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{budgetSummary.exceeded}</Text>
+        </View>
+      )}
+    </View>
+
+    <Text style={styles.gridSub}>
+      {budgets.length === 0
+        ? 'No budgets set yet'
+        : `${budgetSummary.warning} near limit • Remaining ${Math.round(budgetSummary.totalRemaining)}`
+      }
+    </Text>
+
+
       {budgets.length === 0 ? (
         <Text style={styles.gridSub}>No budgets set yet</Text>
       ) : (
@@ -586,5 +603,16 @@ const styles = StyleSheet.create({
     fontSize: 22,
     paddingLeft: 10,
   },
+  badge: {
+  minWidth: 22,
+  height: 22,
+  paddingHorizontal: 6,
+  borderRadius: 999,
+  alignItems: 'center',
+  justifyContent: 'center',
+  backgroundColor: '#EF4444',
+},
+badgeText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
 
 });

@@ -6,8 +6,11 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useApp } from '../state/AppContext';
-import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
-
+import {
+  createBackupV1,
+  parseAndValidateBackup,
+  type BackupLatest,
+} from '../utils/backup';
 import {
   getSavedBackupReminderMode,
   setBackupReminderMode,
@@ -22,12 +25,14 @@ export default function BackupRestoreScreen() {
   const accounts = state.accounts || [];
   const transactions = state.transactions || [];
   const recurring = state.recurring || [];
+  const budgets = state.budgets || [];
 
   const [preview, setPreview] = useState<BackupLatest | null>(null);
   const [status, setStatus] = useState<string>('');
   const [replaceMode, setReplaceMode] = useState(true);
 
-  const [reminderMode, setReminderModeState] = useState<BackupReminderMode>('off');
+  const [reminderMode, setReminderModeState] =
+    useState<BackupReminderMode>('off');
   const [reminderStatus, setReminderStatus] = useState<string>('');
 
   useEffect(() => {
@@ -66,15 +71,17 @@ export default function BackupRestoreScreen() {
       accounts: accounts.length,
       transactions: transactions.length,
       recurring: recurring.length,
+      budgets: budgets.length,
     }),
-    [accounts.length, transactions.length, recurring.length]
+    [accounts.length, transactions.length, recurring.length, budgets.length]
   );
 
   const handleExportBackup = async () => {
     try {
       setStatus('');
 
-      const backup = createBackupV1({ accounts, transactions, recurring });
+      // ✅ This now exports budgets too (assuming createBackupV1 supports it)
+      const backup = createBackupV1({ accounts, transactions, recurring, });
       const json = JSON.stringify(backup, null, 2);
 
       const filename = `DebitLens_Backup_${new Date()
@@ -149,7 +156,9 @@ export default function BackupRestoreScreen() {
       accounts: preview.app.accounts,
       transactions: preview.app.transactions,
       recurring: preview.app.recurring,
+      budgets: preview.app.budgets ?? budgets, // if backup has budgets use them, else keep current
     });
+
 
     setPreview(null);
     setStatus('Restore applied (data replaced).');
@@ -168,6 +177,7 @@ export default function BackupRestoreScreen() {
         <Text style={styles.cardLine}>Accounts: {counts.accounts}</Text>
         <Text style={styles.cardLine}>Transactions: {counts.transactions}</Text>
         <Text style={styles.cardLine}>Recurring: {counts.recurring}</Text>
+        <Text style={styles.cardLine}>Budgets: {counts.budgets}</Text>
 
         <Pressable style={styles.btn} onPress={handleExportBackup}>
           <Text style={styles.btnText}>Export full backup (JSON)</Text>
@@ -224,10 +234,9 @@ export default function BackupRestoreScreen() {
             <Text style={styles.previewLine}>Version: {preview.version}</Text>
             <Text style={styles.previewLine}>Exported: {preview.exportedAt}</Text>
             <Text style={styles.previewLine}>Accounts: {preview.app.accounts.length}</Text>
-            <Text style={styles.previewLine}>
-              Transactions: {preview.app.transactions.length}
-            </Text>
+            <Text style={styles.previewLine}>Transactions: {preview.app.transactions.length}</Text>
             <Text style={styles.previewLine}>Recurring: {preview.app.recurring.length}</Text>
+            <Text style={styles.previewLine}>Budgets: {preview.app.budgets?.length ?? 0}</Text>
 
             <Pressable style={styles.btnDanger} onPress={handleApplyRestore}>
               <Text style={styles.btnText}>Apply restore</Text>

@@ -23,35 +23,12 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
-  createBackupV1, // now creates latest (v2) via backup.ts
-  parseAndValidateBackup, // returns latest (v2)
+  createBackupV1,
+  parseAndValidateBackup,
   type BackupLatest,
 } from '../utils/backup';
 
 const FS: any = FileSystem as any;
-
-async function writeAndShareFile(
-  filename: string,
-  contents: string,
-  mimeType: string
-) {
-  const baseDir: string | undefined = FS.documentDirectory;
-  if (!baseDir) throw new Error('File system directory not available.');
-
-  const uri = baseDir + filename;
-
-  if (!FS.writeAsStringAsync) {
-    throw new Error('expo-file-system is not available. Install expo-file-system.');
-  }
-
-  await FS.writeAsStringAsync(uri, contents);
-
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType, dialogTitle: 'Save / Share file' });
-  } else {
-    throw new Error('Sharing is not available on this device.');
-  }
-}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -154,6 +131,29 @@ function normalizeType(typeRaw: string, amountRaw: number): 'income' | 'expense'
 }
 
 /* ===========================
+   File write + share
+=========================== */
+
+async function writeAndShareFile(filename: string, contents: string, mimeType: string) {
+  const baseDir: string | undefined = FS.documentDirectory;
+  if (!baseDir) throw new Error('File system directory not available.');
+
+  const uri = baseDir + filename;
+
+  if (!FS.writeAsStringAsync) {
+    throw new Error('expo-file-system is not available. Install expo-file-system.');
+  }
+
+  await FS.writeAsStringAsync(uri, contents);
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType, dialogTitle: 'Save / Share file' });
+  } else {
+    throw new Error('Sharing is not available on this device.');
+  }
+}
+
+/* ===========================
    CSV import stats persistence
 =========================== */
 
@@ -167,7 +167,6 @@ type CsvImportStats = {
   finishedAt: string; // ISO
   source: 'file' | 'manual';
 
-  // optional additions (backwards-compatible)
   operation?: 'import' | 'restore';
   mode?: RestoreMode;
 };
@@ -175,12 +174,12 @@ type CsvImportStats = {
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
 export default function DataExportImportScreen({ navigation }: Props) {
-  // keep as-any for actions flexibility, but state will still be typed
   const { state, actions } = useApp() as any;
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
   const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
   const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
+  const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
 
   const [lastStatus, setLastStatus] = useState<string>('');
 
@@ -193,6 +192,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   const handleExportJsonFile = async () => {
     try {
+      // NOTE: budgets are NOT included in backup format yet (utils/backup types)
+      // We will add budgets once backup.ts is updated.
       const backup = createBackupV1({
         accounts,
         transactions: txs,
@@ -249,19 +250,22 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   const applyJsonReplace = () => {
     if (!jsonPreview) return;
+
     actions.replaceAllData({
       accounts: jsonPreview.app.accounts,
       transactions: jsonPreview.app.transactions,
       recurring: jsonPreview.app.recurring,
+      // ✅ preserve existing budgets (backup format doesn’t include budgets yet)
+      budgets,
     });
   };
 
   const applyJsonMerge = () => {
     if (!jsonPreview) return;
 
-    const existingAccounts = Array.isArray(state.accounts) ? state.accounts : [];
-    const existingTxs = Array.isArray(state.transactions) ? state.transactions : [];
-    const existingRecurring = Array.isArray(state.recurring) ? state.recurring : [];
+    const existingAccounts = accounts;
+    const existingTxs = txs;
+    const existingRecurring = recurring;
 
     const accIds = new Set(existingAccounts.map((a: any) => a.id));
     const txIds = new Set(existingTxs.map((t: any) => t.id));
@@ -275,6 +279,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
       accounts: [...existingAccounts, ...addAccounts],
       transactions: [...existingTxs, ...addTxs],
       recurring: [...existingRecurring, ...addRecurring],
+      // ✅ preserve existing budgets
+      budgets,
     });
   };
 
@@ -382,7 +388,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
   const [importSource, setImportSource] = useState<'manual' | 'file' | null>(null);
 
-  // NEW: CSV Restore mode
   const [csvRestoreMode, setCsvRestoreMode] = useState<RestoreMode>('merge');
 
   const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
@@ -438,7 +443,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setCsvPreviewSourceName('');
       setLastImportSummary('');
 
-      setLastStatus(`Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview, import, or restore it.`);
+      setLastStatus(
+        `Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview, import, or restore it.`
+      );
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
@@ -510,7 +517,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
         setCsvPreviewSourceName(
           `Detected account column at index ${accountColIndex}. ` +
             `Known accounts: ${matchedCount}. Unknown: ${unknownCount}. ` +
-            (createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.')
+            (createMissingAccounts
+              ? 'Unknown accounts will be created.'
+              : 'Unknown accounts will be skipped.')
         );
       } else {
         setCsvPreviewSourceName(
@@ -665,22 +674,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   continue;
                 }
 
-                let csvType: 'income' | 'expense' | null = null;
-                const typeLower = String(typeStrRaw).toLowerCase();
-
-                if (typeLower === 'credit' || typeLower === 'income' || typeLower === 'in') {
-                  csvType = 'income';
-                } else if (typeLower === 'debit' || typeLower === 'expense' || typeLower === 'out') {
-                  csvType = 'expense';
-                }
-
                 const rawAmount = amountNum;
                 const amount = Math.abs(rawAmount);
 
                 let finalType: 'income' | 'expense';
                 if (rawAmount < 0) finalType = 'expense';
                 else if (rawAmount > 0) finalType = 'income';
-                else finalType = csvType ?? 'expense';
+                else finalType = normalizeType(typeStrRaw, amountNum);
 
                 actions.addTransaction({
                   accountId: accountForRow.id,
@@ -706,7 +706,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
               setLastImportSummary(summary);
               setLastStatus('CSV import completed. See summary below.');
 
-              // Persist stats
               await persistCsvStats({
                 importedCount,
                 createdAccountsCount,
@@ -731,9 +730,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   /* ===========================
      CSV RESTORE (NEW)
-     - Merge: append CSV txs
-     - Replace: replace ALL txs with CSV txs
-     Accounts are preserved, plus optional new accounts from CSV.
   =========================== */
 
   const buildCsvTransactions = (csvText: string) => {
@@ -749,7 +745,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
       dataRows = restRows;
     }
 
-    // Default order: date, account, amount, type, description, category
     let dateCol = 0;
     let accountCol = 1;
     let amountCol = 2;
@@ -759,8 +754,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
     if (headerRow) {
       const headerLower = headerRow.map((h) => h.toLowerCase());
-      const findIndex = (names: string[]) =>
-        headerLower.findIndex((h) => names.includes(h));
+      const findIndex = (names: string[]) => headerLower.findIndex((h) => names.includes(h));
 
       const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
       const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
@@ -777,7 +771,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
       if (catIdx >= 0) categoryCol = catIdx;
     }
 
-    // Account lookup (by name)
     const accountByName: Record<string, Account> = {};
     for (const a of accounts) {
       if (a?.name) accountByName[String(a.name).trim()] = a;
@@ -822,9 +815,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
           continue;
         }
 
-        // Create locally-valid account (required fields)
         try {
-          // Prefer actions.addAccount so it stays consistent with app behavior
           const created = actions.addAccount({
             name: accountName,
             type: 'bank',
@@ -851,7 +842,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const finalType = normalizeType(rawType, amountNum);
       const amount = Math.abs(amountNum);
       const isoDate = normalizeDateToISODate(String(rawDate));
-
       const name = description || category || 'Imported';
 
       builtTxs.push({
@@ -904,14 +894,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
             const built = buildCsvTransactions(importCsvText);
 
             const finalTxs =
-              csvRestoreMode === 'replace'
-                ? built.builtTxs
-                : [...txs, ...built.builtTxs];
+              csvRestoreMode === 'replace' ? built.builtTxs : [...txs, ...built.builtTxs];
 
             actions.replaceAllData({
               accounts: built.newAccounts,
               transactions: finalTxs,
               recurring, // unchanged
+              budgets,   // ✅ preserve budgets during CSV restore/merge
             });
 
             const summaryLines: string[] = [];
@@ -959,6 +948,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
         <Text style={styles.statLine}>Accounts: {accounts.length}</Text>
         <Text style={styles.statLine}>Transactions: {txs.length}</Text>
         <Text style={styles.statLine}>Recurring: {recurring.length}</Text>
+        <Text style={styles.statLine}>Budgets: {budgets.length}</Text>
       </View>
 
       {/* JSON BACKUP */}
@@ -1059,32 +1049,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
           <Switch value={createMissingAccounts} onValueChange={setCreateMissingAccounts} />
         </View>
 
-        {/* CSV Restore Mode */}
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>
             CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
           </Text>
-          <View style={styles.modePillRow}>
-            <Pressable
-              style={[
-                styles.modePill,
-                csvRestoreMode === 'merge' ? styles.modePillOn : null,
-              ]}
-              onPress={() => setCsvRestoreMode('merge')}
-            >
-              <Text style={styles.modePillText}>Merge</Text>
-            </Pressable>
-
-            <Pressable
-              style={[
-                styles.modePill,
-                csvRestoreMode === 'replace' ? styles.modePillOnDanger : null,
-              ]}
-              onPress={() => setCsvRestoreMode('replace')}
-            >
-              <Text style={styles.modePillText}>Replace</Text>
-            </Pressable>
-          </View>
         </View>
 
         <View style={styles.rowButtons}>
@@ -1290,33 +1258,6 @@ const styles = StyleSheet.create({
     color: '#D1D5DB',
     flex: 1,
     marginRight: 8,
-  },
-
-  modePillRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  modePill: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#020617',
-    marginLeft: 8,
-  },
-  modePillOn: {
-    borderColor: '#2563EB',
-    backgroundColor: '#0B1020',
-  },
-  modePillOnDanger: {
-    borderColor: '#B91C1C',
-    backgroundColor: '#0B1020',
-  },
-  modePillText: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    fontSize: 12,
   },
 
   textBox: {

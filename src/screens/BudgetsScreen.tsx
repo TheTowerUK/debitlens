@@ -30,6 +30,14 @@ export default function BudgetsScreen({ navigation }: Props) {
   const [newCategory, setNewCategory] = useState('');
   const [newLimit, setNewLimit] = useState('');
 
+  const existingCategories = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of txs) {
+      const c = (t.category || '').trim();
+      if (c) set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [txs]);
 
   const thisMonth = monthKey();
 
@@ -117,21 +125,38 @@ export default function BudgetsScreen({ navigation }: Props) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Add budget</Text>
 
+      {/* Category Input */}
         <Text style={styles.label}>Category</Text>
+
+        {existingCategories.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+            {existingCategories.slice(0, 12).map((c) => (
+              <Pressable
+                key={c}
+                style={[styles.chip, newCategory.trim() === c ? styles.chipActive : null]}
+                onPress={() => setNewCategory(c)}
+              >
+                <Text style={styles.chipText}>{c}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
         <TextInput
           value={newCategory}
           onChangeText={setNewCategory}
           placeholder="e.g. Groceries"
-          placeholderTextColor="#7a7a7a"
+          placeholderTextColor="#6B7280"
           style={styles.input}
         />
+
 
         <Text style={styles.label}>Monthly limit</Text>
         <TextInput
           value={newLimit}
           onChangeText={setNewLimit}
           placeholder="e.g. 300"
-          placeholderTextColor="#7a7a7a"
+          placeholderTextColor="#6B7280"
           keyboardType="numeric"
           style={styles.input}
         />
@@ -149,6 +174,15 @@ export default function BudgetsScreen({ navigation }: Props) {
           <Text style={styles.subtle}>No budgets yet. Add one above.</Text>
         ) : (
           derived.map((b) => {
+            const progressStyle =
+              b.status === 'exceeded' ? styles.progressBad :
+              b.status === 'warning' ? styles.progressWarn :
+              styles.progressOk;
+
+            const statusStyle =
+              b.status === 'exceeded' ? styles.statusBad :
+              b.status === 'warning' ? styles.statusWarn :
+              styles.statusOk;
             const statusText =
               b.status === 'exceeded'
                 ? 'Exceeded'
@@ -171,11 +205,12 @@ export default function BudgetsScreen({ navigation }: Props) {
                     </Text>
                   </View>
 
+
                   <View style={styles.progressOuter}>
-                    <View style={[styles.progressInner, { width: `${Math.round(b.pct * 100)}%` }]} />
+                    <View style={[styles.progressInner, progressStyle, { width: `${Math.round(b.pct * 100)}%` }]} />
                   </View>
 
-                  <Text style={styles.status}>Status: {statusText}</Text>
+                  <Text style={[styles.status, statusStyle]}>Status: {statusText}</Text>
 
                   <Text style={[styles.label, { marginTop: 8 }]}>Edit monthly limit</Text>
 
@@ -189,7 +224,7 @@ export default function BudgetsScreen({ navigation }: Props) {
                       style={[styles.input, { flex: 1, marginBottom: 0 }]}
                     />
 
-                  {/* Budget Change Save */}
+                  {/* Budget Change Save Handler */}
                     <Pressable
                       style={[styles.btn, { marginLeft: 10 }]}
                       onPress={() => {
@@ -198,7 +233,6 @@ export default function BudgetsScreen({ navigation }: Props) {
                         if (!Number.isFinite(n) || n <= 0) return;
 
                         actions.updateBudget(b.id, { limit: n });
-                        Alert.alert('Saved', 'Budget updated successfully.');
 
                         setSavedBudgetId(b.id);
 
@@ -225,12 +259,11 @@ export default function BudgetsScreen({ navigation }: Props) {
                     >
                       <Text style={styles.btnSecondaryText}>Delete</Text>
                     </Pressable>
-                    {savedBudgetId === b.id && (
-                    <Text style={styles.confirm}>
-
-                    </Text>
-                  )}
                   </View>
+                  {savedBudgetId === b.id && (
+                    <Text style={styles.confirm}>✓ Budget updated</Text>
+                  )}
+
                   <Text style={styles.help}>Tip: tap “Save” to apply the new limit.</Text>
                 </View>
               </View>
@@ -335,17 +368,28 @@ const styles = StyleSheet.create({
     borderColor: '#374151',
     overflow: 'hidden',
   },
-  progressInner: {
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#4B5563',
-  },
+  progressInner: { height: '100%', borderRadius: 999 },
+
   confirm: {
   marginTop: 6,
   fontSize: 12,
   color: '#A7F3D0', // soft green, readable on your palette
   fontWeight: '600',
-},
+  },
+  chipRow: { marginBottom: 10 },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
+    marginRight: 8,
+  },
+  chipActive: {
+    borderColor: '#E5E7EB',
+  },
+  chipText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
 
 
   status: { marginTop: 8, fontWeight: '700', color: '#E5E7EB' },
@@ -353,5 +397,13 @@ const styles = StyleSheet.create({
   inlineRow: { flexDirection: 'row', alignItems: 'center' },
 
   help: { marginTop: 6, fontSize: 12, color: '#9CA3AF' },
+  progressOk: { backgroundColor: '#4B5563' },
+  progressWarn: { backgroundColor: '#F59E0B' },
+  progressBad: { backgroundColor: '#EF4444' },
+
+  statusOk: { color: '#9CA3AF' },
+  statusWarn: { color: '#F59E0B' },
+  statusBad: { color: '#EF4444' },
+
 });
 
