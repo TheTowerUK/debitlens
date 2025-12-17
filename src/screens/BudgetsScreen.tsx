@@ -5,8 +5,6 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useApp } from '../state/AppContext';
 import type { RootStackParamList } from '../navigations/types';
 
-const [editLimitById, setEditLimitById] = useState<Record<string, string>>({});
-
 type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
 
 function monthKey(d = new Date()) {
@@ -27,7 +25,7 @@ export default function BudgetsScreen({ navigation }: Props) {
   const { state, actions } = useApp();
   const budgets = state.budgets || [];
   const txs = state.transactions || [];
-
+  const [editLimitById, setEditLimitById] = useState<Record<string, string>>({});
   const [newCategory, setNewCategory] = useState('');
   const [newLimit, setNewLimit] = useState('');
 
@@ -208,11 +206,7 @@ export default function BudgetsScreen({ navigation }: Props) {
                       <Text style={styles.btnSecondaryText}>Delete</Text>
                     </Pressable>
                   </View>
-
-
-                  <Text style={styles.help}>
-                    Tip: press “Enter” after changing the limit to save.
-                  </Text>
+                  <Text style={styles.help}>Tip: tap “Save” to apply the new limit.</Text>
                 </View>
               </View>
             );
