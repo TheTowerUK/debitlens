@@ -317,19 +317,21 @@ export default function DashboardScreen({ navigation }: Props) {
       <Text style={styles.gridTitle}>Recurring</Text>
       <Text style={styles.gridSub}>Direct debits & standing orders</Text>
     </Pressable>
+  </View>
 
-  <Pressable style={styles.card} onPress={() => navigation.navigate('Budgets')}>
-    <Text style={styles.cardTitle}>Budgets</Text>
-    {budgets.length === 0 ? (
-      <Text style={styles.subtle}>No budgets set yet</Text>
-    ) : (
-      <Text style={styles.subtle}>
-        {budgetSummary.exceeded} exceeded • {budgetSummary.warning} near limit • Remaining:{' '}
-        {budgetSummary.totalRemaining.toFixed(0)}
-      </Text>
-    )}
-  </Pressable>
-
+  {/* Budgets */}
+  <View style={styles.gridRow}>  
+    <Pressable style={styles.card} onPress={() => navigation.navigate('Budgets')}>
+      <Text style={styles.cardTitle}>Budgets</Text>
+      {budgets.length === 0 ? (
+        <Text style={styles.subtle}>No budgets set yet</Text>
+      ) : (
+        <Text style={styles.subtle}>
+          {budgetSummary.exceeded} exceeded • {budgetSummary.warning} near limit • Remaining:{' '}
+          {budgetSummary.totalRemaining.toFixed(0)}
+        </Text>
+      )}
+    </Pressable>
   </View>
 
   {/* Reports / Notifications */}
