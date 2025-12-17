@@ -1,0 +1,13 @@
+{
+  "entry": [
+    "App.tsx",
+    "src/navigations/RootNavigator.tsx",
+    "src/navigations/screens.ts",
+    "src/state/AppContext.tsx"
+  ],
+  "project": ["src/**/*.{ts,tsx,js}"],
+  "ignore": [
+    "**/*.d.ts",
+    "src/notifications/bootstrapper.old"
+  ]
+}

@@ -1,9 +1,10 @@
+// src/state/AppContext.tsx
 import React, {
   createContext,
   useContext,
   useMemo,
   useState,
-  ReactNode,
+  type ReactNode,
 } from 'react';
 
 /* =====================
@@ -67,10 +68,19 @@ export type RecurringItem = {
   toAccountId?: string;
 };
 
+/* ===== Budgets ===== */
+
+export type Budget = {
+  id: string;
+  category: string; // should match Transaction.category
+  limit: number; // monthly
+};
+
 export type AppState = {
   accounts: Account[];
   transactions: Transaction[];
   recurring: RecurringItem[];
+  budgets: Budget[];
 };
 
 export type AppActions = {
@@ -89,11 +99,17 @@ export type AppActions = {
   updateRecurring: (id: string, patch: Partial<RecurringItem>) => void;
   deleteRecurring: (id: string) => void;
 
+  /* Budgets */
+  addBudget: (input: Omit<Budget, 'id'>) => Budget;
+  updateBudget: (id: string, patch: Partial<Omit<Budget, 'id'>>) => void;
+  deleteBudget: (id: string) => void;
+
   /* Full restore (Option 1) */
   replaceAllData: (next: {
     accounts: Account[];
     transactions: Transaction[];
     recurring?: RecurringItem[];
+    budgets?: Budget[];
   }) => void;
 };
 
@@ -108,6 +124,10 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
+/* =====================
+   Helpers
+===================== */
+
 function uuid() {
   // crypto.randomUUID isn't always available in RN
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,10 +136,15 @@ function uuid() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+/* =====================
+   Provider
+===================== */
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [recurring, setRecurring] = useState<RecurringItem[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [pin, setPinState] = useState<string | null>(null);
 
   const actions = useMemo<AppActions>(
@@ -131,14 +156,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return account;
       },
       updateAccount: (id, patch) => {
-        setAccounts((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+        setAccounts((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, ...patch } : a))
+        );
       },
       deleteAccount: (id) => {
         setAccounts((prev) => prev.filter((a) => a.id !== id));
         setTransactions((prev) => prev.filter((t) => t.accountId !== id));
-        // remove recurring referencing account
         setRecurring((prev) =>
-          prev.filter((r) => r.accountId !== id && r.fromAccountId !== id && r.toAccountId !== id)
+          prev.filter(
+            (r) =>
+              r.accountId !== id && r.fromAccountId !== id && r.toAccountId !== id
+          )
         );
       },
 
@@ -149,7 +178,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return txn;
       },
       updateTransaction: (id, patch) => {
-        setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
+        );
       },
       deleteTransaction: (id) => {
         setTransactions((prev) => prev.filter((t) => t.id !== id));
@@ -162,10 +193,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return item;
       },
       updateRecurring: (id, patch) => {
-        setRecurring((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+        setRecurring((prev) =>
+          prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+        );
       },
       deleteRecurring: (id) => {
         setRecurring((prev) => prev.filter((r) => r.id !== id));
+      },
+
+      /* Budgets */
+      addBudget: (input) => {
+        const budget: Budget = { ...input, id: uuid() };
+        setBudgets((prev) => [...prev, budget]);
+        return budget;
+      },
+      updateBudget: (id, patch) => {
+        setBudgets((prev) =>
+          prev.map((b) => (b.id === id ? { ...b, ...patch } : b))
+        );
+      },
+      deleteBudget: (id) => {
+        setBudgets((prev) => prev.filter((b) => b.id !== id));
       },
 
       /* Full restore */
@@ -173,14 +221,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAccounts(next.accounts || []);
         setTransactions(next.transactions || []);
         setRecurring(next.recurring || []);
+        setBudgets(next.budgets || []);
       },
     }),
     []
   );
 
   const state = useMemo<AppState>(
-    () => ({ accounts, transactions, recurring }),
-    [accounts, transactions, recurring]
+    () => ({ accounts, transactions, recurring, budgets }),
+    [accounts, transactions, recurring, budgets]
   );
 
   const getPin = () => pin;
@@ -192,6 +241,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     </AppContext.Provider>
   );
 }
+
+/* =====================
+   Hook
+===================== */
 
 export function useApp() {
   const ctx = useContext(AppContext);

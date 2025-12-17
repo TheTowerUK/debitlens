@@ -10,9 +10,9 @@ export type RootStackParamList = {
   Account: { accountId: string };
   DataExportImport: undefined;
   AddAccount: undefined;
-
   History: undefined;
   Reports: undefined;
+
   ReportDetail: {
     categoryKey: string;
     period: 'thisMonth' | 'lastMonth' | 'allTime';

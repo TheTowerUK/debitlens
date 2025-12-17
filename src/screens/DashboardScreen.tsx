@@ -21,6 +21,17 @@ export default function DashboardScreen({ navigation }: Props) {
   const txs = state.transactions || [];
   const recurring: RecurringItem[] = state.recurring || [];
 
+  const budgets = state.budgets || [];
+
+  // ---- Month range (used by monthSummary + budgets) ----
+  const monthRange = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start, end };
+  }, []);
+
+
   // ---- Account balances (derived from transactions) ----
   const { totalBalance, accountCount } = useMemo(() => {
     const balanceById: Record<string, number> = {};
@@ -56,9 +67,7 @@ export default function DashboardScreen({ navigation }: Props) {
 
   // ---- This month summary ----
   const monthSummary = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const { start, end } = monthRange;
 
     let income = 0;
     let expense = 0;
@@ -79,7 +88,48 @@ export default function DashboardScreen({ navigation }: Props) {
       expense,
       net: income - expense,
     };
-  }, [txs]);
+  }, [txs, monthRange]);
+
+    // ---- Budgets summary (this month) ----
+  const spentByCategory = useMemo(() => {
+    const { start, end } = monthRange;
+    const map: Record<string, number> = {};
+
+    for (const t of txs) {
+      if (!t.date) continue;
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
+      if (t.type !== 'expense') continue;
+
+      const cat = (t.category || 'Uncategorised').trim();
+      map[cat] = (map[cat] || 0) + Math.abs(Number(t.amount) || 0);
+    }
+
+    return map;
+  }, [txs, monthRange]);
+
+  const budgetSummary = useMemo(() => {
+    let exceeded = 0;
+    let warning = 0;
+    let totalRemaining = 0;
+
+    for (const b of budgets) {
+      const limit = Number(b.limit) || 0;
+      const spent = spentByCategory[b.category] || 0;
+      const remaining = limit - spent;
+
+      totalRemaining += remaining;
+
+      if (limit <= 0) continue;
+      if (spent >= limit) exceeded += 1;
+      else if (spent >= limit * 0.8) warning += 1;
+    }
+
+    return { exceeded, warning, totalRemaining };
+  }, [budgets, spentByCategory]);
+
 
   // ---- Upcoming recurring (next 30 days) ----
   const upcomingRecurring = useMemo(() => {
@@ -268,13 +318,18 @@ export default function DashboardScreen({ navigation }: Props) {
       <Text style={styles.gridSub}>Direct debits & standing orders</Text>
     </Pressable>
 
-    <Pressable
-      style={styles.gridCard}
-      onPress={() => navigation.navigate('Budgets')}
-    >
-      <Text style={styles.gridTitle}>Budgets</Text>
-      <Text style={styles.gridSub}>Plan spending by category</Text>
-    </Pressable>
+  <Pressable style={styles.card} onPress={() => navigation.navigate('Budgets')}>
+    <Text style={styles.cardTitle}>Budgets</Text>
+    {budgets.length === 0 ? (
+      <Text style={styles.subtle}>No budgets set yet</Text>
+    ) : (
+      <Text style={styles.subtle}>
+        {budgetSummary.exceeded} exceeded • {budgetSummary.warning} near limit • Remaining:{' '}
+        {budgetSummary.totalRemaining.toFixed(0)}
+      </Text>
+    )}
+  </Pressable>
+
   </View>
 
   {/* Reports / Notifications */}

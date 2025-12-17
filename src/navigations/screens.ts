@@ -1,11 +1,16 @@
 // src/navigation/screens.ts
-import HomeScreen from 'screens/HomeScreen';
+import DashboardScreen from 'screens/DashboardScreen';
 import SettingsScreen from 'screens/SettingsScreen';
+import BudgetsScreen from 'screens/BudgetsScreen';
 
 export const screens = {
   Home: {
     title: 'Home',
-    component: HomeScreen,
+    component: DashboardScreen,
+  },
+  Budgets: {
+    title: 'Budgets',
+    component: BudgetsScreen,
   },
   Settings: {
     title: 'Settings',
