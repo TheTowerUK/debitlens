@@ -1,490 +1,334 @@
 // src/screens/ReportsScreen.tsx
 import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Platform,
-  Pressable,
-} from 'react-native';
-import { useApp, type Transaction } from '../state/AppContext';
-import { formatDateDDMMYYYY } from '../utils/formatDate';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/types';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { useApp } from '../state/AppContext';
 
-type PeriodKey = 'thisMonth' | 'lastMonth' | 'allTime';
+type SortMode = 'largest' | 'a-z';
 
-type ReportsNav = NativeStackNavigationProp<RootStackParamList, 'Reports'>;
+function formatGBP(n: number) {
+  const v = Number(n) || 0;
+  try {
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+    }).format(v);
+  } catch {
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    return `${sign}£${abs.toFixed(2)}`;
+  }
+}
 
-const ReportsScreen: React.FC = () => {
+function clamp01(x: number) {
+  if (!isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function startOfNextMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+
+export default function ReportsScreen({ navigation }: any) {
   const { state } = useApp();
-  const txs: Transaction[] = state.transactions || [];
-  const accounts = state.accounts || [];
+  const txs = state.transactions || [];
 
-  const [period, setPeriod] = useState<PeriodKey>('thisMonth');
-  const [selectedAccountId, setSelectedAccountId] = useState<'all' | string>('all');
-  const navigation = useNavigation<ReportsNav>();
+  const [sortMode, setSortMode] = useState<SortMode>('largest');
 
-  // Work out date boundaries for periods
-  const now = new Date();
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = thisMonthStart;
+  // ---- This month range ----
+  const monthRange = useMemo(() => {
+    const now = new Date();
+    const start = startOfMonth(now);
+    const end = startOfNextMonth(now);
+    return { start, end };
+  }, []);
 
-  const filteredTxs = useMemo(() => {
-    return txs.filter((t) => {
-      if (!t.date) return false;
-      const d = new Date(t.date);
-      if (isNaN(d.getTime())) return false;
+  // ---- Monthly totals (read-only) ----
+  const monthSummary = useMemo(() => {
+    const { start, end } = monthRange;
 
-      // Period filter
-      let inPeriod = false;
-      switch (period) {
-        case 'thisMonth':
-          inPeriod = d >= thisMonthStart && d < nextMonthStart;
-          break;
-        case 'lastMonth':
-          inPeriod = d >= lastMonthStart && d < lastMonthEnd;
-          break;
-        case 'allTime':
-        default:
-          inPeriod = true;
-          break;
-      }
-      if (!inPeriod) return false;
-
-      // Account filter
-      if (selectedAccountId !== 'all') {
-        if (!t.accountId || t.accountId !== selectedAccountId) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [
-    txs,
-    period,
-    selectedAccountId,
-    thisMonthStart,
-    nextMonthStart,
-    lastMonthStart,
-    lastMonthEnd,
-  ]);
-
-  // Summary totals
-  const { totalIncome, totalExpense, net } = useMemo(() => {
     let income = 0;
     let expense = 0;
 
-    for (const t of filteredTxs) {
+    for (const t of txs) {
+      if (!t.date) continue;
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') income += amt;
-      else expense += amt;
+      else if (t.type === 'expense') expense += amt;
     }
 
     return {
-      totalIncome: income,
-      totalExpense: expense,
+      income,
+      expense,
       net: income - expense,
     };
-  }, [filteredTxs]);
+  }, [txs, monthRange]);
 
-  // Category breakdown (expenses only)
-  const categoryRows = useMemo(() => {
-    const map = new Map<string, number>();
+  // ---- spentByCategory (this month, expenses only) ----
+  const spentByCategory = useMemo(() => {
+    const { start, end } = monthRange;
+    const map: Record<string, number> = {};
 
-    filteredTxs.forEach((t) => {
-      if (t.type !== 'expense') return;
+    for (const t of txs) {
+      if (t.type !== 'expense') continue;
+      if (!t.date) continue;
+
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
+      const catRaw = (t.category || '').trim();
+      const cat = catRaw ? catRaw : 'Uncategorised';
+
       const amt = Number(t.amount) || 0;
-      const key = t.category || 'Uncategorised';
-      map.set(key, (map.get(key) || 0) + amt);
+      if (!map[cat]) map[cat] = 0;
+      map[cat] += amt;
+    }
+
+    return map;
+  }, [txs, monthRange]);
+
+  // ---- Option B: UX polish derived data ----
+  const totalSpent = useMemo(() => {
+    const vals = Object.values(spentByCategory || {});
+    return vals.reduce((sum, v) => sum + (Number(v) || 0), 0);
+  }, [spentByCategory]);
+
+  const categoryRows = useMemo(() => {
+    const entries = Object.entries(spentByCategory || {})
+      .map(([category, amount]) => ({
+        category: category || 'Uncategorised',
+        amount: Number(amount) || 0,
+      }))
+      .filter((r) => r.amount > 0);
+
+    if (sortMode === 'a-z') {
+      entries.sort((a, b) => a.category.localeCompare(b.category));
+    } else {
+      entries.sort((a, b) => b.amount - a.amount);
+    }
+
+    const max = entries.length ? entries[0].amount : 0;
+
+    return entries.map((r) => {
+      const pct = totalSpent > 0 ? r.amount / totalSpent : 0;
+      const bar = max > 0 ? r.amount / max : 0; // relative to top category
+      return { ...r, pct: clamp01(pct), bar: clamp01(bar) };
     });
+  }, [spentByCategory, sortMode, totalSpent]);
 
-    const rows = Array.from(map.entries()).map(([category, amount]) => ({
-      category,
-      amount,
-    }));
-
-    rows.sort((a, b) => b.amount - a.amount); // biggest first
-    return rows;
-  }, [filteredTxs]);
-
-  const periodLabel = (() => {
-    const monthNames = [
-      'January','February','March','April','May','June',
-      'July','August','September','October','November','December',
-    ];
-    if (period === 'thisMonth') {
-      return `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-    }
-    if (period === 'lastMonth') {
-      const tmp = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      return `${monthNames[tmp.getMonth()]} ${tmp.getFullYear()}`;
-    }
-    return 'All time';
-  })();
+  const noTxsThisMonth =
+    (monthSummary.income || 0) === 0 && (monthSummary.expense || 0) === 0;
 
   return (
-    <ScrollView
-      style={styles.wrap}
-      contentContainerStyle={{ paddingBottom: 32 }}
-    >
+    <ScrollView contentContainerStyle={styles.wrap}>
       <Text style={styles.h1}>Reports</Text>
-      <Text style={styles.subtle}>Overview for {periodLabel}</Text>
 
-      {/* Period selector */}
-      <View style={styles.periodRow}>
-        <PeriodChip
-          label="This month"
-          active={period === 'thisMonth'}
-          onPress={() => setPeriod('thisMonth')}
-        />
-        <PeriodChip
-          label="Last month"
-          active={period === 'lastMonth'}
-          onPress={() => setPeriod('lastMonth')}
-        />
-        <PeriodChip
-          label="All time"
-          active={period === 'allTime'}
-          onPress={() => setPeriod('allTime')}
-        />
-      </View>
+      {/* Monthly totals */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>This month</Text>
 
-      {/* Account selector */}
-      {accounts.length > 0 && (
-        <View style={styles.accountRow}>
-          <Pressable
-            style={[
-              styles.chip,
-              selectedAccountId === 'all' && styles.chipActive,
-            ]}
-            onPress={() => setSelectedAccountId('all')}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                selectedAccountId === 'all' && styles.chipTextActive,
-              ]}
-            >
-              All accounts
-            </Text>
-          </Pressable>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingLeft: 4 }}
-          >
-            {accounts.map((acc: any) => (
-              <Pressable
-                key={acc.id}
-                style={[
-                  styles.chip,
-                  selectedAccountId === acc.id && styles.chipActive,
-                ]}
-                onPress={() => setSelectedAccountId(acc.id)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    selectedAccountId === acc.id && styles.chipTextActive,
-                  ]}
-                >
-                  {acc.name || 'Account'}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* Summary cards */}
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Income</Text>
-          <Text style={[styles.summaryValue, styles.incomeText]}>
-            £{totalIncome.toFixed(2)}
+        {noTxsThisMonth ? (
+          <Text style={styles.subtle}>
+            No transactions recorded for this month yet.
           </Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Spending</Text>
-          <Text style={[styles.summaryValue, styles.expenseText]}>
-            £{totalExpense.toFixed(2)}
-          </Text>
-        </View>
-      </View>
+        ) : (
+          <View style={{ gap: 10 }}>
+            <View style={styles.row}>
+              <Text style={styles.label}>Income</Text>
+              <Text style={styles.value}>{formatGBP(monthSummary.income)}</Text>
+            </View>
 
-      <View style={styles.summaryRow}>
-        <View style={[styles.summaryCard, { flex: 1 }]}>
-          <Text style={styles.summaryLabel}>Net</Text>
-          <Text
-            style={[
-              styles.summaryValue,
-              net >= 0 ? styles.incomeText : styles.expenseText,
-            ]}
-          >
-            {net >= 0 ? '+' : '-'}£{Math.abs(net).toFixed(2)}
-          </Text>
-        </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>Expenses</Text>
+              <Text style={styles.value}>{formatGBP(monthSummary.expense)}</Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.row}>
+              <Text style={[styles.label, { fontWeight: '900', opacity: 0.95 }]}>
+                Net
+              </Text>
+              <Text style={[styles.value, { fontWeight: '900' }]}>
+                {formatGBP(monthSummary.net)}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Category breakdown */}
-      <Text style={styles.sectionTitle}>Spending by category</Text>
-      {categoryRows.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No expenses in this period</Text>
-          <Text style={styles.emptyText}>
-            Once you add expenses, they&apos;ll be summarised here by category.
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          {categoryRows.map((row) => (
-            <Pressable
-              key={row.category}
-              style={styles.row}
-              onPress={() =>
-                navigation.navigate('ReportDetail', {
-                  categoryKey: row.category,
-                  period,
-                })
-              }
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={styles.categoryLabel}>{row.category}</Text>
-              </View>
-              <Text style={styles.amountText}>
-                £{row.amount.toFixed(2)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
+      <View style={styles.card}>
+        <View style={styles.headerRow}>
+          <Text style={styles.sectionTitle}>Spending by category</Text>
 
-      {/* Transactions list for this period */}
-      <Text style={styles.sectionTitle}>Transactions in this period</Text>
-      {filteredTxs.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No activity</Text>
-          <Text style={styles.emptyText}>
-            No transactions match this period filter.
-          </Text>
+          <Pressable
+            onPress={() => setSortMode((m) => (m === 'largest' ? 'a-z' : 'largest'))}
+            style={styles.pillBtn}
+          >
+            <Text style={styles.pillBtnText}>
+              Sort: {sortMode === 'largest' ? 'Largest' : 'A–Z'}
+            </Text>
+          </Pressable>
         </View>
-      ) : (
-        <View style={styles.card}>
-          {filteredTxs
-            .slice()
-            .sort((a, b) => {
-              const da = a.date ? Date.parse(a.date) : 0;
-              const db = b.date ? Date.parse(b.date) : 0;
-              return db - da;
-            })
-            .map((t) => {
-              const isIncome = t.type === 'income';
-              const sign = isIncome ? '+' : '-';
-              const label = t.category || 'Uncategorised';
-              const note = t.description || '';
-              return (
-                <View key={t.id} style={styles.txRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.txLabel}>{label}</Text>
-                    {note ? <Text style={styles.txNote}>{note}</Text> : null}
-                    {t.date ? (
-                      <Text style={styles.txMeta}>
-                        {formatDateDDMMYYYY(t.date)}
-                      </Text>
-                    ) : null}
+
+        {totalSpent <= 0 ? (
+          <Text style={styles.subtle}>No expenses this month (yet).</Text>
+        ) : categoryRows.length === 0 ? (
+          <Text style={styles.subtle}>No categorised spending to display.</Text>
+        ) : (
+          <View style={{ gap: 12 }}>
+            <Text style={styles.subtle}>
+              Total spent:{' '}
+              <Text style={{ fontWeight: '900', opacity: 0.95 }}>
+                {formatGBP(totalSpent)}
+              </Text>
+            </Text>
+
+            {categoryRows.map((r) => (
+              <View key={r.category} style={styles.catRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.catTopLine}>
+                    <Text style={styles.catName} numberOfLines={1}>
+                      {r.category}
+                    </Text>
+
+                    <Text style={styles.catAmt}>
+                      {formatGBP(r.amount)}{' '}
+                      <Text style={styles.catPct}>({Math.round(r.pct * 100)}%)</Text>
+                    </Text>
                   </View>
-                  <Text
-                    style={[
-                      styles.txAmount,
-                      isIncome ? styles.incomeText : styles.expenseText,
-                    ]}
-                  >
-                    {sign}£{Number(t.amount).toFixed(2)}
-                  </Text>
+
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.barFill,
+                        { width: `${Math.round(r.bar * 100)}%` },
+                      ]}
+                    />
+                  </View>
                 </View>
-              );
-            })}
-        </View>
-      )}
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {/* If you want a quick way back */}
+      <Pressable onPress={() => navigation?.goBack?.()} style={styles.backBtn}>
+        <Text style={styles.backBtnText}>Back</Text>
+      </Pressable>
     </ScrollView>
   );
-};
-
-type ChipProps = {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-};
-
-const PeriodChip: React.FC<ChipProps> = ({ label, active, onPress }) => (
-  <Pressable
-    style={[styles.chip, active && styles.chipActive]}
-    onPress={onPress}
-  >
-    <Text
-      style={[styles.chipText, active && styles.chipTextActive]}
-    >
-      {label}
-    </Text>
-  </Pressable>
-);
+}
 
 const styles = StyleSheet.create({
   wrap: {
-    flex: 1,
-    backgroundColor: '#020617',
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    padding: 16,
+    gap: 12,
   },
   h1: {
-    color: '#ffffff',
     fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
+    fontWeight: '900',
+    marginBottom: 6,
   },
   subtle: {
-    color: '#9CA3AF',
-    marginBottom: 16,
-  },
-  periodRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    columnGap: 8,
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#020617',
-  },
-  chipActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#111827',
-  },
-  chipText: {
-    color: '#9CA3AF',
-    fontSize: 12,
-  },
-  chipTextActive: {
-    color: '#BFDBFE',
-    fontWeight: '600',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    marginBottom: 12,
-  },
-  summaryCard: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginRight: 8,
-  },
-  summaryLabel: {
-    color: '#9CA3AF',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  summaryValue: {
-    color: '#F9FAFB',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  incomeText: {
-    color: '#22C55E',
-  },
-  expenseText: {
-    color: '#F97373',
-  },
-  sectionTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyBox: {
-    marginTop: 4,
-    marginBottom: 12,
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#0F172A',
-  },
-  emptyTitle: {
-    color: '#E5E7EB',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  emptyText: {
-    color: '#9CA3AF',
-    fontSize: 14,
+    opacity: 0.75,
+    lineHeight: 20,
   },
   card: {
-    backgroundColor: '#020617',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    padding: 12,
-    marginBottom: 12,
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
   },
   row: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
   },
-  categoryLabel: {
-    color: '#F9FAFB',
-    fontSize: 14,
+  label: {
+    opacity: 0.8,
   },
-  amountText: {
-    color: '#E5E7EB',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#111827',
-  },
-  txLabel: {
-    color: '#F9FAFB',
-    fontSize: 14,
+  value: {
     fontWeight: '700',
   },
-  txNote: {
-    color: '#9CA3AF',
-    fontSize: 12,
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 4,
   },
-  txMeta: {
-    color: '#6B7280',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  txAmount: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginLeft: 12,
-  },
-  accountRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    columnGap: 8,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  pillBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  pillBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.9,
+  },
+  catRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  catTopLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    gap: 10,
+  },
+  catName: {
+    fontWeight: '800',
+    flex: 1,
+  },
+  catAmt: {
+    fontWeight: '800',
+  },
+  catPct: {
+    fontWeight: '700',
+    opacity: 0.7,
+  },
+  barTrack: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  barFill: {
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    borderRadius: 999,
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginTop: 2,
+  },
+  backBtnText: {
+    fontWeight: '800',
+    opacity: 0.9,
   },
 });
-
-export default ReportsScreen;
