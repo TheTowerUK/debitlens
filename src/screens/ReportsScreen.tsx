@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { useApp } from '../state/AppContext';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type SortMode = 'largest' | 'a-z';
 
@@ -32,6 +33,7 @@ function startOfNextMonth(d: Date) {
 }
 
 export default function ReportsScreen({ navigation }: any) {
+  
   const { state } = useApp();
   const txs = state.transactions || [];
 
@@ -124,119 +126,121 @@ export default function ReportsScreen({ navigation }: any) {
   const netIsPositive = (monthSummary.net || 0) >= 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.wrap}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.h1}>Reports</Text>
-          <Text style={styles.subtle}>Monthly totals and category breakdown (read-only)</Text>
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.wrap}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.h1}>Reports</Text>
+            <Text style={styles.subtle}>Monthly totals and category breakdown (read-only)</Text>
+          </View>
+
+          <View style={styles.headerPillsRow}>
+            <Pressable
+              style={styles.headerPill}
+              onPress={() => navigation?.goBack?.()}
+            >
+              <Text style={styles.headerPillText}>Back</Text>
+            </Pressable>
+          </View>
         </View>
 
-        <View style={styles.headerPillsRow}>
-          <Pressable
-            style={styles.headerPill}
-            onPress={() => navigation?.goBack?.()}
-          >
-            <Text style={styles.headerPillText}>Back</Text>
-          </Pressable>
-        </View>
-      </View>
+        {/* SUMMARY CARD (match Dashboard summary) */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>This month</Text>
 
-      {/* SUMMARY CARD (match Dashboard summary) */}
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>This month</Text>
+          {noTxsThisMonth ? (
+            <Text style={styles.emptyText}>No transactions recorded for this month yet.</Text>
+          ) : (
+            <>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Income</Text>
+                  <Text style={styles.summaryValue}>{formatGBP(monthSummary.income)}</Text>
+                  <Text style={styles.summarySub}>Total income this month</Text>
+                </View>
 
-        {noTxsThisMonth ? (
-          <Text style={styles.emptyText}>No transactions recorded for this month yet.</Text>
-        ) : (
-          <>
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Income</Text>
-                <Text style={styles.summaryValue}>{formatGBP(monthSummary.income)}</Text>
-                <Text style={styles.summarySub}>Total income this month</Text>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Expenses</Text>
+                  <Text style={styles.summaryValue}>{formatGBP(monthSummary.expense)}</Text>
+                  <Text style={styles.summarySub}>Total expenses this month</Text>
+                </View>
               </View>
 
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Expenses</Text>
-                <Text style={styles.summaryValue}>{formatGBP(monthSummary.expense)}</Text>
-                <Text style={styles.summarySub}>Total expenses this month</Text>
+              <View style={{ height: 10 }} />
+
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryLabel}>Net</Text>
+                  <Text
+                    style={[
+                      styles.summaryValue,
+                      netIsPositive ? styles.positiveText : styles.negativeText,
+                    ]}
+                  >
+                    {formatGBP(monthSummary.net)}
+                  </Text>
+                  <Text style={styles.summarySub}>Income minus expenses</Text>
+                </View>
+                <View style={styles.summaryItem} />
               </View>
-            </View>
-
-            <View style={{ height: 10 }} />
-
-            <View style={styles.summaryRow}>
-              <View style={styles.summaryItem}>
-                <Text style={styles.summaryLabel}>Net</Text>
-                <Text
-                  style={[
-                    styles.summaryValue,
-                    netIsPositive ? styles.positiveText : styles.negativeText,
-                  ]}
-                >
-                  {formatGBP(monthSummary.net)}
-                </Text>
-                <Text style={styles.summarySub}>Income minus expenses</Text>
-              </View>
-              <View style={styles.summaryItem} />
-            </View>
-          </>
-        )}
-      </View>
-
-      {/* CATEGORY CARD (match Dashboard card) */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>Spending by category</Text>
-
-          <Pressable
-            style={styles.smallBtn}
-            onPress={() => setSortMode((m) => (m === 'largest' ? 'a-z' : 'largest'))}
-          >
-            <Text style={styles.smallBtnText}>
-              Sort: {sortMode === 'largest' ? 'Largest' : 'A–Z'}
-            </Text>
-          </Pressable>
+            </>
+          )}
         </View>
 
-        {totalSpent <= 0 ? (
-          <Text style={styles.emptyText}>No expenses this month (yet).</Text>
-        ) : categoryRows.length === 0 ? (
-          <Text style={styles.emptyText}>No categorised spending to display.</Text>
-        ) : (
-          <>
-            <Text style={styles.subtle}>
-              Total spent:{' '}
-              <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
-                {formatGBP(totalSpent)}
+        {/* CATEGORY CARD (match Dashboard card) */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Spending by category</Text>
+
+            <Pressable
+              style={styles.smallBtn}
+              onPress={() => setSortMode((m) => (m === 'largest' ? 'a-z' : 'largest'))}
+            >
+              <Text style={styles.smallBtnText}>
+                Sort: {sortMode === 'largest' ? 'Largest' : 'A–Z'}
               </Text>
-            </Text>
+            </Pressable>
+          </View>
 
-            {categoryRows.map((r) => (
-              <View key={r.category} style={styles.catRow}>
-                <View style={styles.catTopLine}>
-                  <Text style={styles.upcomingTitle} numberOfLines={1}>
-                    {r.category}
-                  </Text>
+          {totalSpent <= 0 ? (
+            <Text style={styles.emptyText}>No expenses this month (yet).</Text>
+          ) : categoryRows.length === 0 ? (
+            <Text style={styles.emptyText}>No categorised spending to display.</Text>
+          ) : (
+            <>
+              <Text style={styles.subtle}>
+                Total spent:{' '}
+                <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
+                  {formatGBP(totalSpent)}
+                </Text>
+              </Text>
 
-                  <Text style={styles.upcomingAmount}>
-                    {formatGBP(r.amount)}{' '}
-                    <Text style={styles.catPct}>({Math.round(r.pct * 100)}%)</Text>
-                  </Text>
+              {categoryRows.map((r) => (
+                <View key={r.category} style={styles.catRow}>
+                  <View style={styles.catTopLine}>
+                    <Text style={styles.upcomingTitle} numberOfLines={1}>
+                      {r.category}
+                    </Text>
+
+                    <Text style={styles.upcomingAmount}>
+                      {formatGBP(r.amount)}{' '}
+                      <Text style={styles.catPct}>({Math.round(r.pct * 100)}%)</Text>
+                    </Text>
+                  </View>
+
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[styles.barFill, { width: `${Math.round(r.bar * 100)}%` }]}
+                    />
+                  </View>
                 </View>
-
-                <View style={styles.barTrack}>
-                  <View
-                    style={[styles.barFill, { width: `${Math.round(r.bar * 100)}%` }]}
-                  />
-                </View>
-              </View>
-            ))}
-          </>
-        )}
-      </View>
-    </ScrollView>
+              ))}
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -411,4 +415,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#93C5FD', // soft blue, matches Dashboard link vibe
   },
+  screen: {
+  flex: 1,
+  backgroundColor: '#020617', // app blue background (same as Dashboard)
+},
+
 });
