@@ -415,6 +415,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
   const handlePickCsvFile = async () => {
     try {
+      setCsvHasHeaderRow(true);
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/csv', 'text/plain', 'application/vnd.ms-excel'],
         copyToCacheDirectory: true,
@@ -1059,9 +1060,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
         <View style={styles.rowButtons}>
           <Pressable style={styles.btnSecondary} onPress={handlePickCsvFile}>            
-            <Text style={styles.btnSecondaryText}>Pick CSV file
-              setCsvHasHeaderRow(true);
-            </Text>
+            <Text style={styles.btnSecondaryText}>Pick CSV file</Text>
           </Pressable>
 
           <Pressable style={styles.btnDestructive} onPress={handleApplyCsvRestore}>
