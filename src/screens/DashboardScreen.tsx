@@ -90,44 +90,49 @@ export default function DashboardScreen({ navigation }: Props) {
   }, [txs, monthRange]);
 
     // ---- Budgets summary (this month) ----
-  const spentByCategory = useMemo(() => {
-    const { start, end } = monthRange;
-    const map: Record<string, number> = {};
+    const spentByCategory = useMemo(() => {
+      const { start, end } = monthRange;
+      const map: Record<string, number> = {};
 
-    for (const t of txs) {
-      if (!t.date) continue;
-      const d = new Date(t.date);
-      if (isNaN(d.getTime())) continue;
-      if (d < start || d >= end) continue;
+      for (const t of txs) {
+        if (!t.date) continue;
+        const d = new Date(t.date);
+        if (isNaN(d.getTime())) continue;
+        if (d < start || d >= end) continue;
 
-      if (t.type !== 'expense') continue;
+        if (t.type !== 'expense') continue;
 
-      const cat = (t.category || 'Uncategorised').trim();
-      map[cat] = (map[cat] || 0) + Math.abs(Number(t.amount) || 0);
-    }
+        const cat = (t.category || 'Uncategorised').trim();
+        map[cat] = (map[cat] || 0) + Math.abs(Number(t.amount) || 0);
+      }
 
-    return map;
-  }, [txs, monthRange]);
+      return map;
+    }, [txs, monthRange]);
 
-  const budgetSummary = useMemo(() => {
-    let exceeded = 0;
-    let warning = 0;
-    let totalRemaining = 0;
+    const budgetSummary = useMemo(() => {
+      const list = budgets ?? [];
+      if (list.length === 0) return { exceeded: 0, warning: 0, totalRemaining: 0 };
 
-    for (const b of budgets) {
-      const limit = Number(b.limit) || 0;
-      const spent = spentByCategory[b.category] || 0;
-      const remaining = limit - spent;
+      let exceeded = 0;
+      let warning = 0;
+      let totalRemaining = 0;
 
-      totalRemaining += remaining;
+      for (const b of list) {
+        const limit = Number(b.limit) || 0;
+        if (limit <= 0) continue;
 
-      if (limit <= 0) continue;
-      if (spent >= limit) exceeded += 1;
-      else if (spent >= limit * 0.8) warning += 1;
-    }
+        const cat = (b.category || '').trim();
+        const spent = spentByCategory[cat] || 0;
 
-    return { exceeded, warning, totalRemaining };
-  }, [budgets, spentByCategory]);
+        const remaining = limit - spent;
+        totalRemaining += remaining;
+
+        if (spent >= limit) exceeded++;
+        else if (spent >= limit * 0.8) warning++;
+      }
+
+      return { exceeded, warning, totalRemaining };
+    }, [budgets, spentByCategory]);
 
 
   // ---- Upcoming recurring (next 30 days) ----
@@ -320,7 +325,10 @@ export default function DashboardScreen({ navigation }: Props) {
 
   {/* Budgets */}
   <View style={styles.gridRow}>
-    <Pressable style={styles.gridCard} onPress={() => navigation.navigate('Budgets')}>
+    <Pressable
+      style={styles.gridCard}
+      onPress={() => navigation.navigate('Budgets')}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <Text style={styles.gridTitle}>Budgets</Text>
 
@@ -338,6 +346,7 @@ export default function DashboardScreen({ navigation }: Props) {
         }
       </Text>
     </Pressable>
+
   </View>
 
 
@@ -589,15 +598,21 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
   badge: {
-  minWidth: 22,
-  height: 22,
-  paddingHorizontal: 6,
-  borderRadius: 999,
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: '#EF4444',
-},
-badgeText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#B91C1C',
+  },
+  badgeText: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+
+
 
 
 });
