@@ -1,8 +1,8 @@
 // src/screens/ReportsScreen.tsx
 import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { useApp } from '../state/AppContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useApp } from '../state/AppContext';
 
 type SortMode = 'largest' | 'a-z';
 
@@ -31,21 +31,36 @@ function startOfMonth(d: Date) {
 function startOfNextMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
 }
+function addMonths(d: Date, delta: number) {
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1, 0, 0, 0, 0);
+}
+function monthLabel(d: Date) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
+  } catch {
+    // fallback
+    const months = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
+    ];
+    return `${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+}
 
 export default function ReportsScreen({ navigation }: any) {
-  
   const { state } = useApp();
   const txs = state.transactions || [];
 
   const [sortMode, setSortMode] = useState<SortMode>('largest');
 
-  // ---- This month range ----
+  // ✅ Option C: selected month (read-only navigation)
+  const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
+
   const monthRange = useMemo(() => {
-    const now = new Date();
-    const start = startOfMonth(now);
-    const end = startOfNextMonth(now);
+    const start = startOfMonth(activeMonth);
+    const end = startOfNextMonth(activeMonth);
     return { start, end };
-  }, []);
+  }, [activeMonth]);
 
   // ---- Monthly totals (read-only) ----
   const monthSummary = useMemo(() => {
@@ -68,7 +83,7 @@ export default function ReportsScreen({ navigation }: any) {
     return { income, expense, net: income - expense };
   }, [txs, monthRange]);
 
-  // ---- spentByCategory (this month, expenses only) ----
+  // ---- spentByCategory (selected month, expenses only) ----
   const spentByCategory = useMemo(() => {
     const { start, end } = monthRange;
     const map: Record<string, number> = {};
@@ -85,8 +100,7 @@ export default function ReportsScreen({ navigation }: any) {
       const cat = catRaw ? catRaw : 'Uncategorised';
 
       const amt = Number(t.amount) || 0;
-      if (!map[cat]) map[cat] = 0;
-      map[cat] += amt;
+      map[cat] = (map[cat] || 0) + amt;
     }
 
     return map;
@@ -132,22 +146,43 @@ export default function ReportsScreen({ navigation }: any) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>Reports</Text>
-            <Text style={styles.subtle}>Monthly totals and category breakdown (read-only)</Text>
+            <Text style={styles.subtle}>{monthLabel(activeMonth)}</Text>
           </View>
 
           <View style={styles.headerPillsRow}>
-            <Pressable
-              style={styles.headerPill}
-              onPress={() => navigation?.goBack?.()}
-            >
+            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()}>
               <Text style={styles.headerPillText}>Back</Text>
             </Pressable>
           </View>
         </View>
 
-        {/* SUMMARY CARD (match Dashboard summary) */}
+        {/* ✅ Option C: month nav pills */}
+        <View style={styles.headerPillsRow}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth((m) => addMonths(m, -1))}
+          >
+            <Text style={styles.headerPillText}>◀ Prev</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth(() => startOfMonth(new Date()))}
+          >
+            <Text style={styles.headerPillText}>This month</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth((m) => addMonths(m, 1))}
+          >
+            <Text style={styles.headerPillText}>Next ▶</Text>
+          </Pressable>
+        </View>
+
+        {/* SUMMARY CARD */}
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>This month</Text>
+          <Text style={styles.summaryTitle}>Summary</Text>
 
           {noTxsThisMonth ? (
             <Text style={styles.emptyText}>No transactions recorded for this month yet.</Text>
@@ -157,13 +192,13 @@ export default function ReportsScreen({ navigation }: any) {
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Income</Text>
                   <Text style={styles.summaryValue}>{formatGBP(monthSummary.income)}</Text>
-                  <Text style={styles.summarySub}>Total income this month</Text>
+                  <Text style={styles.summarySub}>Total income</Text>
                 </View>
 
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>Expenses</Text>
                   <Text style={styles.summaryValue}>{formatGBP(monthSummary.expense)}</Text>
-                  <Text style={styles.summarySub}>Total expenses this month</Text>
+                  <Text style={styles.summarySub}>Total expenses</Text>
                 </View>
               </View>
 
@@ -188,7 +223,7 @@ export default function ReportsScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* CATEGORY CARD (match Dashboard card) */}
+        {/* CATEGORY CARD */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Spending by category</Text>
@@ -245,18 +280,20 @@ export default function ReportsScreen({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  // page
+  screen: {
+    flex: 1,
+    backgroundColor: '#020617', // ✅ main app blue background
+  },
   wrap: {
     padding: 16,
   },
 
-  // header (match Dashboard vibe)
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     columnGap: 12,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   h1: {
     color: '#ffffff',
@@ -267,9 +304,11 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 4,
   },
+
   headerPillsRow: {
     flexDirection: 'row',
     columnGap: 8,
+    marginBottom: 14,
   },
   headerPill: {
     paddingHorizontal: 10,
@@ -285,7 +324,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // SUMMARY CARD (Dashboard style)
   summaryCard: {
     backgroundColor: '#0B1020',
     borderRadius: 14,
@@ -329,7 +367,6 @@ const styles = StyleSheet.create({
     color: '#F97373',
   },
 
-  // CARD
   card: {
     backgroundColor: '#0B1020',
     borderRadius: 14,
@@ -350,7 +387,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // small button (Dashboard style)
   smallBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -365,13 +401,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // empty
   emptyText: {
     color: '#9CA3AF',
     marginTop: 10,
   },
 
-  // category rows (reuse upcoming-like typography)
   catRow: {
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -400,7 +434,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // bar
   barTrack: {
     height: 8,
     borderRadius: 999,
@@ -413,11 +446,6 @@ const styles = StyleSheet.create({
   barFill: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: '#93C5FD', // soft blue, matches Dashboard link vibe
+    backgroundColor: '#93C5FD',
   },
-  screen: {
-  flex: 1,
-  backgroundColor: '#020617', // app blue background (same as Dashboard)
-},
-
 });
