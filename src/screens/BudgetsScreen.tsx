@@ -1,409 +1,406 @@
-// src/screens/BudgetsScreen.tsx
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, Alert } from 'react-native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../state/AppContext';
-import type { RootStackParamList } from '../navigations/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Budgets'>;
+type SortMode = 'status' | 'largestRemaining' | 'a-z';
 
-function monthKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`; // matches 'YYYY-MM'
-}
-
-function money(n: number) {
+function formatGBP(n: number) {
+  const v = Number(n) || 0;
   try {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(n);
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+    }).format(v);
   } catch {
-    return `£${n.toFixed(2)}`;
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    return `${sign}£${abs.toFixed(2)}`;
   }
 }
 
-export default function BudgetsScreen({ navigation }: Props) {
-  const { state, actions } = useApp();
-  const budgets = state.budgets || [];
+function clamp01(x: number) {
+  if (!isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+}
+function startOfNextMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+}
+function addMonths(d: Date, delta: number) {
+  return new Date(d.getFullYear(), d.getMonth() + delta, 1, 0, 0, 0, 0);
+}
+function monthLabel(d: Date) {
+  try {
+    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
+  } catch {
+    const months = [
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
+    ];
+    return `${months[d.getMonth()]} ${d.getFullYear()}`;
+  }
+}
+
+type BudgetLike = {
+  id: string;
+  name?: string;
+  category?: string;
+  limit: number;
+};
+
+type Status = 'ok' | 'warning' | 'exceeded';
+
+export default function BudgetsScreen({ navigation }: any) {
+  const { state } = useApp();
+  const budgets: BudgetLike[] = (state as any).budgets || [];
   const txs = state.transactions || [];
-  const [editLimitById, setEditLimitById] = useState<Record<string, string>>({});
-  const [savedBudgetId, setSavedBudgetId] = useState<string | null>(null);
-  const [newCategory, setNewCategory] = useState('');
-  const [newLimit, setNewLimit] = useState('');
 
-  const existingCategories = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of txs) {
-      const c = (t.category || '').trim();
-      if (c) set.add(c);
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [txs]);
+  const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [sortMode, setSortMode] = useState<SortMode>('status');
 
-  const thisMonth = monthKey();
+  const monthRange = useMemo(() => {
+    const start = startOfMonth(activeMonth);
+    const end = startOfNextMonth(activeMonth);
+    return { start, end };
+  }, [activeMonth]);
 
+  // Spend by category for selected month (expenses only)
   const spentByCategory = useMemo(() => {
+    const { start, end } = monthRange;
     const map: Record<string, number> = {};
 
     for (const t of txs) {
-      // budget only tracks expenses
       if (t.type !== 'expense') continue;
-      if (!t.date || !t.date.startsWith(thisMonth)) continue;
+      if (!t.date) continue;
 
-      const cat = (t.category || 'Uncategorised').trim();
-      map[cat] = (map[cat] || 0) + Math.abs(Number(t.amount) || 0);
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
+      const catRaw = (t.category || '').trim();
+      const cat = catRaw ? catRaw : 'Uncategorised';
+
+      const amt = Number(t.amount) || 0;
+      map[cat] = (map[cat] || 0) + amt;
     }
-
     return map;
-  }, [txs, thisMonth]);
+  }, [txs, monthRange]);
 
-  const derived = useMemo(() => {
-    return budgets
-      .map((b) => {
-        const spent = spentByCategory[b.category] || 0;
-        const limit = Number(b.limit) || 0;
-        const remaining = limit - spent;
-        const pct = limit > 0 ? Math.min(1, spent / limit) : 0;
+  // Build per-budget view model
+  const budgetRows = useMemo(() => {
+    const rows = budgets.map((b) => {
+      const cat = (b.category || 'Uncategorised').trim() || 'Uncategorised';
+      const limit = Number((b as any).limit) || 0;
+      const spent = Number(spentByCategory[cat]) || 0;
+      const remaining = limit - spent;
 
-        const status =
-          limit <= 0 ? 'unset' :
-          spent >= limit ? 'exceeded' :
-          spent >= limit * 0.8 ? 'warning' :
-          'ok';
+      // thresholds (tweak if you want):
+      // warning when <= 15% remaining and not exceeded
+      const warningThreshold = 0.15;
 
-        return { ...b, spent, remaining, pct, status };
-      })
-      .sort((a, b) => {
-        // exceeded first, then warning, then ok, then unset
-        const rank = (s: string) =>
-          s === 'exceeded' ? 0 : s === 'warning' ? 1 : s === 'ok' ? 2 : 3;
-        return rank(a.status) - rank(b.status) || a.category.localeCompare(b.category);
-      });
-  }, [budgets, spentByCategory]);
+      let status: Status = 'ok';
+      if (limit > 0 && remaining < 0) status = 'exceeded';
+      else if (limit > 0 && remaining / limit <= warningThreshold) status = 'warning';
 
-  const handleAdd = () => {
-    const cat = newCategory.trim();
-    const limit = Number(newLimit);
+      const usedPct = limit > 0 ? spent / limit : 0;
 
-    if (!cat) return;
+      return {
+        id: b.id,
+        name: (b.name || cat).trim() || cat,
+        category: cat,
+        limit,
+        spent,
+        remaining,
+        status,
+        usedPct: clamp01(usedPct),
+      };
+    });
 
-    if (!Number.isFinite(limit) || limit <= 0) {
-      Alert.alert('Invalid limit', 'Enter a monthly limit greater than 0.');
-      return;
+    if (sortMode === 'a-z') {
+      rows.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortMode === 'largestRemaining') {
+      rows.sort((a, b) => b.remaining - a.remaining);
+    } else {
+      // status order: exceeded, warning, ok
+      const rank = (s: Status) => (s === 'exceeded' ? 0 : s === 'warning' ? 1 : 2);
+      rows.sort((a, b) => rank(a.status) - rank(b.status) || b.usedPct - a.usedPct);
     }
 
-    // prevent duplicates (same category)
-    const exists = budgets.some((b) => b.category.toLowerCase() === cat.toLowerCase());
-    if (exists) {
-      Alert.alert('Already exists', 'You already have a budget for that category.');
-      return;
+    return rows;
+  }, [budgets, spentByCategory, sortMode]);
+
+  const summary = useMemo(() => {
+    let exceeded = 0;
+    let warning = 0;
+    let totalRemaining = 0;
+
+    for (const r of budgetRows) {
+      if (r.status === 'exceeded') exceeded += 1;
+      else if (r.status === 'warning') warning += 1;
+      totalRemaining += r.remaining;
     }
 
-    actions.addBudget({ category: cat, limit });
-    setNewCategory('');
-    setNewLimit('');
-  };
-
-  const handleDelete = (id: string) => {
-    Alert.alert('Delete budget?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => actions.deleteBudget(id) },
-    ]);
-  };
+    return { exceeded, warning, totalRemaining };
+  }, [budgetRows]);
 
   return (
-    <ScrollView contentContainerStyle={styles.wrap}>
-      <View style={styles.headerRow}>
-        <Text style={styles.h1}>Budgets</Text>
-        <Pressable style={styles.btn} onPress={() => navigation.goBack()}>
-          <Text style={styles.btnText}>Back</Text>
-        </Pressable>
-      </View>
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.wrap}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.h1}>Budgets</Text>
+            <Text style={styles.subtle}>{monthLabel(activeMonth)}</Text>
+          </View>
 
-      <Text style={styles.subtle}>Tracking month: {thisMonth}</Text>
+          <View style={styles.headerPillsRow}>
+            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()}>
+              <Text style={styles.headerPillText}>Back</Text>
+            </Pressable>
+          </View>
+        </View>
 
-      {/* Add budget */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Add budget</Text>
+        {/* Month navigation */}
+        <View style={styles.headerPillsRow}>
+          <Pressable style={styles.headerPill} onPress={() => setActiveMonth((m) => addMonths(m, -1))}>
+            <Text style={styles.headerPillText}>◀ Prev</Text>
+          </Pressable>
 
-      {/* Category Input */}
-        <Text style={styles.label}>Category</Text>
+          <Pressable style={styles.headerPill} onPress={() => setActiveMonth(() => startOfMonth(new Date()))}>
+            <Text style={styles.headerPillText}>This month</Text>
+          </Pressable>
 
-        {existingCategories.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-            {existingCategories.slice(0, 12).map((c) => (
-              <Pressable
-                key={c}
-                style={[styles.chip, newCategory.trim() === c ? styles.chipActive : null]}
-                onPress={() => setNewCategory(c)}
-              >
-                <Text style={styles.chipText}>{c}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
+          <Pressable style={styles.headerPill} onPress={() => setActiveMonth((m) => addMonths(m, 1))}>
+            <Text style={styles.headerPillText}>Next ▶</Text>
+          </Pressable>
+        </View>
 
-        <TextInput
-          value={newCategory}
-          onChangeText={setNewCategory}
-          placeholder="e.g. Groceries"
-          placeholderTextColor="#6B7280"
-          style={styles.input}
-        />
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTopRow}>
+            <Text style={styles.summaryTitle}>Budget status</Text>
 
+            {summary.exceeded > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{summary.exceeded}</Text>
+              </View>
+            )}
+          </View>
 
-        <Text style={styles.label}>Monthly limit</Text>
-        <TextInput
-          value={newLimit}
-          onChangeText={setNewLimit}
-          placeholder="e.g. 300"
-          placeholderTextColor="#6B7280"
-          keyboardType="numeric"
-          style={styles.input}
-        />
+          {budgets.length === 0 ? (
+            <Text style={styles.emptyText}>No budgets set yet.</Text>
+          ) : (
+            <>
+              <Text style={styles.subtle}>
+                {summary.exceeded} exceeded • {summary.warning} near limit • Remaining{' '}
+                <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
+                  {formatGBP(summary.totalRemaining)}
+                </Text>
+              </Text>
+            </>
+          )}
+        </View>
 
-        <Pressable style={[styles.btn, { marginTop: 10 }]} onPress={handleAdd}>
-          <Text style={styles.btnText}>Add budget</Text>
-        </Pressable>
-      </View>
+        {/* List card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Your budgets</Text>
 
-      {/* Budget list */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Your budgets</Text>
+            <Pressable
+              style={styles.smallBtn}
+              onPress={() =>
+                setSortMode((m) =>
+                  m === 'status' ? 'a-z' : m === 'a-z' ? 'largestRemaining' : 'status'
+                )
+              }
+            >
+              <Text style={styles.smallBtnText}>
+                Sort: {sortMode === 'status' ? 'Status' : sortMode === 'a-z' ? 'A–Z' : 'Remaining'}
+              </Text>
+            </Pressable>
+          </View>
 
-        {derived.length === 0 ? (
-          <Text style={styles.subtle}>No budgets yet. Add one above.</Text>
-        ) : (
-          derived.map((b) => {
-            const progressStyle =
-              b.status === 'exceeded' ? styles.progressBad :
-              b.status === 'warning' ? styles.progressWarn :
-              styles.progressOk;
-
-            const statusStyle =
-              b.status === 'exceeded' ? styles.statusBad :
-              b.status === 'warning' ? styles.statusWarn :
-              styles.statusOk;
-            const statusText =
-              b.status === 'exceeded'
-                ? 'Exceeded'
-                : b.status === 'warning'
-                ? 'Near limit'
-                : b.status === 'ok'
-                ? 'On track'
-                : 'No limit';
-
-            return (
-              <View key={b.id} style={styles.budgetRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.budgetTitle}>{b.category}</Text>
-
-                  <View style={styles.kpiRow}>
-                    <Text style={styles.kpi}>Limit: {money(b.limit)}</Text>
-                    <Text style={styles.kpi}>Spent: {money(b.spent)}</Text>
-                    <Text style={styles.kpi}>
-                      Remaining: {money(Math.max(-999999999, b.remaining))}
+          {budgets.length === 0 ? (
+            <Text style={styles.emptyText}>
+              Add your first budget from the Budgets area (or wire an “Add Budget” button next).
+            </Text>
+          ) : (
+            budgetRows.map((r) => (
+              <View key={r.id} style={styles.budgetRow}>
+                <View style={styles.budgetTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.budgetName} numberOfLines={1}>
+                      {r.name}
+                    </Text>
+                    <Text style={styles.budgetMeta} numberOfLines={1}>
+                      {r.category} • Limit {formatGBP(r.limit)}
                     </Text>
                   </View>
 
-
-                  <View style={styles.progressOuter}>
-                    <View style={[styles.progressInner, progressStyle, { width: `${Math.round(b.pct * 100)}%` }]} />
-                  </View>
-
-                  <Text style={[styles.status, statusStyle]}>Status: {statusText}</Text>
-
-                  <Text style={[styles.label, { marginTop: 8 }]}>Edit monthly limit</Text>
-
-                  <View style={styles.inlineRow}>
-                    <TextInput
-                      value={editLimitById[b.id] ?? String(b.limit)}
-                      onChangeText={(v) => setEditLimitById((p) => ({ ...p, [b.id]: v }))}
-                      keyboardType="numeric"
-                      placeholder="e.g. 300"
-                      placeholderTextColor="#6B7280"
-                      style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                    />
-
-                  {/* Budget Change Save Handler */}
-                    <Pressable
-                      style={[styles.btn, { marginLeft: 10 }]}
-                      onPress={() => {
-                        const raw = editLimitById[b.id] ?? String(b.limit);
-                        const n = Number(raw);
-                        if (!Number.isFinite(n) || n <= 0) return;
-
-                        actions.updateBudget(b.id, { limit: n });
-
-                        setSavedBudgetId(b.id);
-
-                        // clear the edit buffer for this row
-                        setEditLimitById((p) => {
-                          const next = { ...p };
-                          delete next[b.id];
-                          return next;
-                        });
-
-                        // auto-hide confirmation after 2 seconds
-                        setTimeout(() => {
-                          setSavedBudgetId((current) => (current === b.id ? null : current));
-                        }, 2000);
-                      }}
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.budgetAmount}>
+                      Spent {formatGBP(r.spent)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.budgetMeta,
+                        r.status === 'exceeded'
+                          ? styles.negativeText
+                          : r.status === 'warning'
+                          ? styles.warningText
+                          : styles.positiveText,
+                      ]}
                     >
-                      <Text style={styles.btnText}>Save</Text>
-                    </Pressable>
-
-
-                    <Pressable
-                      style={[styles.btnSecondary, { marginLeft: 10 }]}
-                      onPress={() => handleDelete(b.id)}
-                    >
-                      <Text style={styles.btnSecondaryText}>Delete</Text>
-                    </Pressable>
+                      {r.status === 'exceeded'
+                        ? `${formatGBP(-r.remaining)} over`
+                        : `${formatGBP(r.remaining)} left`}
+                    </Text>
                   </View>
-                  {savedBudgetId === b.id && (
-                    <Text style={styles.confirm}>✓ Budget updated</Text>
-                  )}
+                </View>
 
-                  <Text style={styles.help}>Tip: tap “Save” to apply the new limit.</Text>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[
+                      styles.barFill,
+                      r.status === 'exceeded'
+                        ? styles.barFillExceeded
+                        : r.status === 'warning'
+                        ? styles.barFillWarning
+                        : styles.barFillOk,
+                      { width: `${Math.round(r.usedPct * 100)}%` },
+                    ]}
+                  />
                 </View>
               </View>
-            );
-          })
-        )}
-      </View>
-    </ScrollView>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    padding: 16,
-    paddingBottom: 32,
-    backgroundColor: '#0B1020',
-    flexGrow: 1,
-  },
+  screen: { flex: 1, backgroundColor: '#020617' },
+  wrap: { padding: 16 },
 
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-  },
-
-  h1: { fontSize: 26, fontWeight: '800', color: '#E5E7EB' },
-  subtle: { marginTop: 6, color: '#9CA3AF' },
-
-  card: {
-    marginTop: 14,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
-  },
-
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    columnGap: 12,
     marginBottom: 10,
-    color: '#E5E7EB',
   },
+  h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginTop: 4 },
 
-  label: { marginTop: 10, marginBottom: 6, color: '#E5E7EB' },
-
-  input: {
-    borderWidth: 1,
-    borderColor: '#374151',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 6,
-    color: '#E5E7EB',
-    backgroundColor: '#0B1020',
-  },
-
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0B1020',
-    alignSelf: 'flex-start',
-  },
-  btnText: { fontWeight: '700', color: '#E5E7EB' },
-
-  btnSecondary: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
-    alignSelf: 'flex-start',
-  },
-  btnSecondaryText: { fontWeight: '700', color: '#E5E7EB' },
-
-  budgetRow: {
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#1F2937',
-  },
-
-  budgetTitle: { fontSize: 16, fontWeight: '800', color: '#E5E7EB' },
-
-  kpiRow: {
-    marginTop: 6,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-
-  kpi: { color: '#9CA3AF' },
-
-  progressOuter: {
-    marginTop: 10,
-    height: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#374151',
-    overflow: 'hidden',
-  },
-  progressInner: { height: '100%', borderRadius: 999 },
-
-  confirm: {
-  marginTop: 6,
-  fontSize: 12,
-  color: '#A7F3D0', // soft green, readable on your palette
-  fontWeight: '600',
-  },
-  chipRow: { marginBottom: 10 },
-  chip: {
+  headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
+  headerPill: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
     backgroundColor: '#0B1020',
-    marginRight: 8,
   },
-  chipActive: {
-    borderColor: '#E5E7EB',
+  headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
+
+  summaryCard: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
   },
-  chipText: { color: '#E5E7EB', fontSize: 12, fontWeight: '700' },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  summaryTitle: { color: '#E5E7EB', fontWeight: '700', fontSize: 16 },
 
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
 
-  status: { marginTop: 8, fontWeight: '700', color: '#E5E7EB' },
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  smallBtnText: { color: '#BFDBFE', fontWeight: '700', fontSize: 13 },
 
-  inlineRow: { flexDirection: 'row', alignItems: 'center' },
+  emptyText: { color: '#9CA3AF', marginTop: 10 },
 
-  help: { marginTop: 6, fontSize: 12, color: '#9CA3AF' },
-  progressOk: { backgroundColor: '#4B5563' },
-  progressWarn: { backgroundColor: '#F59E0B' },
-  progressBad: { backgroundColor: '#EF4444' },
+  budgetRow: {
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1F2937',
+    marginTop: 8,
+  },
+  budgetTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    columnGap: 12,
+  },
+  budgetName: { color: '#F9FAFB', fontWeight: '800' },
+  budgetMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  budgetAmount: { color: '#E5E7EB', fontWeight: '700' },
 
-  statusOk: { color: '#9CA3AF' },
-  statusWarn: { color: '#F59E0B' },
-  statusBad: { color: '#EF4444' },
+  positiveText: { color: '#22C55E' },
+  negativeText: { color: '#F97373' },
+  warningText: { color: '#FBBF24' },
 
+  badge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#B91C1C',
+  },
+  badgeText: { color: 'white', fontWeight: '800', fontSize: 12 },
+
+  barTrack: {
+    height: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginTop: 10,
+  },
+  barFill: { height: 8, borderRadius: 999 },
+  barFillOk: { backgroundColor: '#93C5FD' },
+  barFillWarning: { backgroundColor: '#FBBF24' },
+  barFillExceeded: { backgroundColor: '#F97373' },
 });
-
