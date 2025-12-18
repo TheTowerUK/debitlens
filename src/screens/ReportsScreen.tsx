@@ -63,11 +63,7 @@ export default function ReportsScreen({ navigation }: any) {
       else if (t.type === 'expense') expense += amt;
     }
 
-    return {
-      income,
-      expense,
-      net: income - expense,
-    };
+    return { income, expense, net: income - expense };
   }, [txs, monthRange]);
 
   // ---- spentByCategory (this month, expenses only) ----
@@ -94,10 +90,12 @@ export default function ReportsScreen({ navigation }: any) {
     return map;
   }, [txs, monthRange]);
 
-  // ---- Option B: UX polish derived data ----
+  // ---- UX polish derived data ----
   const totalSpent = useMemo(() => {
-    const vals = Object.values(spentByCategory || {});
-    return vals.reduce((sum, v) => sum + (Number(v) || 0), 0);
+    return Object.values(spentByCategory || {}).reduce(
+      (sum, v) => sum + (Number(v) || 0),
+      0
+    );
   }, [spentByCategory]);
 
   const categoryRows = useMemo(() => {
@@ -108,17 +106,14 @@ export default function ReportsScreen({ navigation }: any) {
       }))
       .filter((r) => r.amount > 0);
 
-    if (sortMode === 'a-z') {
-      entries.sort((a, b) => a.category.localeCompare(b.category));
-    } else {
-      entries.sort((a, b) => b.amount - a.amount);
-    }
+    if (sortMode === 'a-z') entries.sort((a, b) => a.category.localeCompare(b.category));
+    else entries.sort((a, b) => b.amount - a.amount);
 
     const max = entries.length ? entries[0].amount : 0;
 
     return entries.map((r) => {
       const pct = totalSpent > 0 ? r.amount / totalSpent : 0;
-      const bar = max > 0 ? r.amount / max : 0; // relative to top category
+      const bar = max > 0 ? r.amount / max : 0;
       return { ...r, pct: clamp01(pct), bar: clamp01(bar) };
     });
   }, [spentByCategory, sortMode, totalSpent]);
@@ -126,209 +121,294 @@ export default function ReportsScreen({ navigation }: any) {
   const noTxsThisMonth =
     (monthSummary.income || 0) === 0 && (monthSummary.expense || 0) === 0;
 
+  const netIsPositive = (monthSummary.net || 0) >= 0;
+
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
-      <Text style={styles.h1}>Reports</Text>
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.h1}>Reports</Text>
+          <Text style={styles.subtle}>Monthly totals and category breakdown (read-only)</Text>
+        </View>
 
-      {/* Monthly totals */}
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>This month</Text>
+        <View style={styles.headerPillsRow}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => navigation?.goBack?.()}
+          >
+            <Text style={styles.headerPillText}>Back</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* SUMMARY CARD (match Dashboard summary) */}
+      <View style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>This month</Text>
 
         {noTxsThisMonth ? (
-          <Text style={styles.subtle}>
-            No transactions recorded for this month yet.
-          </Text>
+          <Text style={styles.emptyText}>No transactions recorded for this month yet.</Text>
         ) : (
-          <View style={{ gap: 10 }}>
-            <View style={styles.row}>
-              <Text style={styles.label}>Income</Text>
-              <Text style={styles.value}>{formatGBP(monthSummary.income)}</Text>
+          <>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Income</Text>
+                <Text style={styles.summaryValue}>{formatGBP(monthSummary.income)}</Text>
+                <Text style={styles.summarySub}>Total income this month</Text>
+              </View>
+
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Expenses</Text>
+                <Text style={styles.summaryValue}>{formatGBP(monthSummary.expense)}</Text>
+                <Text style={styles.summarySub}>Total expenses this month</Text>
+              </View>
             </View>
 
-            <View style={styles.row}>
-              <Text style={styles.label}>Expenses</Text>
-              <Text style={styles.value}>{formatGBP(monthSummary.expense)}</Text>
-            </View>
+            <View style={{ height: 10 }} />
 
-            <View style={styles.divider} />
-
-            <View style={styles.row}>
-              <Text style={[styles.label, { fontWeight: '900', opacity: 0.95 }]}>
-                Net
-              </Text>
-              <Text style={[styles.value, { fontWeight: '900' }]}>
-                {formatGBP(monthSummary.net)}
-              </Text>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryLabel}>Net</Text>
+                <Text
+                  style={[
+                    styles.summaryValue,
+                    netIsPositive ? styles.positiveText : styles.negativeText,
+                  ]}
+                >
+                  {formatGBP(monthSummary.net)}
+                </Text>
+                <Text style={styles.summarySub}>Income minus expenses</Text>
+              </View>
+              <View style={styles.summaryItem} />
             </View>
-          </View>
+          </>
         )}
       </View>
 
-      {/* Category breakdown */}
+      {/* CATEGORY CARD (match Dashboard card) */}
       <View style={styles.card}>
-        <View style={styles.headerRow}>
-          <Text style={styles.sectionTitle}>Spending by category</Text>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.cardTitle}>Spending by category</Text>
 
           <Pressable
+            style={styles.smallBtn}
             onPress={() => setSortMode((m) => (m === 'largest' ? 'a-z' : 'largest'))}
-            style={styles.pillBtn}
           >
-            <Text style={styles.pillBtnText}>
+            <Text style={styles.smallBtnText}>
               Sort: {sortMode === 'largest' ? 'Largest' : 'A–Z'}
             </Text>
           </Pressable>
         </View>
 
         {totalSpent <= 0 ? (
-          <Text style={styles.subtle}>No expenses this month (yet).</Text>
+          <Text style={styles.emptyText}>No expenses this month (yet).</Text>
         ) : categoryRows.length === 0 ? (
-          <Text style={styles.subtle}>No categorised spending to display.</Text>
+          <Text style={styles.emptyText}>No categorised spending to display.</Text>
         ) : (
-          <View style={{ gap: 12 }}>
+          <>
             <Text style={styles.subtle}>
               Total spent:{' '}
-              <Text style={{ fontWeight: '900', opacity: 0.95 }}>
+              <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
                 {formatGBP(totalSpent)}
               </Text>
             </Text>
 
             {categoryRows.map((r) => (
               <View key={r.category} style={styles.catRow}>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.catTopLine}>
-                    <Text style={styles.catName} numberOfLines={1}>
-                      {r.category}
-                    </Text>
+                <View style={styles.catTopLine}>
+                  <Text style={styles.upcomingTitle} numberOfLines={1}>
+                    {r.category}
+                  </Text>
 
-                    <Text style={styles.catAmt}>
-                      {formatGBP(r.amount)}{' '}
-                      <Text style={styles.catPct}>({Math.round(r.pct * 100)}%)</Text>
-                    </Text>
-                  </View>
+                  <Text style={styles.upcomingAmount}>
+                    {formatGBP(r.amount)}{' '}
+                    <Text style={styles.catPct}>({Math.round(r.pct * 100)}%)</Text>
+                  </Text>
+                </View>
 
-                  <View style={styles.barTrack}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        { width: `${Math.round(r.bar * 100)}%` },
-                      ]}
-                    />
-                  </View>
+                <View style={styles.barTrack}>
+                  <View
+                    style={[styles.barFill, { width: `${Math.round(r.bar * 100)}%` }]}
+                  />
                 </View>
               </View>
             ))}
-          </View>
+          </>
         )}
       </View>
-
-      {/* If you want a quick way back */}
-      <Pressable onPress={() => navigation?.goBack?.()} style={styles.backBtn}>
-        <Text style={styles.backBtnText}>Back</Text>
-      </Pressable>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  // page
   wrap: {
     padding: 16,
-    gap: 12,
   },
-  h1: {
-    fontSize: 24,
-    fontWeight: '900',
-    marginBottom: 6,
-  },
-  subtle: {
-    opacity: 0.75,
-    lineHeight: 20,
-  },
-  card: {
-    backgroundColor: '#111827',
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  label: {
-    opacity: 0.8,
-  },
-  value: {
-    fontWeight: '700',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    marginVertical: 4,
-  },
+
+  // header (match Dashboard vibe)
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 10,
+    columnGap: 12,
+    marginBottom: 14,
   },
-  pillBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+  h1: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '800',
   },
-  pillBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    opacity: 0.9,
+  subtle: {
+    color: '#9CA3AF',
+    marginTop: 4,
   },
-  catRow: {
+  headerPillsRow: {
     flexDirection: 'row',
-    gap: 10,
+    columnGap: 8,
+  },
+  headerPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
+  },
+  headerPillText: {
+    color: '#E5E7EB',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // SUMMARY CARD (Dashboard style)
+  summaryCard: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  summaryTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    marginBottom: 6,
+    fontSize: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    columnGap: 12,
+  },
+  summaryItem: {
+    flex: 1,
+  },
+  summaryLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  summaryValue: {
+    color: '#F9FAFB',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  summarySub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  positiveText: {
+    color: '#22C55E',
+  },
+  negativeText: {
+    color: '#F97373',
+  },
+
+  // CARD
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // small button (Dashboard style)
+  smallBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  smallBtnText: {
+    color: '#BFDBFE',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+
+  // empty
+  emptyText: {
+    color: '#9CA3AF',
+    marginTop: 10,
+  },
+
+  // category rows (reuse upcoming-like typography)
+  catRow: {
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1F2937',
+    marginTop: 8,
   },
   catTopLine: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'baseline',
-    gap: 10,
+    justifyContent: 'space-between',
+    columnGap: 10,
   },
-  catName: {
-    fontWeight: '800',
+  upcomingTitle: {
+    color: '#F9FAFB',
+    fontSize: 14,
+    fontWeight: '600',
     flex: 1,
   },
-  catAmt: {
-    fontWeight: '800',
+  upcomingAmount: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    marginLeft: 8,
   },
   catPct: {
+    color: '#9CA3AF',
     fontWeight: '700',
-    opacity: 0.7,
   },
+
+  // bar
   barTrack: {
     height: 8,
-    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 6,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    marginTop: 8,
   },
   barFill: {
     height: 8,
-    backgroundColor: 'rgba(255,255,255,0.35)',
     borderRadius: 999,
-  },
-  backBtn: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    marginTop: 2,
-  },
-  backBtnText: {
-    fontWeight: '800',
-    opacity: 0.9,
+    backgroundColor: '#93C5FD', // soft blue, matches Dashboard link vibe
   },
 });
