@@ -164,10 +164,22 @@ export default function BudgetsScreen({ navigation }: any) {
           </View>
 
           <View style={styles.headerPillsRow}>
+            <Pressable
+              style={styles.headerPill}
+              onPress={() =>
+                navigation?.navigate?.('BudgetEditor', { mode: 'create' }) ||
+                navigation?.navigate?.('AddBudget') ||
+                navigation?.navigate?.('BudgetsEditor')
+              }
+            >
+              <Text style={styles.headerPillText}>+ Add</Text>
+            </Pressable>
+
             <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()}>
               <Text style={styles.headerPillText}>Back</Text>
             </Pressable>
           </View>
+
         </View>
 
         {/* Month navigation */}
@@ -231,9 +243,20 @@ export default function BudgetsScreen({ navigation }: any) {
           </View>
 
           {budgets.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Add your first budget from the Budgets area (or wire an “Add Budget” button next).
-            </Text>
+          <View>
+            <Text style={styles.emptyText}>No budgets set yet.</Text>
+
+            <Pressable
+              style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
+              onPress={() =>
+                navigation?.navigate?.('BudgetEditor', { mode: 'create' }) ||
+                navigation?.navigate?.('AddBudget')
+              }
+            >
+              <Text style={styles.headerPillText}>+ Add budget</Text>
+            </Pressable>
+          </View>
+
           ) : (
             budgetRows.map((r) => (
               <View key={r.id} style={styles.budgetRow}>
@@ -248,9 +271,8 @@ export default function BudgetsScreen({ navigation }: any) {
                   </View>
 
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.budgetAmount}>
-                      Spent {formatGBP(r.spent)}
-                    </Text>
+                    <Text style={styles.budgetAmount}>Spent {formatGBP(r.spent)}</Text>
+
                     <Text
                       style={[
                         styles.budgetMeta,
@@ -265,7 +287,18 @@ export default function BudgetsScreen({ navigation }: any) {
                         ? `${formatGBP(-r.remaining)} over`
                         : `${formatGBP(r.remaining)} left`}
                     </Text>
+
+                    <Pressable
+                      style={[styles.headerPill, { marginTop: 8 }]}
+                      onPress={() =>
+                        navigation?.navigate?.('BudgetEditor', { id: r.id }) ||
+                        navigation?.navigate?.('EditBudget', { id: r.id })
+                      }
+                    >
+                      <Text style={styles.headerPillText}>Edit</Text>
+                    </Pressable>
                   </View>
+
                 </View>
 
                 <View style={styles.barTrack}>
@@ -399,6 +432,20 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     marginTop: 10,
   },
+  pillSmall: {
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 999,
+  borderWidth: 1,
+  borderColor: '#4B5563',
+  backgroundColor: '#0B1020',
+},
+pillSmallText: {
+  color: '#E5E7EB',
+  fontSize: 12,
+  fontWeight: '700',
+},
+
   barFill: { height: 8, borderRadius: 999 },
   barFillOk: { backgroundColor: '#93C5FD' },
   barFillWarning: { backgroundColor: '#FBBF24' },
