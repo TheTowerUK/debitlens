@@ -1058,8 +1058,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.rowButtons}>
-          <Pressable style={styles.btnSecondary} onPress={handlePickCsvFile}>
-            <Text style={styles.btnSecondaryText}>Pick CSV file</Text>
+          <Pressable style={styles.btnSecondary} onPress={handlePickCsvFile}>            
+            <Text style={styles.btnSecondaryText}>Pick CSV file
+              setCsvHasHeaderRow(true);
+            </Text>
           </Pressable>
 
           <Pressable style={styles.btnDestructive} onPress={handleApplyCsvRestore}>
