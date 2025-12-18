@@ -649,11 +649,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
                   let newAccount: any;
                   try {
-                    newAccount = actions.addAccount({
+                    const created: Account = {
+                      id: makeId('acc'),
                       name: accountName,
                       type: 'bank',
                       balance: 0,
-                    });
+                    };
                   } catch (err) {
                     console.error('Error creating account from CSV row', err);
                   }
@@ -968,13 +969,14 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>
-            Restore mode: {jsonRestoreMode === 'replace' ? 'Replace' : 'Merge'}
+            CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
           </Text>
           <Switch
-            value={jsonRestoreMode === 'merge'}
-            onValueChange={(v) => setJsonRestoreMode(v ? 'merge' : 'replace')}
+            value={csvRestoreMode === 'merge'}
+            onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')}
           />
         </View>
+
 
         {jsonPreview ? (
           <View style={styles.previewBox}>
@@ -1080,7 +1082,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
           textAlignVertical="top"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={importSource !== 'file'}
+          // editable={importSource !== 'file'}
+          editable={true}
+
         />
 
         <View style={styles.rowButtons}>
