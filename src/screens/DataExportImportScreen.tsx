@@ -29,6 +29,7 @@ import {
 } from '../utils/backup';
 
 const FS: any = FileSystem as any;
+const norm = (s: string) => s.trim().toLowerCase();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -625,22 +626,20 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 const dateStr = row[dateCol] ?? '';
                 const typeStrRaw = row[typeCol] ?? '';
                 const amountRaw = row[amountCol] ?? '';
-                const accountName = (row[accountCol] ?? '').trim();
                 const description = row[descriptionCol] ?? '';
                 const category = row[categoryCol] ?? '';
+                const rawAccountName = row[accountCol] ?? '';
+                const accountKey = norm(String(rawAccountName));
+                const accountName = String(rawAccountName).trim();
 
                 if (!accountName) {
                   skippedMissingAccountName++;
                   continue;
                 }
 
-                let accountForRow: any = accounts.find(
-                  (a) => a && typeof a.name === 'string' && a.name.trim() === accountName
-                );
-
-                if (!accountForRow && createdAccountByName[accountName]) {
-                  accountForRow = createdAccountByName[accountName];
-                }
+                let accountForRow: any =
+                  createdAccountByName[accountKey] ??
+                  accounts.find((a) => a?.name && norm(a.name) === accountKey);
 
                 if (!accountForRow) {
                   if (!createMissingAccounts) {
@@ -650,12 +649,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
                   let newAccount: any;
                   try {
-                    const created: Account = {
-                      id: makeId('acc'),
+                    newAccount = actions.addAccount({
                       name: accountName,
                       type: 'bank',
                       balance: 0,
-                    };
+                    });
                   } catch (err) {
                     console.error('Error creating account from CSV row', err);
                   }
@@ -666,9 +664,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   }
 
                   createdAccountsCount++;
-                  createdAccountByName[accountName] = newAccount;
+                  createdAccountByName[accountKey] = newAccount;
                   accountForRow = newAccount;
                 }
+
 
                 const amountNum = Number(String(amountRaw).replace(/,/g, ''));
                 if (!isFinite(amountNum) || isNaN(amountNum)) {
