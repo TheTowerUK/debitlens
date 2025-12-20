@@ -1,15 +1,18 @@
+// src/screens/BudgetsScreen.tsx
 import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../state/AppContext';
 
 type SortMode = 'status' | 'largestRemaining' | 'a-z';
+type Status = 'ok' | 'warning' | 'exceeded';
+
+type BudgetLike = {
+  id: string;
+  name?: string;
+  category?: string;
+  limit: number;
+};
 
 function formatGBP(n: number) {
   const v = Number(n) || 0;
@@ -41,24 +44,28 @@ function addMonths(d: Date, delta: number) {
 }
 function monthLabel(d: Date) {
   try {
-    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
+    return new Intl.DateTimeFormat('en-GB', {
+      month: 'long',
+      year: 'numeric',
+    }).format(d);
   } catch {
     const months = [
-      'January','February','March','April','May','June',
-      'July','August','September','October','November','December'
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return `${months[d.getMonth()]} ${d.getFullYear()}`;
   }
 }
-
-type BudgetLike = {
-  id: string;
-  name?: string;
-  category?: string;
-  limit: number;
-};
-
-type Status = 'ok' | 'warning' | 'exceeded';
 
 export default function BudgetsScreen({ navigation }: any) {
   const { state } = useApp();
@@ -67,6 +74,18 @@ export default function BudgetsScreen({ navigation }: any) {
 
   const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [sortMode, setSortMode] = useState<SortMode>('status');
+
+  // IMPORTANT: keep this helper INSIDE the component so "navigation" is in scope
+  const safeNavigate = (routeNames: string[], params?: any) => {
+    const available = navigation?.getState?.()?.routeNames ?? [];
+    for (const name of routeNames) {
+      if (available.includes(name)) {
+        navigation.navigate(name, params);
+        return;
+      }
+    }
+    // do nothing if not found (prevents NAVIGATE error)
+  };
 
   const monthRange = useMemo(() => {
     const start = startOfMonth(activeMonth);
@@ -98,15 +117,13 @@ export default function BudgetsScreen({ navigation }: any) {
 
   // Build per-budget view model
   const budgetRows = useMemo(() => {
+    const warningThreshold = 0.15; // <= 15% remaining
+
     const rows = budgets.map((b) => {
       const cat = (b.category || 'Uncategorised').trim() || 'Uncategorised';
       const limit = Number((b as any).limit) || 0;
       const spent = Number(spentByCategory[cat]) || 0;
       const remaining = limit - spent;
-
-      // thresholds (tweak if you want):
-      // warning when <= 15% remaining and not exceeded
-      const warningThreshold = 0.15;
 
       let status: Status = 'ok';
       if (limit > 0 && remaining < 0) status = 'exceeded';
@@ -131,7 +148,6 @@ export default function BudgetsScreen({ navigation }: any) {
     } else if (sortMode === 'largestRemaining') {
       rows.sort((a, b) => b.remaining - a.remaining);
     } else {
-      // status order: exceeded, warning, ok
       const rank = (s: Status) => (s === 'exceeded' ? 0 : s === 'warning' ? 1 : 2);
       rows.sort((a, b) => rank(a.status) - rank(b.status) || b.usedPct - a.usedPct);
     }
@@ -166,11 +182,7 @@ export default function BudgetsScreen({ navigation }: any) {
           <View style={styles.headerPillsRow}>
             <Pressable
               style={styles.headerPill}
-              onPress={() =>
-                navigation?.navigate?.('BudgetEditor', { mode: 'create' }) ||
-                navigation?.navigate?.('AddBudget') ||
-                navigation?.navigate?.('BudgetsEditor')
-              }
+              onPress={() => safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })}
             >
               <Text style={styles.headerPillText}>+ Add</Text>
             </Pressable>
@@ -179,7 +191,6 @@ export default function BudgetsScreen({ navigation }: any) {
               <Text style={styles.headerPillText}>Back</Text>
             </Pressable>
           </View>
-
         </View>
 
         {/* Month navigation */}
@@ -210,16 +221,23 @@ export default function BudgetsScreen({ navigation }: any) {
           </View>
 
           {budgets.length === 0 ? (
-            <Text style={styles.emptyText}>No budgets set yet.</Text>
+            <View>
+              <Text style={styles.emptyText}>No budgets set yet.</Text>
+
+              <Pressable
+                style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
+                onPress={() => safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })}
+              >
+                <Text style={styles.headerPillText}>+ Add budget</Text>
+              </Pressable>
+            </View>
           ) : (
-            <>
-              <Text style={styles.subtle}>
-                {summary.exceeded} exceeded • {summary.warning} near limit • Remaining{' '}
-                <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
-                  {formatGBP(summary.totalRemaining)}
-                </Text>
+            <Text style={styles.subtle}>
+              {summary.exceeded} exceeded • {summary.warning} near limit • Remaining{' '}
+              <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
+                {formatGBP(summary.totalRemaining)}
               </Text>
-            </>
+            </Text>
           )}
         </View>
 
@@ -237,26 +255,18 @@ export default function BudgetsScreen({ navigation }: any) {
               }
             >
               <Text style={styles.smallBtnText}>
-                Sort: {sortMode === 'status' ? 'Status' : sortMode === 'a-z' ? 'A–Z' : 'Remaining'}
+                Sort:{' '}
+                {sortMode === 'status'
+                  ? 'Status'
+                  : sortMode === 'a-z'
+                  ? 'A–Z'
+                  : 'Remaining'}
               </Text>
             </Pressable>
           </View>
 
           {budgets.length === 0 ? (
-          <View>
-            <Text style={styles.emptyText}>No budgets set yet.</Text>
-
-            <Pressable
-              style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
-              onPress={() =>
-                navigation?.navigate?.('BudgetEditor', { mode: 'create' }) ||
-                navigation?.navigate?.('AddBudget')
-              }
-            >
-              <Text style={styles.headerPillText}>+ Add budget</Text>
-            </Pressable>
-          </View>
-
+            <Text style={styles.emptyText}>Create a budget to start tracking spending.</Text>
           ) : (
             budgetRows.map((r) => (
               <View key={r.id} style={styles.budgetRow}>
@@ -289,16 +299,14 @@ export default function BudgetsScreen({ navigation }: any) {
                     </Text>
 
                     <Pressable
-                      style={[styles.headerPill, { marginTop: 8 }]}
+                      style={[styles.pillSmall, { marginTop: 8 }]}
                       onPress={() =>
-                        navigation?.navigate?.('BudgetEditor', { id: r.id }) ||
-                        navigation?.navigate?.('EditBudget', { id: r.id })
+                        safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { id: r.id })
                       }
                     >
-                      <Text style={styles.headerPillText}>Edit</Text>
+                      <Text style={styles.pillSmallText}>Edit</Text>
                     </Pressable>
                   </View>
-
                 </View>
 
                 <View style={styles.barTrack}>
@@ -432,22 +440,22 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
     marginTop: 10,
   },
-  pillSmall: {
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 999,
-  borderWidth: 1,
-  borderColor: '#4B5563',
-  backgroundColor: '#0B1020',
-},
-pillSmallText: {
-  color: '#E5E7EB',
-  fontSize: 12,
-  fontWeight: '700',
-},
-
   barFill: { height: 8, borderRadius: 999 },
   barFillOk: { backgroundColor: '#93C5FD' },
   barFillWarning: { backgroundColor: '#FBBF24' },
   barFillExceeded: { backgroundColor: '#F97373' },
+
+  pillSmall: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
+  },
+  pillSmallText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });
