@@ -1409,6 +1409,6 @@ const styles = StyleSheet.create({
     }),
     fontSize: 12,
   },
-  hint: { opacity: 0.7, marginTop: 6 },
+  hint: { opacity: 0.7, marginTop: 8 },
 
 });
