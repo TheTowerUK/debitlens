@@ -33,6 +33,56 @@ const norm = (s: string) => s.trim().toLowerCase();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
+type BackupPayload = {
+  accounts?: any[];
+  transactions?: any[];
+  recurring?: any[];
+};
+
+function isArray(v: any): v is any[] {
+  return Array.isArray(v);
+}
+
+function normaliseBackup(raw: any): BackupPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  // allow either {accounts,transactions,recurring} OR {state:{...}}
+  const root = raw.state && typeof raw.state === 'object' ? raw.state : raw;
+
+  const accounts = isArray(root.accounts) ? root.accounts : [];
+  const transactions = isArray(root.transactions) ? root.transactions : [];
+  const recurring = isArray(root.recurring) ? root.recurring : [];
+
+  return { accounts, transactions, recurring };
+}
+
+function buildIdSet(items: any[]) {
+  const s = new Set<string>();
+  for (const x of items) if (x && typeof x.id === 'string') s.add(x.id);
+  return s;
+}
+
+function validateBackup(payload: BackupPayload) {
+  const issues: string[] = [];
+
+  // basic shape checks
+  if (!isArray(payload.accounts)) issues.push('accounts is not an array');
+  if (!isArray(payload.transactions)) issues.push('transactions is not an array');
+  if (!isArray(payload.recurring)) issues.push('recurring is not an array');
+
+  // referential check: transaction.accountId must exist in accounts
+  const accountIds = buildIdSet(payload.accounts || []);
+  let badRefs = 0;
+  for (const t of payload.transactions || []) {
+    const aid = t?.accountId;
+    if (aid && typeof aid === 'string' && !accountIds.has(aid)) badRefs++;
+  }
+  if (badRefs > 0) issues.push(`${badRefs} transactions reference missing accounts`);
+
+  return issues;
+}
+/* ===========================
+
 /**
  * Small CSV helper – deliberately simple / conservative.
  */
@@ -284,31 +334,32 @@ export default function DataExportImportScreen({ navigation }: Props) {
       budgets,
     });
   };
+  
+    const handleApplyJsonRestore = () => {
+      if (!jsonPreview) return;
 
-  const handleApplyJsonRestore = () => {
-    if (!jsonPreview) return;
+      const modeLabel = jsonRestoreMode === 'replace' ? 'REPLACE' : 'MERGE';
+      const body =
+        jsonRestoreMode === 'replace'
+          ? 'This will REPLACE your current accounts, transactions, and recurring items.'
+          : 'This will MERGE by adding only items with NEW ids. Existing items are kept (no overwrites).';
 
-    const modeLabel = jsonRestoreMode === 'replace' ? 'REPLACE' : 'MERGE';
-    const body =
-      jsonRestoreMode === 'replace'
-        ? 'This will REPLACE your current accounts, transactions, and recurring items.'
-        : 'This will MERGE by adding only items with NEW ids. Existing items are kept (no overwrites).';
+      Alert.alert('Confirm restore', `${body}\n\nMode: ${modeLabel}\nContinue?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: () => {
+            if (jsonRestoreMode === 'replace') applyJsonReplace();
+            else applyJsonMerge();
 
-    Alert.alert('Confirm restore', `${body}\n\nMode: ${modeLabel}\nContinue?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Restore',
-        style: 'destructive',
-        onPress: () => {
-          if (jsonRestoreMode === 'replace') applyJsonReplace();
-          else applyJsonMerge();
-
-          setJsonPreview(null);
-          setLastStatus(`JSON restore applied (${jsonRestoreMode}).`);
+            setJsonPreview(null);
+            setLastStatus(`JSON restore applied (${jsonRestoreMode}).`);
+          },
         },
-      },
-    ]);
-  };
+      ]);
+    };
+
 
   /* ===========================
      CSV EXPORT
@@ -977,6 +1028,24 @@ export default function DataExportImportScreen({ navigation }: Props) {
           />
         </View>
 
+        <View style={styles.optionsBox}>
+          <Text style={styles.optionsTitle}>Restore mode</Text>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>
+              {jsonRestoreMode === 'replace' ? 'Replace (full restore)' : 'Merge (add new only)'}
+            </Text>
+            <Switch
+              value={jsonRestoreMode === 'replace'}
+              onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')}
+            />
+          </View>
+
+          <Text style={styles.hint}>
+            Replace wipes current data first. Merge keeps current data and adds only new IDs.
+          </Text>
+        </View>
+
 
         {jsonPreview ? (
           <View style={styles.previewBox}>
@@ -1342,4 +1411,6 @@ const styles = StyleSheet.create({
     }),
     fontSize: 12,
   },
+  hint: { opacity: 0.7, marginTop: 6 },
+
 });
