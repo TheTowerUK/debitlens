@@ -1222,7 +1222,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 30,
     paddingBottom: 32,
   },
   h1: {
@@ -1409,6 +1409,6 @@ const styles = StyleSheet.create({
     }),
     fontSize: 12,
   },
-  hint: { opacity: 0.7, marginTop: 8 },
+  hint: { opacity: 0.7, marginTop: 6 },
 
 });
