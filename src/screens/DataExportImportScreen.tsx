@@ -361,6 +361,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
     };
 
 
+
   /* ===========================
      CSV EXPORT
   =========================== */
@@ -1018,33 +1019,26 @@ export default function DataExportImportScreen({ navigation }: Props) {
           <Text style={styles.btnSecondaryText}>Select JSON backup to restore</Text>
         </Pressable>
 
-        <View style={styles.optionRow}>
-          <Text style={styles.optionLabel}>
-            CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
-          </Text>
-          <Switch
-            value={csvRestoreMode === 'merge'}
-            onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')}
-          />
-        </View>
+        {jsonPreview ? (
+          <View style={styles.optionsBox}>
+            <Text style={styles.optionsTitle}>Restore mode</Text>
 
-        <View style={styles.optionsBox}>
-          <Text style={styles.optionsTitle}>Restore mode</Text>
+            <View style={styles.optionRow}>
+              <Text style={styles.optionLabel}>
+                {jsonRestoreMode === 'replace' ? 'Replace (full restore)' : 'Merge (add new only)'}
+              </Text>
+              <Switch
+                value={jsonRestoreMode === 'replace'}
+                onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')}
+              />
+            </View>
 
-          <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>
-              {jsonRestoreMode === 'replace' ? 'Replace (full restore)' : 'Merge (add new only)'}
+            <Text style={styles.hint}>
+              Replace wipes current data first. Merge keeps current data and adds only new IDs.
             </Text>
-            <Switch
-              value={jsonRestoreMode === 'replace'}
-              onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')}
-            />
           </View>
+        ) : null}
 
-          <Text style={styles.hint}>
-            Replace wipes current data first. Merge keeps current data and adds only new IDs.
-          </Text>
-        </View>
 
 
         {jsonPreview ? (
@@ -1124,6 +1118,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
           <Text style={styles.optionLabel}>
             CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
           </Text>
+          <Switch
+            value={csvRestoreMode === 'merge'}
+            onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')}
+          />
         </View>
 
         <View style={styles.rowButtons}>
