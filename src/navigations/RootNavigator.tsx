@@ -1,4 +1,4 @@
-// src/navigation/RootNavigator.tsx
+// src/navigations/RootNavigator.tsx
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -19,14 +19,17 @@ import ReportsScreen from '../screens/ReportsScreen';
 import DataExportImportScreen from '../screens/DataExportImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
 import SplashAuthScreen from '../screens/SplashAuthScreen';
+import BudgetEditorScreen from '../screens/BudgetEditorScreen';
 
 export type RootStackParamList = {
   Login: undefined;
   Dashboard: undefined;
+
   Account: { accountId?: string } | undefined;
   AddAccount: undefined;
   Transfer: { fromAccountId?: string } | undefined;
   RecentActivity: undefined;
+
   TxnEditor:
     | {
         id?: string;
@@ -34,86 +37,59 @@ export type RootStackParamList = {
         type?: 'income' | 'expense';
       }
     | undefined;
+
   Payments: undefined;
   Recurring: undefined;
+
   Budgets: undefined;
+  BudgetEditor: { id?: string; mode?: 'create' } | undefined;
+
   Notifications: undefined;
   RecurringEditor: { id?: string } | undefined;
+
   Settings: undefined;
   Reports: undefined;
+
   DataExportImport: undefined;
   ImportCSV: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const RootNavigator: React.FC = () => {
-  // TS workaround for `id`
-  const navigatorProps = {
-    id: undefined as undefined,
-    initialRouteName: 'Login' as const,
-  };
-
+export default function RootNavigator() {
   return (
     <Stack.Navigator
-      {...(navigatorProps as any)}
-    screenOptions={({ route }) => ({
-      // Hide header on Dashboard and Login
-      headerShown: route.name !== 'Dashboard' && route.name !== 'Login',
-
-      headerStyle: { backgroundColor: '#020617' },
-      headerTintColor: '#F9FAFB',
-      headerTitleStyle: { fontWeight: '700' },
-      headerBackTitleVisible: false,
-    })}
-
+      // ✅ TS fix: some @react-navigation type versions require `id`
+      id={undefined as any}
+      initialRouteName="Login"
+      screenOptions={{
+        headerShown: false,
+      }}
     >
-      {/* Auth / splash */}
-      <Stack.Screen
-        name="Login"
-        component={SplashAuthScreen}
-        options={{ headerShown: false }} // this also works, and overrides screenOptions
-      />
-
-      {/* Main */}
+      <Stack.Screen name="Login" component={SplashAuthScreen} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
 
-      {/* Accounts */}
       <Stack.Screen name="Account" component={AccountScreen} />
       <Stack.Screen name="AddAccount" component={AddAccountScreen} />
       <Stack.Screen name="Transfer" component={TransferScreen} />
-      <Stack.Screen
-        name="RecentActivity"
-        component={RecentActivityScreen}
-      />
+      <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
 
-      {/* Editor */}
       <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
 
-      {/* Dashboard-linked */}
       <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="Recurring" component={RecurringScreen} />
-      <Stack.Screen name="Budgets" component={BudgetsScreen} />
-      <Stack.Screen
-        name="Notifications"
-        component={NotificationsScreen}
-      />
-      <Stack.Screen
-        name="RecurringEditor"
-        component={RecurringEditorScreen}
-      />
 
-      {/* Other */}
+      <Stack.Screen name="Budgets" component={BudgetsScreen} />
+      <Stack.Screen name="BudgetEditor" component={BudgetEditorScreen} />
+
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="RecurringEditor" component={RecurringEditorScreen} />
+
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Reports" component={ReportsScreen} />
-      <Stack.Screen
-        name="DataExportImport"
-        component={DataExportImportScreen}
-        options={{ title: 'Export / Import' }}
-      />
+
+      <Stack.Screen name="DataExportImport" component={DataExportImportScreen} />
       <Stack.Screen name="ImportCSV" component={ImportCsvScreen} />
     </Stack.Navigator>
   );
-};
-
-export default RootNavigator;
+}

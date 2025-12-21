@@ -17,10 +17,7 @@ type BudgetLike = {
 function formatGBP(n: number) {
   const v = Number(n) || 0;
   try {
-    return new Intl.NumberFormat('en-GB', {
-      style: 'currency',
-      currency: 'GBP',
-    }).format(v);
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
   } catch {
     const sign = v < 0 ? '-' : '';
     const abs = Math.abs(v);
@@ -44,24 +41,11 @@ function addMonths(d: Date, delta: number) {
 }
 function monthLabel(d: Date) {
   try {
-    return new Intl.DateTimeFormat('en-GB', {
-      month: 'long',
-      year: 'numeric',
-    }).format(d);
+    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
   } catch {
     const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December'
     ];
     return `${months[d.getMonth()]} ${d.getFullYear()}`;
   }
@@ -74,30 +58,6 @@ export default function BudgetsScreen({ navigation }: any) {
 
   const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [sortMode, setSortMode] = useState<SortMode>('status');
-
-  /**
-   * ✅ safeNavigate that works with nested navigators:
-   * It walks up parent navigators until it finds one that owns the route.
-   */
-  const safeNavigate = (routeNames: string[], params?: any) => {
-    let nav: any = navigation;
-
-    while (nav) {
-      const available: string[] = nav?.getState?.()?.routeNames ?? [];
-
-      for (const name of routeNames) {
-        if (available.includes(name)) {
-          nav.navigate(name, params);
-          return;
-        }
-      }
-
-      nav = nav.getParent?.();
-    }
-
-    // If nothing matched, do nothing (prevents NAVIGATE error)
-    // console.warn('No matching route found for:', routeNames);
-  };
 
   const monthRange = useMemo(() => {
     const start = startOfMonth(activeMonth);
@@ -181,6 +141,9 @@ export default function BudgetsScreen({ navigation }: any) {
     return { exceeded, warning, totalRemaining };
   }, [budgetRows]);
 
+  const onAddBudget = () => navigation.navigate('BudgetEditor', { mode: 'create' });
+  const onEditBudget = (id: string) => navigation.navigate('BudgetEditor', { id });
+
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.wrap}>
@@ -192,12 +155,7 @@ export default function BudgetsScreen({ navigation }: any) {
           </View>
 
           <View style={styles.headerPillsRow}>
-            <Pressable
-              style={styles.headerPill}
-              onPress={() =>
-                safeNavigate(['AddBudget', 'BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })
-              }
-            >
+            <Pressable style={styles.headerPill} onPress={onAddBudget}>
               <Text style={styles.headerPillText}>+ Add</Text>
             </Pressable>
 
@@ -240,9 +198,7 @@ export default function BudgetsScreen({ navigation }: any) {
 
               <Pressable
                 style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
-                onPress={() =>
-                  safeNavigate(['AddBudget', 'BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })
-                }
+                onPress={onAddBudget}
               >
                 <Text style={styles.headerPillText}>+ Add budget</Text>
               </Pressable>
@@ -316,9 +272,7 @@ export default function BudgetsScreen({ navigation }: any) {
 
                     <Pressable
                       style={[styles.pillSmall, { marginTop: 8 }]}
-                      onPress={() =>
-                        safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { id: r.id })
-                      }
+                      onPress={() => onEditBudget(r.id)}
                     >
                       <Text style={styles.pillSmallText}>Edit</Text>
                     </Pressable>
