@@ -83,6 +83,15 @@ export type AppState = {
   budgets: Budget[];
 };
 
+export type MergeBackupResult = {
+  accountsAdded: number;
+  accountsUpdated: number;
+  transactionsAdded: number;
+  transactionsUpdated: number;
+  recurringAdded: number;
+  recurringUpdated: number;
+};
+
 export type AppActions = {
   /* Accounts */
   addAccount: (input: Omit<Account, 'id'>) => Account;
@@ -104,13 +113,21 @@ export type AppActions = {
   updateBudget: (id: string, patch: Partial<Omit<Budget, 'id'>>) => void;
   deleteBudget: (id: string) => void;
 
-  /* Full restore (Option 1) */
+  /* Full restore (Replace) */
   replaceAllData: (next: {
     accounts: Account[];
     transactions: Transaction[];
     recurring?: RecurringItem[];
     budgets?: Budget[];
   }) => void;
+
+  /* Merge restore (Merge) */
+  mergeBackup: (input: {
+    accounts: Account[];
+    transactions: Transaction[];
+    recurring?: RecurringItem[];
+    budgets?: Budget[];
+  }) => MergeBackupResult;
 };
 
 type AppContextValue = {
@@ -134,6 +151,10 @@ function uuid() {
   const g: any = globalThis as any;
   if (g?.crypto?.randomUUID) return g.crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function isArray<T = any>(v: any): v is T[] {
+  return Array.isArray(v);
 }
 
 /* =====================
@@ -216,12 +237,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setBudgets((prev) => prev.filter((b) => b.id !== id));
       },
 
-      /* Full restore */
+      /* Full restore (Replace) */
       replaceAllData: (next) => {
         setAccounts(next.accounts || []);
         setTransactions(next.transactions || []);
         setRecurring(next.recurring || []);
         setBudgets(next.budgets || []);
+      },
+
+      /* Merge restore (Merge) */
+      mergeBackup: (input) => {
+        const incomingAccounts = isArray<Account>(input.accounts) ? input.accounts : [];
+        const incomingTxs = isArray<Transaction>(input.transactions) ? input.transactions : [];
+        const incomingRecurring = isArray<RecurringItem>(input.recurring) ? input.recurring : [];
+
+        let accountsAdded = 0;
+        let accountsUpdated = 0;
+        let transactionsAdded = 0;
+        let transactionsUpdated = 0;
+        let recurringAdded = 0;
+        let recurringUpdated = 0;
+
+        setAccounts((prev) => {
+          const map = new Map(prev.map((a) => [a.id, a] as const));
+
+          for (const a of incomingAccounts) {
+            if (!a?.id) continue;
+            const existing = map.get(a.id);
+            if (!existing) {
+              map.set(a.id, a);
+              accountsAdded++;
+            } else {
+              map.set(a.id, { ...existing, ...a });
+              accountsUpdated++;
+            }
+          }
+
+          return Array.from(map.values());
+        });
+
+        setTransactions((prev) => {
+          const map = new Map(prev.map((t) => [t.id, t] as const));
+
+          for (const t of incomingTxs) {
+            if (!t?.id) continue;
+            const existing = map.get(t.id);
+            if (!existing) {
+              map.set(t.id, t);
+              transactionsAdded++;
+            } else {
+              map.set(t.id, { ...existing, ...t });
+              transactionsUpdated++;
+            }
+          }
+
+          return Array.from(map.values());
+        });
+
+        setRecurring((prev) => {
+          const map = new Map(prev.map((r) => [r.id, r] as const));
+
+          for (const r of incomingRecurring) {
+            if (!r?.id) continue;
+            const existing = map.get(r.id);
+            if (!existing) {
+              map.set(r.id, r);
+              recurringAdded++;
+            } else {
+              map.set(r.id, { ...existing, ...r });
+              recurringUpdated++;
+            }
+          }
+
+          return Array.from(map.values());
+        });
+
+        // Budgets: keep current unless explicitly supplied
+        if (isArray<Budget>(input.budgets)) {
+          setBudgets(input.budgets);
+        }
+
+        return {
+          accountsAdded,
+          accountsUpdated,
+          transactionsAdded,
+          transactionsUpdated,
+          recurringAdded,
+          recurringUpdated,
+        };
       },
     }),
     []
