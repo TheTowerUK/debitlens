@@ -75,16 +75,28 @@ export default function BudgetsScreen({ navigation }: any) {
   const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
   const [sortMode, setSortMode] = useState<SortMode>('status');
 
-  // IMPORTANT: keep this helper INSIDE the component so "navigation" is in scope
+  /**
+   * ✅ safeNavigate that works with nested navigators:
+   * It walks up parent navigators until it finds one that owns the route.
+   */
   const safeNavigate = (routeNames: string[], params?: any) => {
-    const available = navigation?.getState?.()?.routeNames ?? [];
-    for (const name of routeNames) {
-      if (available.includes(name)) {
-        navigation.navigate(name, params);
-        return;
+    let nav: any = navigation;
+
+    while (nav) {
+      const available: string[] = nav?.getState?.()?.routeNames ?? [];
+
+      for (const name of routeNames) {
+        if (available.includes(name)) {
+          nav.navigate(name, params);
+          return;
+        }
       }
+
+      nav = nav.getParent?.();
     }
-    // do nothing if not found (prevents NAVIGATE error)
+
+    // If nothing matched, do nothing (prevents NAVIGATE error)
+    // console.warn('No matching route found for:', routeNames);
   };
 
   const monthRange = useMemo(() => {
@@ -182,7 +194,9 @@ export default function BudgetsScreen({ navigation }: any) {
           <View style={styles.headerPillsRow}>
             <Pressable
               style={styles.headerPill}
-              onPress={() => safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })}
+              onPress={() =>
+                safeNavigate(['AddBudget', 'BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })
+              }
             >
               <Text style={styles.headerPillText}>+ Add</Text>
             </Pressable>
@@ -226,7 +240,9 @@ export default function BudgetsScreen({ navigation }: any) {
 
               <Pressable
                 style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
-                onPress={() => safeNavigate(['BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })}
+                onPress={() =>
+                  safeNavigate(['AddBudget', 'BudgetEditor', 'BudgetEditorScreen'], { mode: 'create' })
+                }
               >
                 <Text style={styles.headerPillText}>+ Add budget</Text>
               </Pressable>
