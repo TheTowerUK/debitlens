@@ -295,18 +295,22 @@ export default function DashboardScreen({ navigation }: Props) {
                   onPress={() => navigation.navigate('Account', { accountId: a.id })}
                   hitSlop={6}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.accountName}>{a.name || 'Account'}</Text>
-                    <Text style={styles.accountMeta}>
-                      {String(a.type || 'account').toUpperCase()}
-                    </Text>
-                  </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.accountName}>{a.name || 'Account'}</Text>
 
-                  <Text style={styles.accountBalance}>
-                    {formatMoney(balanceById[a.id] ?? 0)}
-                  </Text>
+            <Text style={styles.accountMeta}>
+              {String(a.type || 'account').toUpperCase()}
+              <Text style={styles.accountMetaDim}> · Opening: {formatMoney(Number(a.balance || 0))}</Text>
+            </Text>
 
-                  <Text style={styles.accountChevron}>›</Text>
+            </View>
+
+            <Text style={styles.accountBalance}>
+              {formatMoney(balanceById[a.id] ?? 0)}
+            </Text>
+
+            <Text style={styles.accountChevron}>›</Text>
+
                 </Pressable>
               ))}
             </View>
