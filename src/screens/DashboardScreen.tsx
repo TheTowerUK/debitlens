@@ -580,6 +580,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+  accountMetaDim: { opacity: 0.8 },
+
   accountBalance: {
     color: '#E5E7EB',
     fontWeight: '700',
