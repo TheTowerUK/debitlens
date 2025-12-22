@@ -72,7 +72,7 @@ export default AddAccountScreen;
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    padding: 16,
+    padding: 35,
     paddingBottom: 32,
     backgroundColor: '#0B1020',
   },

@@ -243,7 +243,7 @@ export default function AccountScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    padding: 16,
+    padding: 35,
     backgroundColor: '#0B1020',
   },
   h1: {

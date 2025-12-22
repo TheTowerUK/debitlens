@@ -93,7 +93,7 @@ export default AccountEditorScreen;
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    paddingTop: 35,
   },
   heading: {
     fontSize: 22,
