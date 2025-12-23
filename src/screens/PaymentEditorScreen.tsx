@@ -1,3 +1,4 @@
+// src/screens/PaymentEditorScreen.tsx
 import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
@@ -14,7 +15,19 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
+
 type TxType = 'income' | 'expense';
+
+function formatGBP(n: number) {
+  const v = Number(n) || 0;
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
+  } catch {
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    return `${sign}£${abs.toFixed(2)}`;
+  }
+}
 
 function isoToday() {
   const d = new Date();
@@ -30,51 +43,35 @@ function isValidISODate(s: string) {
   return !isNaN(d.getTime());
 }
 
-function formatGBP(n: number) {
-  const v = Number(n) || 0;
-  try {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
-  } catch {
-    const sign = v < 0 ? '-' : '';
-    const abs = Math.abs(v);
-    return `${sign}£${abs.toFixed(2)}`;
-  }
-}
-
-export default function TxnEditorScreen({ navigation, route }: Props) {
+export default function PaymentEditorScreen({ navigation, route }: Props) {
   const { state, actions } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const params = route.params;
-  const id = params?.id;
+  const id = (route.params as any)?.id as string | undefined;
+  const existing = useMemo(() => (id ? txs.find((t) => t.id === id) : undefined), [id, txs]);
 
-  const existing = useMemo(
-    () => (id ? txs.find((t) => t.id === id) : undefined),
-    [id, txs]
-  );
-
+  // If there are no accounts, prevent creating a transaction (needs accountId)
   const hasAccounts = accounts.length > 0;
-  const fallbackAccountId = accounts[0]?.id ?? '';
 
-  const [accountId, setAccountId] = useState<string>(
-    existing?.accountId ?? params?.accountId ?? fallbackAccountId
-  );
-  const [type, setType] = useState<TxType>(
-    (existing?.type as TxType) ?? (params?.type as TxType) ?? 'expense'
-  );
-  const [date, setDate] = useState<string>(existing?.date ?? isoToday());
-  const [amountText, setAmountText] = useState<string>(
+  // Defaults
+  const defaultAccountId = accounts[0]?.id ?? '';
+  const [accountId, setAccountId] = useState(existing?.accountId ?? defaultAccountId);
+  const [type, setType] = useState<TxType>((existing?.type as TxType) ?? 'expense');
+  const [date, setDate] = useState(existing?.date ?? isoToday());
+  const [amountText, setAmountText] = useState(
     existing ? String(Number(existing.amount ?? 0).toFixed(2)) : ''
   );
-  const [name, setName] = useState<string>(existing?.name ?? '');
-  const [category, setCategory] = useState<string>(existing?.category ?? '');
-  const [description, setDescription] = useState<string>(existing?.description ?? '');
+  const [name, setName] = useState(existing?.name ?? '');
+  const [category, setCategory] = useState(existing?.category ?? '');
+  const [description, setDescription] = useState(existing?.description ?? '');
 
+  // If user navigates here before accounts load, keep accountId sensible
   useEffect(() => {
-    // keep accountId sensible if accounts appear later
     if (!accountId && accounts[0]?.id) setAccountId(accounts[0].id);
   }, [accounts, accountId]);
+
+  const title = existing ? 'Edit payment' : 'Add payment';
 
   const selectedAccountName = useMemo(() => {
     const a = accounts.find((x) => x.id === accountId);
@@ -89,19 +86,18 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
   };
 
   const parsedAmount = useMemo(() => {
+    // allow "12" or "12.50"
     const v = Number(String(amountText).replace(/,/g, '').trim());
     return isFinite(v) ? v : NaN;
   }, [amountText]);
 
   const canSave =
     hasAccounts &&
-    !!accountId &&
+    accountId &&
     (type === 'income' || type === 'expense') &&
     isValidISODate(date) &&
     isFinite(parsedAmount) &&
     parsedAmount > 0;
-
-  const title = existing ? 'Edit payment' : 'Add payment';
 
   const handleSave = () => {
     if (!hasAccounts) {
@@ -131,15 +127,19 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
       description: description.trim() || undefined,
     };
 
-    if (existing) actions.updateTransaction(existing.id, payload);
-    else actions.addTransaction(payload as any);
+    if (existing) {
+      actions.updateTransaction(existing.id, payload);
+    } else {
+      actions.addTransaction(payload as any);
+    }
 
     navigation.goBack();
   };
 
   const handleDelete = () => {
     if (!existing) return;
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
+
+    Alert.alert('Delete payment?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -205,7 +205,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           )}
         </View>
 
-        {/* Details */}
+        {/* Type + Date + Amount */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Details</Text>
 
@@ -251,12 +251,12 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           />
 
           <Text style={styles.hint}>
-            Preview: {type === 'income' ? '+' : '-'}
-            {isFinite(parsedAmount) ? formatGBP(parsedAmount) : '£0.00'}
+            You’ll see it as {type === 'income' ? '+' : '-'}
+            {isFinite(parsedAmount) ? formatGBP(parsedAmount) : '£0.00'}.
           </Text>
         </View>
 
-        {/* Optional */}
+        {/* Optional fields */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Optional</Text>
 
@@ -276,6 +276,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
             onChangeText={setCategory}
             placeholder="e.g. Groceries"
             placeholderTextColor="#6B7280"
+            autoCapitalize="sentences"
           />
 
           <Text style={styles.label}>Description</Text>
@@ -297,11 +298,15 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
             onPress={handleSave}
             disabled={!canSave}
           >
-            <Text style={styles.btnPrimaryText}>{existing ? 'Save changes' : 'Add payment'}</Text>
+            <Text style={styles.btnPrimaryText}>
+              {existing ? 'Save changes' : 'Add payment'}
+            </Text>
           </Pressable>
 
           {!canSave ? (
-            <Text style={styles.hint}>Required: account, valid date, positive amount.</Text>
+            <Text style={styles.hint}>
+              Required: account, valid date, positive amount.
+            </Text>
           ) : null}
         </View>
       </ScrollView>
@@ -344,6 +349,7 @@ const styles = StyleSheet.create({
     borderColor: '#1F2937',
   },
   cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+
   emptyText: { color: '#9CA3AF', marginTop: 10 },
 
   accountPickerRow: {
@@ -368,6 +374,7 @@ const styles = StyleSheet.create({
   smallBtnText: { color: '#BFDBFE', fontWeight: '900', fontSize: 14 },
 
   pillsRow: { flexDirection: 'row', columnGap: 8, marginTop: 10 },
+
   pill: {
     flex: 1,
     paddingVertical: 10,
@@ -392,7 +399,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: '#F9FAFB',
   },
-  inputMultiline: { minHeight: 90 },
+  inputMultiline: {
+    minHeight: 90,
+  },
 
   hint: { color: '#9CA3AF', marginTop: 10, fontSize: 12 },
 

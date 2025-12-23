@@ -115,12 +115,13 @@ export default function PaymentsScreen({ navigation }: Props) {
 
   const onAdd = () => {
     // ✅ Adjust if your add screen route is different (e.g. 'PaymentForm')
-    navigation.navigate('PaymentForm' as any);
+    navigation.navigate('TxnEditor');
   };
 
   const onOpen = (id: string) => {
     // ✅ Adjust if your editor screen route differs
-    navigation.navigate('PaymentEditor' as any, { id });
+    navigation.navigate('TxnEditor', { id });
+
   };
 
   const onDelete = (id: string) => {
