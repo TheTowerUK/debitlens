@@ -216,7 +216,12 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+ 
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       {/* Type toggle */}
       <View style={styles.segmentWrap}>
         <Pressable
@@ -333,8 +338,15 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, gap: 10 },
-
+  screen: {
+    flex: 1,
+    backgroundColor: '#020617',
+  },
+  container: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 28,
+  },
   segmentWrap: {
     flexDirection: 'row',
     borderWidth: 1,
