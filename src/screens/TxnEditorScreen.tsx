@@ -1,22 +1,25 @@
-import React, { useMemo, useState, useEffect } from 'react';
+// src/screens/TxnEditorScreen.tsx
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  StyleSheet,
-  Pressable,
   TextInput,
+  Pressable,
+  StyleSheet,
   Alert,
+  Platform,
+  ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useApp } from '../state/AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { useApp } from '../state/AppContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
-type TxType = 'income' | 'expense';
 
-function isoToday() {
+const LAST_ACCOUNT_KEY = 'debitlens:lastAccountId';
+
+function todayISO() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -24,384 +27,382 @@ function isoToday() {
   return `${y}-${m}-${day}`;
 }
 
-function isValidISODate(s: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
-  const d = new Date(s);
-  return !isNaN(d.getTime());
-}
-
-function formatGBP(n: number) {
-  const v = Number(n) || 0;
-  try {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
-  } catch {
-    const sign = v < 0 ? '-' : '';
-    const abs = Math.abs(v);
-    return `${sign}£${abs.toFixed(2)}`;
-  }
+function toNumberLoose(s: string) {
+  // Accept "12", "12.50", "£12.50", "12,50"
+  const cleaned = s.replace(/[^\d.,-]/g, '').replace(',', '.');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : NaN;
 }
 
 export default function TxnEditorScreen({ navigation, route }: Props) {
   const { state, actions } = useApp();
+
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
 
-  const params = route.params;
-  const id = params?.id;
+  const editId = route.params?.id;
+  const presetAccountId = route.params?.accountId;
+  const presetType = route.params?.type;
 
-  const existing = useMemo(
-    () => (id ? txs.find((t) => t.id === id) : undefined),
-    [id, txs]
-  );
+  const editingTxn = useMemo(() => {
+    if (!editId) return undefined;
+    return txs.find(t => t.id === editId);
+  }, [editId, txs]);
 
-  const hasAccounts = accounts.length > 0;
-  const fallbackAccountId = accounts[0]?.id ?? '';
+  const isEditing = !!editingTxn;
 
-  const [accountId, setAccountId] = useState<string>(
-    existing?.accountId ?? params?.accountId ?? fallbackAccountId
-  );
-  const [type, setType] = useState<TxType>(
-    (existing?.type as TxType) ?? (params?.type as TxType) ?? 'expense'
-  );
-  const [date, setDate] = useState<string>(existing?.date ?? isoToday());
+  // ---- Local form state ----
+  const [name, setName] = useState<string>(editingTxn?.name ?? '');
   const [amountText, setAmountText] = useState<string>(
-    existing ? String(Number(existing.amount ?? 0).toFixed(2)) : ''
+    editingTxn ? String(editingTxn.amount ?? '') : ''
   );
-  const [name, setName] = useState<string>(existing?.name ?? '');
-  const [category, setCategory] = useState<string>(existing?.category ?? '');
-  const [description, setDescription] = useState<string>(existing?.description ?? '');
+  const [date, setDate] = useState<string>(editingTxn?.date ?? todayISO());
+  const [type, setType] = useState<'income' | 'expense'>(
+    (editingTxn?.type as any) ?? presetType ?? 'expense'
+  );
+  const [accountId, setAccountId] = useState<string>(
+    editingTxn?.accountId ?? presetAccountId ?? ''
+  );
+  const [category, setCategory] = useState<string>(editingTxn?.category ?? '');
+  const [description, setDescription] = useState<string>(
+    editingTxn?.description ?? ''
+  );
 
+  // ---- Load best default account for NEW txns ----
   useEffect(() => {
-    // keep accountId sensible if accounts appear later
-    if (!accountId && accounts[0]?.id) setAccountId(accounts[0].id);
-  }, [accounts, accountId]);
+    let cancelled = false;
 
-  const selectedAccountName = useMemo(() => {
-    const a = accounts.find((x) => x.id === accountId);
-    return a?.name || 'Account';
-  }, [accounts, accountId]);
+    async function pickDefaultAccount() {
+      if (isEditing) return; // don't override existing
+      if (presetAccountId) return; // respect navigation param
+      if (accountId) return; // already set
 
-  const cycleAccount = (dir: 1 | -1) => {
-    if (accounts.length <= 1) return;
-    const idx = accounts.findIndex((a) => a.id === accountId);
-    const nextIdx = idx === -1 ? 0 : (idx + dir + accounts.length) % accounts.length;
-    setAccountId(accounts[nextIdx].id);
-  };
+      try {
+        const last = await AsyncStorage.getItem(LAST_ACCOUNT_KEY);
+        if (cancelled) return;
 
-  const parsedAmount = useMemo(() => {
-    const v = Number(String(amountText).replace(/,/g, '').trim());
-    return isFinite(v) ? v : NaN;
-  }, [amountText]);
+        if (last && accounts.some(a => a.id === last)) {
+          setAccountId(last);
+          return;
+        }
 
-  const canSave =
-    hasAccounts &&
-    !!accountId &&
-    (type === 'income' || type === 'expense') &&
-    isValidISODate(date) &&
-    isFinite(parsedAmount) &&
-    parsedAmount > 0;
-
-  const title = existing ? 'Edit payment' : 'Add payment';
-
-  const handleSave = () => {
-    if (!hasAccounts) {
-      Alert.alert('No accounts', 'Create an account first.');
-      return;
-    }
-    if (!accountId) {
-      Alert.alert('Missing account', 'Please choose an account.');
-      return;
-    }
-    if (!isValidISODate(date)) {
-      Alert.alert('Invalid date', 'Use YYYY-MM-DD (e.g. 2025-12-23).');
-      return;
-    }
-    if (!isFinite(parsedAmount) || parsedAmount <= 0) {
-      Alert.alert('Invalid amount', 'Enter a positive amount (e.g. 12.50).');
-      return;
+        // fallback to first non-archived account, else first
+        const firstActive =
+          accounts.find(a => !a.archived) ?? accounts[0] ?? undefined;
+        if (firstActive?.id) setAccountId(firstActive.id);
+      } catch {
+        // ignore
+      }
     }
 
+    pickDefaultAccount();
+    return () => {
+      cancelled = true;
+    };
+  }, [accounts, accountId, isEditing, presetAccountId]);
+
+  // ---- Keep screen title sensible ----
+  useEffect(() => {
+    navigation.setOptions({
+      title: isEditing ? 'Edit transaction' : 'Add transaction',
+    });
+  }, [isEditing, navigation]);
+
+  // ---- Validation + disabled save ----
+  const amount = useMemo(() => toNumberLoose(amountText), [amountText]);
+
+  const validation = useMemo(() => {
+    const trimmedName = name.trim();
+    if (!trimmedName) return { ok: false, reason: 'Add a name' };
+
+    if (!accountId) return { ok: false, reason: 'Choose an account' };
+
+    // Basic ISO date sanity check
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return { ok: false, reason: 'Date must be YYYY-MM-DD' };
+    }
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return { ok: false, reason: 'Invalid date' };
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { ok: false, reason: 'Enter a valid amount > 0' };
+    }
+
+    return { ok: true as const };
+  }, [name, accountId, date, amount]);
+
+  const canSave = validation.ok;
+
+  async function persistLastAccount(id: string) {
+    try {
+      await AsyncStorage.setItem(LAST_ACCOUNT_KEY, id);
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleSave = async () => {
+    if (!canSave) {
+      Alert.alert('Can’t save yet', validation.reason);
+      return;
+    }
+
+    const trimmedName = name.trim();
     const payload = {
+      name: trimmedName,
       accountId,
-      type,
       date,
-      amount: parsedAmount,
-      name: name.trim() || undefined,
+      type,
       category: category.trim() || undefined,
       description: description.trim() || undefined,
+      amount,
     };
 
-    if (existing) actions.updateTransaction(existing.id, payload);
-    else actions.addTransaction(payload as any);
+    try {
+      if (isEditing && editingTxn?.id) {
+        
+        actions.updateTransaction(editingTxn.id, payload);
+      } else {
+        
+        actions.addTransaction(payload);
+      }
 
-    navigation.goBack();
+      await persistLastAccount(accountId);
+      navigation.goBack();
+    } catch (e: any) {
+      Alert.alert('Save failed', e?.message ?? 'Please try again.');
+    }
   };
 
   const handleDelete = () => {
-    if (!existing) return;
-    Alert.alert('Delete transaction?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          actions.deleteTransaction(existing.id);
-          navigation.goBack();
+    if (!isEditing || !editingTxn?.id) return;
+
+    Alert.alert(
+      'Delete transaction?',
+      'This can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              
+              actions.deleteTransaction(editingTxn.id);
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Delete failed', e?.message ?? 'Please try again.');
+            }
+          },
         },
-      },
-    ]);
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Simple “picker” without adding dependencies:
+  const accountName = useMemo(() => {
+    return accounts.find(a => a.id === accountId)?.name ?? '';
+  }, [accounts, accountId]);
+
+  const cycleAccount = () => {
+    if (accounts.length === 0) return;
+    const idx = Math.max(
+      0,
+      accounts.findIndex(a => a.id === accountId)
+    );
+    const next = accounts[(idx + 1) % accounts.length];
+    if (next?.id) setAccountId(next.id);
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.wrap}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>{title}</Text>
-            <Text style={styles.subtle}>
-              {existing ? 'Update details and save' : 'Create a new transaction'}
-            </Text>
-          </View>
-
-          <View style={styles.headerPillsRow}>
-            {existing ? (
-              <Pressable
-                style={[styles.headerPill, styles.dangerPill]}
-                onPress={handleDelete}
-                hitSlop={8}
-              >
-                <Text style={styles.headerPillText}>Delete</Text>
-              </Pressable>
-            ) : null}
-
-            <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
-              <Text style={styles.headerPillText}>Back</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Account */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account</Text>
-
-          {!hasAccounts ? (
-            <Text style={styles.emptyText}>No accounts yet. Create an account first.</Text>
-          ) : (
-            <View style={styles.accountPickerRow}>
-              <Pressable style={styles.smallBtn} onPress={() => cycleAccount(-1)} hitSlop={8}>
-                <Text style={styles.smallBtnText}>◀</Text>
-              </Pressable>
-
-              <View style={{ flex: 1, alignItems: 'center' }}>
-                <Text style={styles.pickerValue}>{selectedAccountName}</Text>
-                <Text style={styles.pickerSub}>Tap arrows to change</Text>
-              </View>
-
-              <Pressable style={styles.smallBtn} onPress={() => cycleAccount(1)} hitSlop={8}>
-                <Text style={styles.smallBtnText}>▶</Text>
-              </Pressable>
-            </View>
-          )}
-        </View>
-
-        {/* Details */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Details</Text>
-
-          <View style={styles.pillsRow}>
-            <Pressable
-              style={[styles.pill, type === 'expense' && styles.pillActive]}
-              onPress={() => setType('expense')}
-            >
-              <Text style={[styles.pillText, type === 'expense' && styles.pillTextActive]}>
-                Expense
-              </Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.pill, type === 'income' && styles.pillActive]}
-              onPress={() => setType('income')}
-            >
-              <Text style={[styles.pillText, type === 'income' && styles.pillTextActive]}>
-                Income
-              </Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-          <TextInput
-            style={styles.input}
-            value={date}
-            onChangeText={setDate}
-            placeholder="2025-12-23"
-            placeholderTextColor="#6B7280"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <Text style={styles.label}>Amount</Text>
-          <TextInput
-            style={styles.input}
-            value={amountText}
-            onChangeText={setAmountText}
-            placeholder="12.50"
-            placeholderTextColor="#6B7280"
-            keyboardType="decimal-pad"
-          />
-
-          <Text style={styles.hint}>
-            Preview: {type === 'income' ? '+' : '-'}
-            {isFinite(parsedAmount) ? formatGBP(parsedAmount) : '£0.00'}
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* Type toggle */}
+      <View style={styles.segmentWrap}>
+        <Pressable
+          onPress={() => setType('expense')}
+          style={[styles.segmentBtn, type === 'expense' && styles.segmentOn]}
+        >
+          <Text style={[styles.segmentText, type === 'expense' && styles.segmentTextOn]}>
+            Expense
           </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setType('income')}
+          style={[styles.segmentBtn, type === 'income' && styles.segmentOn]}
+        >
+          <Text style={[styles.segmentText, type === 'income' && styles.segmentTextOn]}>
+            Income
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Name */}
+      <Text style={styles.label}>Name</Text>
+      <TextInput
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. Groceries"
+        placeholderTextColor="#7b7b7b"
+        style={styles.input}
+        autoCorrect={false}
+        returnKeyType="next"
+      />
+
+      {/* Amount */}
+      <Text style={styles.label}>Amount</Text>
+      <TextInput
+        value={amountText}
+        onChangeText={setAmountText}
+        placeholder="e.g. 12.50"
+        placeholderTextColor="#7b7b7b"
+        style={styles.input}
+        keyboardType={Platform.select({ ios: 'decimal-pad', android: 'numeric' }) as any}
+        autoCorrect={false}
+      />
+
+      {/* Date */}
+      <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
+      <TextInput
+        value={date}
+        onChangeText={setDate}
+        placeholder={todayISO()}
+        placeholderTextColor="#7b7b7b"
+        style={styles.input}
+        autoCorrect={false}
+      />
+
+      {/* Account (lightweight cycle) */}
+      <Text style={styles.label}>Account</Text>
+      <Pressable style={styles.accountPick} onPress={cycleAccount}>
+        <Text style={styles.accountPickText}>
+          {accountName || (accounts.length ? 'Tap to pick account' : 'No accounts yet')}
+        </Text>
+        {!!accounts.length && (
+          <Text style={styles.accountPickHint}>Tap to cycle</Text>
+        )}
+      </Pressable>
+
+      {/* Category */}
+      <Text style={styles.label}>Category (optional)</Text>
+      <TextInput
+        value={category}
+        onChangeText={setCategory}
+        placeholder="e.g. Food"
+        placeholderTextColor="#7b7b7b"
+        style={styles.input}
+        autoCorrect={false}
+      />
+
+      {/* Description */}
+      <Text style={styles.label}>Description (optional)</Text>
+      <TextInput
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Notes…"
+        placeholderTextColor="#7b7b7b"
+        style={[styles.input, styles.inputMultiline]}
+        multiline
+      />
+
+      {/* Save disabled state + hint */}
+      {!canSave && (
+        <View style={styles.validationBox}>
+          <Text style={styles.validationText}>{validation.reason}</Text>
         </View>
+      )}
 
-        {/* Optional */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Optional</Text>
+      <Pressable
+        onPress={handleSave}
+        style={[styles.primaryBtn, !canSave && styles.primaryBtnDisabled]}
+        disabled={!canSave}
+      >
+        <Text style={styles.primaryBtnText}>
+          {isEditing ? 'Save changes' : 'Save transaction'}
+        </Text>
+      </Pressable>
 
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. Grocery shop"
-            placeholderTextColor="#6B7280"
-          />
-
-          <Text style={styles.label}>Category</Text>
-          <TextInput
-            style={styles.input}
-            value={category}
-            onChangeText={setCategory}
-            placeholder="e.g. Groceries"
-            placeholderTextColor="#6B7280"
-          />
-
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.inputMultiline]}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Optional notes…"
-            placeholderTextColor="#6B7280"
-            multiline
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Save */}
-        <View style={styles.card}>
-          <Pressable
-            style={[styles.btnPrimary, !canSave && styles.btnDisabled]}
-            onPress={handleSave}
-            disabled={!canSave}
-          >
-            <Text style={styles.btnPrimaryText}>{existing ? 'Save changes' : 'Add payment'}</Text>
-          </Pressable>
-
-          {!canSave ? (
-            <Text style={styles.hint}>Required: account, valid date, positive amount.</Text>
-          ) : null}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+      {/* Delete only when editing */}
+      {isEditing && (
+        <Pressable onPress={handleDelete} style={styles.dangerBtn}>
+          <Text style={styles.dangerBtnText}>Delete transaction</Text>
+        </Pressable>
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#020617' },
-  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
+  container: { padding: 16, gap: 10 },
 
-  headerRow: {
+  segmentWrap: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    columnGap: 12,
-    marginBottom: 10,
-  },
-  h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4 },
-
-  headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
-  headerPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
-  },
-  dangerPill: { borderColor: '#F97373' },
-  headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
-
-  card: {
-    backgroundColor: '#0B1020',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-  },
-  cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  emptyText: { color: '#9CA3AF', marginTop: 10 },
-
-  accountPickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 10,
-    marginTop: 12,
-  },
-  pickerValue: { color: '#F9FAFB', fontWeight: '800', fontSize: 16 },
-  pickerSub: { color: '#9CA3AF', marginTop: 4, fontSize: 12 },
-
-  smallBtn: {
-    width: 44,
-    height: 40,
+    borderColor: '#2a2a2a',
     borderRadius: 12,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 6,
   },
-  smallBtnText: { color: '#BFDBFE', fontWeight: '900', fontSize: 14 },
-
-  pillsRow: { flexDirection: 'row', columnGap: 8, marginTop: 10 },
-  pill: {
+  segmentBtn: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    paddingVertical: 12,
     alignItems: 'center',
+    backgroundColor: '#111',
   },
-  pillActive: { borderColor: '#93C5FD' },
-  pillText: { color: '#E5E7EB', fontWeight: '800' },
-  pillTextActive: { color: '#BFDBFE' },
+  segmentOn: { backgroundColor: '#1f2a44' },
+  segmentText: { color: '#cfcfcf', fontWeight: '700' },
+  segmentTextOn: { color: '#ffffff' },
 
-  label: { color: '#9CA3AF', marginTop: 12, fontWeight: '700' },
+  label: { color: '#cfcfcf', marginTop: 4, marginBottom: 4, fontWeight: '700' },
   input: {
-    marginTop: 8,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: '#2a2a2a',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: '#F9FAFB',
-  },
-  inputMultiline: { minHeight: 90 },
-
-  hint: { color: '#9CA3AF', marginTop: 10, fontSize: 12 },
-
-  btnPrimary: {
     paddingVertical: 12,
+    color: '#fff',
+    backgroundColor: '#111',
+  },
+  inputMultiline: { minHeight: 90, textAlignVertical: 'top' },
+
+  accountPick: {
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#111',
+  },
+  accountPickText: { color: '#fff', fontWeight: '700' },
+  accountPickHint: { color: '#7b7b7b', marginTop: 4 },
+
+  validationBox: {
+    borderWidth: 1,
+    borderColor: '#3a2a2a',
+    backgroundColor: '#160f0f',
+    padding: 10,
+    borderRadius: 12,
+  },
+  validationText: { color: '#ffb4b4', fontWeight: '600' },
+
+  primaryBtn: {
+    marginTop: 6,
+    backgroundColor: '#2b6ef3',
+    paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: '#2563EB',
     alignItems: 'center',
   },
-  btnDisabled: { opacity: 0.5 },
-  btnPrimaryText: { color: 'white', fontWeight: '900' },
+  primaryBtnDisabled: { opacity: 0.45 },
+  primaryBtnText: { color: '#fff', fontWeight: '800' },
+
+  dangerBtn: {
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#5a2a2a',
+    backgroundColor: '#140b0b',
+  },
+  dangerBtnText: { color: '#ffb4b4', fontWeight: '800' },
 });
