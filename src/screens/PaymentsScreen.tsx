@@ -1,82 +1,356 @@
-// src/screens/Payments.tsx
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Platform } from 'react-native';
+// src/screens/PaymentsScreen.tsx
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  TextInput,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useApp } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
-import { useApp } from '../state/AppContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
 
+type FilterMode = 'all' | 'income' | 'expense';
+
+function formatGBP(n: number) {
+  const v = Number(n) || 0;
+  try {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
+  } catch {
+    const sign = v < 0 ? '-' : '';
+    const abs = Math.abs(v);
+    return `${sign}£${abs.toFixed(2)}`;
+  }
+}
+
+function parseISODate(s?: string) {
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function dateKey(d: Date) {
+  // YYYY-MM-DD
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function prettyDateHeading(d: Date) {
+  // Simple: "Mon 23 Dec 2025"
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(d);
+  } catch {
+    return d.toDateString();
+  }
+}
+
 export default function PaymentsScreen({ navigation }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
+  const accounts = state.accounts || [];
   const txs = state.transactions || [];
-  const payments = useMemo(() => {
-    const list = txs.filter(t => t.type !== 'income');
-    list.sort((a,b) => (b.date ? Date.parse(b.date) : 0) - (a.date ? Date.parse(a.date) : 0));
-    return list;
-  }, [txs]);
-  const total = payments.reduce((s,t)=> s + (+t.amount || 0), 0);
+
+  const [query, setQuery] = useState('');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
+
+  const accountNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const a of accounts) map[a.id] = a.name || 'Account';
+    return map;
+  }, [accounts]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+
+    return txs
+      .filter((t) => {
+        if (filterMode !== 'all' && t.type !== filterMode) return false;
+        if (!q) return true;
+
+        const haystack = [
+          t.name,
+          t.description,
+          t.category,
+          accountNameById[t.accountId],
+          t.type,
+          t.date,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return haystack.includes(q);
+      })
+      .map((t) => {
+        const d = parseISODate(t.date) || new Date(0);
+        return { t, d };
+      })
+      .sort((a, b) => b.d.getTime() - a.d.getTime());
+  }, [txs, query, filterMode, accountNameById]);
+
+  const grouped = useMemo(() => {
+    const groups: Record<string, { date: Date; items: typeof filtered }> = {};
+
+    for (const item of filtered) {
+      const key = dateKey(item.d);
+      if (!groups[key]) groups[key] = { date: item.d, items: [] };
+      groups[key].items.push(item);
+    }
+
+    const keys = Object.keys(groups).sort((a, b) => (a > b ? -1 : 1));
+    return keys.map((k) => groups[k]);
+  }, [filtered]);
+
+  const onAdd = () => {
+    // ✅ Adjust if your add screen route is different (e.g. 'PaymentForm')
+    navigation.navigate('PaymentForm' as any);
+  };
+
+  const onOpen = (id: string) => {
+    // ✅ Adjust if your editor screen route differs
+    navigation.navigate('PaymentEditor' as any, { id });
+  };
+
+  const onDelete = (id: string) => {
+    Alert.alert('Delete transaction?', 'This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => actions.deleteTransaction(id),
+      },
+    ]);
+  };
 
   return (
-    <View style={styles.wrap}>
-      <Text style={styles.h1}>Payments</Text>
-      <Text style={styles.subtle}>Your recent spending and outgoings.</Text>
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total spending</Text>
-          <Text style={[styles.summaryValue, {color:'#F97373'}]}>-£{total.toFixed(2)}</Text>
+    <SafeAreaView style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.wrap}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.h1}>Payments</Text>
+            <Text style={styles.subtle}>Browse, search and edit transactions</Text>
+          </View>
+
+          <View style={styles.headerPillsRow}>
+            <Pressable style={styles.headerPill} onPress={onAdd} hitSlop={8}>
+              <Text style={styles.headerPillText}>+ Add</Text>
+            </Pressable>
+
+            <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
+              <Text style={styles.headerPillText}>Back</Text>
+            </Pressable>
+          </View>
         </View>
-        <Pressable
-          style={styles.addButton}
-          onPress={() => navigation.navigate('TxnEditor', { type: 'expense' })}
-        >
-          <Text style={styles.addButtonText}>Add payment</Text>
-        </Pressable>
-      </View>
-      {payments.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>No payments yet</Text>
-          <Text style={styles.emptyText}>Add your first expense with the button above.</Text>
+
+        {/* Search */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Search</Text>
+          <TextInput
+            style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search name, category, description, account…"
+            placeholderTextColor="#6B7280"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+
+          {/* Filter pills */}
+          <View style={{ flexDirection: 'row', columnGap: 8, marginTop: 10 }}>
+            <Pressable
+              style={[styles.pill, filterMode === 'all' && styles.pillActive]}
+              onPress={() => setFilterMode('all')}
+            >
+              <Text style={[styles.pillText, filterMode === 'all' && styles.pillTextActive]}>
+                All
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.pill, filterMode === 'income' && styles.pillActive]}
+              onPress={() => setFilterMode('income')}
+            >
+              <Text style={[styles.pillText, filterMode === 'income' && styles.pillTextActive]}>
+                Income
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.pill, filterMode === 'expense' && styles.pillActive]}
+              onPress={() => setFilterMode('expense')}
+            >
+              <Text style={[styles.pillText, filterMode === 'expense' && styles.pillTextActive]}>
+                Expense
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={[styles.subtle, { marginTop: 10 }]}>
+            Showing {filtered.length} transaction{filtered.length === 1 ? '' : 's'}
+          </Text>
         </View>
-      ) : (
-        <FlatList
-          data={payments}
-          keyExtractor={(t) => t.id}
-          renderItem={({ item }) => (
-            <View style={styles.row}>
-              <View style={{flex:1}}>
-                <Text style={styles.rowLabel}>{item.category || 'Uncategorised'}</Text>
-                {item.description ? (
-                  <Text style={styles.rowNote}>{item.description}</Text>
-                ) : null}
-                {item.date ? <Text style={styles.rowMeta}>{item.date}</Text> : null}
-              </View>
-              <Text style={styles.rowAmount}>-£{Number(item.amount||0).toFixed(2)}</Text>
+
+        {/* List */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Transactions</Text>
+          </View>
+
+          {filtered.length === 0 ? (
+            <View style={{ paddingVertical: 8 }}>
+              <Text style={styles.emptyTitle}>No results</Text>
+              <Text style={styles.emptySub}>
+                Try a different search, or add your first transaction.
+              </Text>
+
+              <Pressable style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]} onPress={onAdd}>
+                <Text style={styles.headerPillText}>+ Add payment</Text>
+              </Pressable>
             </View>
+          ) : (
+            grouped.map((g) => (
+              <View key={dateKey(g.date)} style={{ marginTop: 10 }}>
+                <Text style={styles.groupHeading}>{prettyDateHeading(g.date)}</Text>
+
+                {g.items.map(({ t }) => (
+                  <Pressable
+                    key={t.id}
+                    style={styles.txRow}
+                    onPress={() => onOpen(t.id)}
+                    onLongPress={() => onDelete(t.id)}
+                    hitSlop={6}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.txTitle} numberOfLines={1}>
+                        {t.name || t.category || 'Transaction'}
+                      </Text>
+                      <Text style={styles.txMeta} numberOfLines={1}>
+                        {accountNameById[t.accountId] || 'Account'}
+                        {t.category ? ` • ${t.category}` : ''}
+                        {t.description ? ` • ${t.description}` : ''}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={[styles.txAmount, t.type === 'income' ? styles.positiveText : styles.negativeText]}>
+                        {t.type === 'income' ? '+' : '-'}
+                        {formatGBP(Math.abs(Number(t.amount) || 0))}
+                      </Text>
+                      <Text style={styles.chevron}>›</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ))
           )}
-          contentContainerStyle={{paddingBottom:24}}
-        />
-      )}
-    </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap:{flex:1, backgroundColor:'#020617', paddingHorizontal:16, paddingTop: Platform.OS==='ios'?56:24},
-  h1:{color:'#fff', fontSize:24, fontWeight:'800', marginBottom:4},
-  subtle:{color:'#9CA3AF', marginBottom:16},
-  summaryRow:{flexDirection:'row', alignItems:'stretch', marginBottom:12},
-  summaryCard:{flex:1, padding:12, borderRadius:12, backgroundColor:'#020617', borderWidth:1, borderColor:'#1F2937', marginRight:8},
-  summaryLabel:{color:'#9CA3AF', fontSize:12, marginBottom:4},
-  summaryValue:{color:'#F9FAFB', fontSize:16, fontWeight:'800'},
-  addButton:{justifyContent:'center', paddingHorizontal:14, borderRadius:12, borderWidth:1, borderColor:'#1F2937', backgroundColor:'#0F172A'},
-  addButtonText:{color:'#E5E7EB', fontWeight:'800'},
-  emptyBox:{marginTop:8, marginBottom:16, padding:16, borderRadius:12, backgroundColor:'#0F172A'},
-  emptyTitle:{color:'#E5E7EB', fontSize:16, fontWeight:'700', marginBottom:4},
-  emptyText:{color:'#9CA3AF', fontSize:14},
-  row:{flexDirection:'row', alignItems:'center', paddingVertical:10, borderBottomWidth:1, borderBottomColor:'#111827'},
-  rowLabel:{color:'#F9FAFB', fontSize:14, fontWeight:'700'},
-  rowNote:{color:'#9CA3AF', fontSize:12},
-  rowMeta:{color:'#6B7280', fontSize:11, marginTop:2},
-  rowAmount:{fontSize:15, fontWeight:'800', marginLeft:12, color:'#F97373'},
+  screen: { flex: 1, backgroundColor: '#020617' },
+  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    columnGap: 12,
+    marginBottom: 10,
+  },
+  h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginTop: 4 },
+
+  headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
+  headerPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4B5563',
+    backgroundColor: '#0B1020',
+  },
+  headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
+
+  card: {
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+
+  searchInput: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#F9FAFB',
+  },
+
+  pill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
+  },
+  pillActive: {
+    borderColor: '#93C5FD',
+  },
+  pillText: { color: '#E5E7EB', fontWeight: '700', fontSize: 13 },
+  pillTextActive: { color: '#BFDBFE' },
+
+  groupHeading: {
+    color: '#E5E7EB',
+    fontWeight: '800',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1F2937',
+  },
+  txTitle: { color: '#F9FAFB', fontWeight: '800' },
+  txMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+
+  txAmount: { fontWeight: '800' },
+  positiveText: { color: '#22C55E' },
+  negativeText: { color: '#F97373' },
+
+  chevron: { color: '#93C5FD', fontSize: 22, marginTop: 2 },
+
+  emptyTitle: { color: '#F9FAFB', fontWeight: '900', fontSize: 16, marginTop: 4 },
+  emptySub: { color: '#9CA3AF', marginTop: 6 },
 });
