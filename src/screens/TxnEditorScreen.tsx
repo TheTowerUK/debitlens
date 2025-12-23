@@ -219,7 +219,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
  
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={styles.wrap}
       keyboardShouldPersistTaps="handled"
     >
       {/* Type toggle */}
@@ -338,83 +338,95 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#020617',
-  },
-  container: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 28,
-  },
+  screen: { flex: 1, backgroundColor: '#020617' },
+  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
+
+  // --- Type toggle (matches pill styling) ---
   segmentWrap: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 6,
+    columnGap: 8,
+    marginBottom: 14,
   },
   segmentBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: '#111',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
   },
-  segmentOn: { backgroundColor: '#1f2a44' },
-  segmentText: { color: '#cfcfcf', fontWeight: '700' },
-  segmentTextOn: { color: '#ffffff' },
+  segmentOn: {
+    borderColor: '#93C5FD',
+  },
+  segmentText: { color: '#E5E7EB', fontWeight: '800', fontSize: 13 },
+  segmentTextOn: { color: '#BFDBFE' },
 
-  label: { color: '#cfcfcf', marginTop: 4, marginBottom: 4, fontWeight: '700' },
+  // --- Form ---
+  label: {
+    color: '#E5E7EB',
+    fontWeight: '800',
+    marginBottom: 6,
+    marginTop: 4,
+  },
+
   input: {
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
     borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: '#fff',
-    backgroundColor: '#111',
+    paddingVertical: 10,
+    color: '#F9FAFB',
+    marginBottom: 12,
   },
   inputMultiline: { minHeight: 90, textAlignVertical: 'top' },
 
+  // --- Account picker (looks like a card/input) ---
   accountPick: {
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: '#1F2937',
+    backgroundColor: '#111827',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    backgroundColor: '#111',
+    marginBottom: 12,
   },
-  accountPickText: { color: '#fff', fontWeight: '700' },
-  accountPickHint: { color: '#7b7b7b', marginTop: 4 },
+  accountPickText: { color: '#F9FAFB', fontWeight: '800' },
+  accountPickHint: { color: '#9CA3AF', marginTop: 4 },
 
+  // --- Validation ---
   validationBox: {
     borderWidth: 1,
-    borderColor: '#3a2a2a',
-    backgroundColor: '#160f0f',
-    padding: 10,
+    borderColor: '#1F2937',
+    backgroundColor: '#0B1020',
+    padding: 12,
     borderRadius: 12,
+    marginBottom: 12,
   },
-  validationText: { color: '#ffb4b4', fontWeight: '600' },
+  validationText: { color: '#F97373', fontWeight: '800' },
 
+  // --- Primary / danger buttons (match card tone) ---
   primaryBtn: {
-    marginTop: 6,
-    backgroundColor: '#2b6ef3',
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
     paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  primaryBtnDisabled: { opacity: 0.45 },
-  primaryBtnText: { color: '#fff', fontWeight: '800' },
-
-  dangerBtn: {
-    marginTop: 10,
-    paddingVertical: 12,
-    borderRadius: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#5a2a2a',
-    backgroundColor: '#140b0b',
+    borderColor: '#1F2937',
+    marginTop: 4,
   },
-  dangerBtnText: { color: '#ffb4b4', fontWeight: '800' },
+  primaryBtnDisabled: { opacity: 0.5 },
+  primaryBtnText: { color: '#E5E7EB', fontWeight: '900' },
+
+  dangerBtn: {
+    marginTop: 12,
+    backgroundColor: '#0B1020',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  dangerBtnText: { color: '#F97373', fontWeight: '900' },
 });
+
