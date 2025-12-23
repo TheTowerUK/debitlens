@@ -9,8 +9,7 @@ type Status = 'ok' | 'warning' | 'exceeded';
 
 type BudgetLike = {
   id: string;
-  name?: string;
-  category?: string;
+  category: string;
   limit: number;
 };
 
@@ -44,11 +43,20 @@ function monthLabel(d: Date) {
     return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
   } catch {
     const months = [
-      'January','February','March','April','May','June',
-      'July','August','September','October','November','December'
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return `${months[d.getMonth()]} ${d.getFullYear()}`;
   }
+}
+
+const normCat = (s?: string) => (s || 'Uncategorised').trim().toLowerCase();
+
+function getBudgetStatus(spent: number, limit: number): Status {
+  if (limit <= 0) return 'ok';
+  if (spent >= limit) return 'exceeded';
+  if (spent >= limit * 0.8) return 'warning';
+  return 'ok';
 }
 
 export default function BudgetsScreen({ navigation }: any) {
@@ -71,57 +79,51 @@ export default function BudgetsScreen({ navigation }: any) {
     const map: Record<string, number> = {};
 
     for (const t of txs) {
-      if (t.type !== 'expense') continue;
-      if (!t.date) continue;
-
+      if (!t?.date) continue;
       const d = new Date(t.date);
       if (isNaN(d.getTime())) continue;
       if (d < start || d >= end) continue;
 
-      const catRaw = (t.category || '').trim();
-      const cat = catRaw ? catRaw : 'Uncategorised';
+      if (t.type !== 'expense') continue;
 
-      const amt = Number(t.amount) || 0;
-      map[cat] = (map[cat] || 0) + amt;
+      const key = normCat(t.category);
+      map[key] = (map[key] || 0) + Math.abs(Number(t.amount) || 0);
     }
+
     return map;
   }, [txs, monthRange]);
 
   // Build per-budget view model
   const budgetRows = useMemo(() => {
-    const warningThreshold = 0.15; // <= 15% remaining
-
     const rows = budgets.map((b) => {
-      const cat = (b.category || 'Uncategorised').trim() || 'Uncategorised';
-      const limit = Number((b as any).limit) || 0;
-      const spent = Number(spentByCategory[cat]) || 0;
+      const category = (b.category || 'Uncategorised').trim() || 'Uncategorised';
+      const limit = Number(b.limit) || 0;
+
+      const key = normCat(category);
+      const spent = spentByCategory[key] || 0;
+
       const remaining = limit - spent;
-
-      let status: Status = 'ok';
-      if (limit > 0 && remaining < 0) status = 'exceeded';
-      else if (limit > 0 && remaining / limit <= warningThreshold) status = 'warning';
-
-      const usedPct = limit > 0 ? spent / limit : 0;
+      const status = getBudgetStatus(spent, limit);
+      const progress = clamp01(limit > 0 ? spent / limit : 0);
 
       return {
         id: b.id,
-        name: (b.name || cat).trim() || cat,
-        category: cat,
+        category,
         limit,
         spent,
         remaining,
         status,
-        usedPct: clamp01(usedPct),
+        progress,
       };
     });
 
     if (sortMode === 'a-z') {
-      rows.sort((a, b) => a.name.localeCompare(b.name));
+      rows.sort((a, b) => a.category.localeCompare(b.category));
     } else if (sortMode === 'largestRemaining') {
       rows.sort((a, b) => b.remaining - a.remaining);
     } else {
       const rank = (s: Status) => (s === 'exceeded' ? 0 : s === 'warning' ? 1 : 2);
-      rows.sort((a, b) => rank(a.status) - rank(b.status) || b.usedPct - a.usedPct);
+      rows.sort((a, b) => rank(a.status) - rank(b.status) || b.progress - a.progress);
     }
 
     return rows;
@@ -155,11 +157,11 @@ export default function BudgetsScreen({ navigation }: any) {
           </View>
 
           <View style={styles.headerPillsRow}>
-            <Pressable style={styles.headerPill} onPress={onAddBudget}>
+            <Pressable style={styles.headerPill} onPress={onAddBudget} hitSlop={8}>
               <Text style={styles.headerPillText}>+ Add</Text>
             </Pressable>
 
-            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()}>
+            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()} hitSlop={8}>
               <Text style={styles.headerPillText}>Back</Text>
             </Pressable>
           </View>
@@ -167,15 +169,27 @@ export default function BudgetsScreen({ navigation }: any) {
 
         {/* Month navigation */}
         <View style={styles.headerPillsRow}>
-          <Pressable style={styles.headerPill} onPress={() => setActiveMonth((m) => addMonths(m, -1))}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth((m) => addMonths(m, -1))}
+            hitSlop={8}
+          >
             <Text style={styles.headerPillText}>◀ Prev</Text>
           </Pressable>
 
-          <Pressable style={styles.headerPill} onPress={() => setActiveMonth(() => startOfMonth(new Date()))}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth(() => startOfMonth(new Date()))}
+            hitSlop={8}
+          >
             <Text style={styles.headerPillText}>This month</Text>
           </Pressable>
 
-          <Pressable style={styles.headerPill} onPress={() => setActiveMonth((m) => addMonths(m, 1))}>
+          <Pressable
+            style={styles.headerPill}
+            onPress={() => setActiveMonth((m) => addMonths(m, 1))}
+            hitSlop={8}
+          >
             <Text style={styles.headerPillText}>Next ▶</Text>
           </Pressable>
         </View>
@@ -199,6 +213,7 @@ export default function BudgetsScreen({ navigation }: any) {
               <Pressable
                 style={[styles.headerPill, { marginTop: 10, alignSelf: 'flex-start' }]}
                 onPress={onAddBudget}
+                hitSlop={8}
               >
                 <Text style={styles.headerPillText}>+ Add budget</Text>
               </Pressable>
@@ -225,6 +240,7 @@ export default function BudgetsScreen({ navigation }: any) {
                   m === 'status' ? 'a-z' : m === 'a-z' ? 'largestRemaining' : 'status'
                 )
               }
+              hitSlop={8}
             >
               <Text style={styles.smallBtnText}>
                 Sort:{' '}
@@ -241,58 +257,54 @@ export default function BudgetsScreen({ navigation }: any) {
             <Text style={styles.emptyText}>Create a budget to start tracking spending.</Text>
           ) : (
             budgetRows.map((r) => (
-              <View key={r.id} style={styles.budgetRow}>
-                <View style={styles.budgetTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.budgetName} numberOfLines={1}>
-                      {r.name}
-                    </Text>
-                    <Text style={styles.budgetMeta} numberOfLines={1}>
-                      {r.category} • Limit {formatGBP(r.limit)}
-                    </Text>
-                  </View>
+              <Pressable
+                key={r.id}
+                style={styles.budgetRow}
+                onPress={() => onEditBudget(r.id)}
+                hitSlop={6}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.budgetCategory} numberOfLines={1}>
+                    {r.category}
+                  </Text>
 
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.budgetAmount}>Spent {formatGBP(r.spent)}</Text>
+                  <Text style={styles.budgetMeta} numberOfLines={1}>
+                    Spent {formatGBP(r.spent)} · Limit {formatGBP(r.limit)}
+                  </Text>
 
-                    <Text
-                      style={[
-                        styles.budgetMeta,
-                        r.status === 'exceeded'
-                          ? styles.negativeText
-                          : r.status === 'warning'
-                          ? styles.warningText
-                          : styles.positiveText,
-                      ]}
-                    >
-                      {r.status === 'exceeded'
-                        ? `${formatGBP(-r.remaining)} over`
-                        : `${formatGBP(r.remaining)} left`}
-                    </Text>
-
-                    <Pressable
-                      style={[styles.pillSmall, { marginTop: 8 }]}
-                      onPress={() => onEditBudget(r.id)}
-                    >
-                      <Text style={styles.pillSmallText}>Edit</Text>
-                    </Pressable>
-                  </View>
-                </View>
-
-                <View style={styles.barTrack}>
-                  <View
+                  <Text
                     style={[
-                      styles.barFill,
+                      styles.budgetRemaining,
                       r.status === 'exceeded'
-                        ? styles.barFillExceeded
+                        ? styles.dangerText
                         : r.status === 'warning'
-                        ? styles.barFillWarning
-                        : styles.barFillOk,
-                      { width: `${Math.round(r.usedPct * 100)}%` },
+                        ? styles.warnText
+                        : styles.okText,
                     ]}
-                  />
+                    numberOfLines={1}
+                  >
+                    {r.status === 'exceeded'
+                      ? `Exceeded by ${formatGBP(r.spent - r.limit)}`
+                      : `Remaining ${formatGBP(r.limit - r.spent)}`}
+                  </Text>
+
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        r.status === 'exceeded'
+                          ? styles.progressFillExceeded
+                          : r.status === 'warning'
+                          ? styles.progressFillWarning
+                          : styles.progressFillOk,
+                        { width: `${Math.round(r.progress * 100)}%` },
+                      ]}
+                    />
+                  </View>
                 </View>
-              </View>
+
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
             ))
           )}
         </View>
@@ -303,7 +315,7 @@ export default function BudgetsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
-  wrap: { padding: 16 },
+  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
 
   headerRow: {
     flexDirection: 'row',
@@ -370,25 +382,41 @@ const styles = StyleSheet.create({
 
   emptyText: { color: '#9CA3AF', marginTop: 10 },
 
+  // Budget row (polished)
   budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#1F2937',
     marginTop: 8,
   },
-  budgetTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    columnGap: 12,
-  },
-  budgetName: { color: '#F9FAFB', fontWeight: '800' },
+  budgetCategory: { color: '#F9FAFB', fontWeight: '800' },
   budgetMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
-  budgetAmount: { color: '#E5E7EB', fontWeight: '700' },
+  budgetRemaining: { marginTop: 6, fontWeight: '700' },
 
-  positiveText: { color: '#22C55E' },
-  negativeText: { color: '#F97373' },
-  warningText: { color: '#FBBF24' },
+  okText: { color: '#22C55E' },
+  warnText: { color: '#FBBF24' },
+  dangerText: { color: '#F97373' },
+
+  progressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#111827',
+    marginTop: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  progressFill: {
+    height: 8,
+    borderRadius: 999,
+  },
+  progressFillOk: { backgroundColor: '#93C5FD' },
+  progressFillWarning: { backgroundColor: '#FBBF24' },
+  progressFillExceeded: { backgroundColor: '#F97373' },
+
+  chevron: { color: '#93C5FD', fontSize: 22, paddingLeft: 10 },
 
   badge: {
     minWidth: 22,
@@ -400,32 +428,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#B91C1C',
   },
   badgeText: { color: 'white', fontWeight: '800', fontSize: 12 },
-
-  barTrack: {
-    height: 8,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#1F2937',
-    marginTop: 10,
-  },
-  barFill: { height: 8, borderRadius: 999 },
-  barFillOk: { backgroundColor: '#93C5FD' },
-  barFillWarning: { backgroundColor: '#FBBF24' },
-  barFillExceeded: { backgroundColor: '#F97373' },
-
-  pillSmall: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
-  },
-  pillSmallText: {
-    color: '#E5E7EB',
-    fontSize: 12,
-    fontWeight: '700',
-  },
 });
