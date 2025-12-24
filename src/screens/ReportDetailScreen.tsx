@@ -161,30 +161,38 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
       </View>
 
       {/* Month switcher (only when period=month) */}
-      {period === 'month' && effectiveMonthKey && (
+      {period === 'month' && effectiveMonthKey ? (
         <View style={styles.headerPillsRow}>
           <Pressable
             style={styles.headerPill}
-            onPress={() => navigation.setParams({ monthKey: addMonths(effectiveMonthKey, -1) })}
+            onPress={() =>
+              navigation.setParams({ monthKey: addMonths(effectiveMonthKey, -1) })
+            }
           >
             <Text style={styles.headerPillText}>◀ Prev</Text>
           </Pressable>
 
           <Pressable
             style={styles.headerPill}
-            onPress={() => navigation.setParams({ monthKey: monthKeyFromDate(new Date()) })}
+            onPress={() =>
+              navigation.setParams({ monthKey: monthKeyFromDate(new Date()) })
+            }
           >
             <Text style={styles.headerPillText}>This month</Text>
           </Pressable>
 
           <Pressable
             style={styles.headerPill}
-            onPress={() => navigation.setParams({ monthKey: addMonths(effectiveMonthKey, 1) })}
+            onPress={() =>
+              navigation.setParams({ monthKey: addMonths(effectiveMonthKey, 1) })
+            }
           >
             <Text style={styles.headerPillText}>Next ▶</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
+
+
 
       {/* Summary */}
       <View style={styles.summaryCard}>
@@ -257,8 +265,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
 
                   <Text style={styles.txMeta}>
-                    {accountName || 'Account'}
-                    {dateLabel ? ` • ${dateLabel}` : ''}
+                    {(accountName || 'Account') + (dateLabel ? ` • ${dateLabel}` : '')}
                   </Text>
                 </View>
               </View>
@@ -266,6 +273,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
           })}
         </View>
       )}
+
     </ScrollView>
   );
 };
