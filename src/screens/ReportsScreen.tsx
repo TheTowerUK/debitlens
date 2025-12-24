@@ -36,15 +36,22 @@ function addMonths(d: Date, delta: number) {
 }
 function monthLabel(d: Date) {
   try {
-    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
+    return new Intl.DateTimeFormat('en-GB', {
+      month: 'long',
+      year: 'numeric',
+    }).format(d);
   } catch {
-    // fallback
     const months = [
-      'January','February','March','April','May','June',
-      'July','August','September','October','November','December'
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
     return `${months[d.getMonth()]} ${d.getFullYear()}`;
   }
+}
+function monthKeyFromDate(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`; // YYYY-MM
 }
 
 export default function ReportsScreen({ navigation }: any) {
@@ -52,9 +59,9 @@ export default function ReportsScreen({ navigation }: any) {
   const txs = state.transactions || [];
 
   const [sortMode, setSortMode] = useState<SortMode>('largest');
-
-  // ✅ Option C: selected month (read-only navigation)
   const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
+
+  const monthKey = useMemo(() => monthKeyFromDate(activeMonth), [activeMonth]);
 
   const monthRange = useMemo(() => {
     const start = startOfMonth(activeMonth);
@@ -62,7 +69,7 @@ export default function ReportsScreen({ navigation }: any) {
     return { start, end };
   }, [activeMonth]);
 
-  // ---- Monthly totals (read-only) ----
+  // ---- Monthly totals ----
   const monthSummary = useMemo(() => {
     const { start, end } = monthRange;
 
@@ -83,7 +90,39 @@ export default function ReportsScreen({ navigation }: any) {
     return { income, expense, net: income - expense };
   }, [txs, monthRange]);
 
-  // ---- spentByCategory (selected month, expenses only) ----
+  // ---- Category breakdown (selected month): income/expense/net ----
+  const categoryBreakdown = useMemo(() => {
+    const { start, end } = monthRange;
+    const map: Record<string, { expense: number; income: number }> = {};
+
+    for (const t of txs) {
+      if (!t.date) continue;
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+      if (d < start || d >= end) continue;
+
+      const key = (t.category || 'Uncategorised').trim() || 'Uncategorised';
+      if (!map[key]) map[key] = { expense: 0, income: 0 };
+
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'expense') map[key].expense += amt;
+      if (t.type === 'income') map[key].income += amt;
+    }
+
+    const rows = Object.entries(map).map(([categoryKey, v]) => ({
+      categoryKey,
+      expense: v.expense,
+      income: v.income,
+      net: v.income - v.expense,
+    }));
+
+    // Default sort: largest expense first (most useful)
+    rows.sort((a, b) => b.expense - a.expense);
+
+    return rows;
+  }, [txs, monthRange]);
+
+  // ---- Spent by category (expenses only) for bar chart ----
   const spentByCategory = useMemo(() => {
     const { start, end } = monthRange;
     const map: Record<string, number> = {};
@@ -106,7 +145,6 @@ export default function ReportsScreen({ navigation }: any) {
     return map;
   }, [txs, monthRange]);
 
-  // ---- UX polish derived data ----
   const totalSpent = useMemo(() => {
     return Object.values(spentByCategory || {}).reduce(
       (sum, v) => sum + (Number(v) || 0),
@@ -114,7 +152,7 @@ export default function ReportsScreen({ navigation }: any) {
     );
   }, [spentByCategory]);
 
-  const categoryRows = useMemo(() => {
+  const chartRows = useMemo(() => {
     const entries = Object.entries(spentByCategory || {})
       .map(([category, amount]) => ({
         category: category || 'Uncategorised',
@@ -148,15 +186,9 @@ export default function ReportsScreen({ navigation }: any) {
             <Text style={styles.h1}>Reports</Text>
             <Text style={styles.subtle}>{monthLabel(activeMonth)}</Text>
           </View>
-
-          <View style={styles.headerPillsRow}>
-            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()}>
-              <Text style={styles.headerPillText}>Back</Text>
-            </Pressable>
-          </View>
         </View>
 
-        {/* ✅ Option C: month nav pills */}
+        {/* Month nav pills */}
         <View style={styles.headerPillsRow}>
           <Pressable
             style={styles.headerPill}
@@ -178,6 +210,49 @@ export default function ReportsScreen({ navigation }: any) {
           >
             <Text style={styles.headerPillText}>Next ▶</Text>
           </Pressable>
+        </View>
+
+        {/* Category breakdown (drill-through) */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Category breakdown</Text>
+          <Text style={styles.subtle}>Tap a category to drill into transactions.</Text>
+
+          {categoryBreakdown.length === 0 ? (
+            <Text style={styles.emptyText}>No transactions in this month.</Text>
+          ) : (
+            categoryBreakdown.map((r) => (
+              <Pressable
+                key={r.categoryKey}
+                onPress={() =>
+                  navigation.navigate('ReportDetail', {
+                    categoryKey: r.categoryKey,
+                    period: 'month',
+                    monthKey, // YYYY-MM
+                  })
+                }
+                style={styles.txRow}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txTitle}>{r.categoryKey}</Text>
+                  <Text style={styles.txMeta}>
+                    Spent {formatGBP(r.expense)} • Income {formatGBP(r.income)}
+                  </Text>
+                </View>
+
+                <Text
+                  style={[
+                    styles.txAmount,
+                    r.net >= 0 ? styles.positiveText : styles.negativeText,
+                  ]}
+                >
+                  {r.net >= 0 ? '+' : '-'}
+                  {formatGBP(Math.abs(r.net))}
+                </Text>
+
+                <Text style={styles.chevron}>›</Text>
+              </Pressable>
+            ))
+          )}
         </View>
 
         {/* SUMMARY CARD */}
@@ -223,7 +298,7 @@ export default function ReportsScreen({ navigation }: any) {
           )}
         </View>
 
-        {/* CATEGORY CARD */}
+        {/* CATEGORY CARD (bar chart) */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Spending by category</Text>
@@ -240,7 +315,7 @@ export default function ReportsScreen({ navigation }: any) {
 
           {totalSpent <= 0 ? (
             <Text style={styles.emptyText}>No expenses this month (yet).</Text>
-          ) : categoryRows.length === 0 ? (
+          ) : chartRows.length === 0 ? (
             <Text style={styles.emptyText}>No categorised spending to display.</Text>
           ) : (
             <>
@@ -251,7 +326,7 @@ export default function ReportsScreen({ navigation }: any) {
                 </Text>
               </Text>
 
-              {categoryRows.map((r) => (
+              {chartRows.map((r) => (
                 <View key={r.category} style={styles.catRow}>
                   <View style={styles.catTopLine}>
                     <Text style={styles.upcomingTitle} numberOfLines={1}>
@@ -282,7 +357,7 @@ export default function ReportsScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#020617', // ✅ main app blue background
+    backgroundColor: '#020617',
   },
   wrap: {
     padding: 16,
@@ -405,6 +480,20 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 10,
   },
+
+  // Drill-through list row styling (matches your Payments style)
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1F2937',
+    marginTop: 8,
+  },
+  txTitle: { color: '#F9FAFB', fontWeight: '800' },
+  txMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  txAmount: { fontWeight: '800' },
+  chevron: { color: '#93C5FD', fontSize: 22, marginTop: 2 },
 
   catRow: {
     paddingVertical: 10,

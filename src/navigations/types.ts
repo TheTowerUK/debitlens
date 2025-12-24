@@ -15,7 +15,8 @@ export type RootStackParamList = {
 
   ReportDetail: {
     categoryKey: string;
-    period: 'thisMonth' | 'lastMonth' | 'allTime';
+    period: 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
+    monthKey?: string; // 'YYYY-MM' when period === 'month'
   };
 
   RecurringEditor:
