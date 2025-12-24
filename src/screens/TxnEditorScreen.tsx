@@ -212,7 +212,14 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         actions.addTransaction(payload);
       }
 
-      await persistLastAccount(accountId);
+      persistLastAccount(accountId); // fire-and-forget
+
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('Payments');
+      }
+
       navigation.goBack();
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Please try again.');
@@ -416,7 +423,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   validationText: { color: '#F97373', fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4, marginBottom: 12 },
+  subtle: { color: '#b1a76eff', marginTop: 4, marginBottom: 12 },
 
 
   // --- Primary / danger buttons (match card tone) ---
