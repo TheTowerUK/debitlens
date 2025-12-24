@@ -158,7 +158,7 @@ export default function PaymentEditorScreen({ navigation, route }: Props) {
         {/* Header */}
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>{title}</Text>
+            <Text style={styles.h1}>Payment Editor</Text>
             <Text style={styles.subtle}>
               {existing ? 'Update details and save' : 'Create a new transaction'}
             </Text>

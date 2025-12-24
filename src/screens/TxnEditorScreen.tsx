@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import { useLayoutEffect } from 'react';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'TxnEditor'>;
 
@@ -101,12 +102,55 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     };
   }, [accounts, accountId, isEditing, presetAccountId]);
 
+    const handleDelete = () => {
+    if (!isEditing || !editingTxn?.id) return;
+
+    Alert.alert(
+      'Delete transaction?',
+      'This can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            try {
+              
+              actions.deleteTransaction(editingTxn.id);
+              navigation.goBack();
+            } catch (e: any) {
+              Alert.alert('Delete failed', e?.message ?? 'Please try again.');
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   // ---- Keep screen title sensible ----
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const title = isEditing ? 'Edit Transaction' : 'Add Transaction';
+
     navigation.setOptions({
-      title: isEditing ? 'Edit transaction' : 'Add transaction',
+      title,
+      headerShown: true,
+      headerStyle: { backgroundColor: '#020617' },
+      headerTintColor: '#E5E7EB',
+      headerTitleStyle: { fontWeight: '800' },
+      headerBackVisible: true,
+
+      // Optional: header delete button for edit mode
+      headerRight: isEditing
+        ? () => (
+            <Pressable onPress={handleDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: '#F97373', fontWeight: '900' }}>Delete</Text>
+            </Pressable>
+          )
+        : undefined,
     });
-  }, [isEditing, navigation]);
+  }, [navigation, isEditing, handleDelete]);
+
 
   // ---- Validation + disabled save ----
   const amount = useMemo(() => toNumberLoose(amountText), [amountText]);
@@ -172,32 +216,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Please try again.');
     }
-  };
-
-  const handleDelete = () => {
-    if (!isEditing || !editingTxn?.id) return;
-
-    Alert.alert(
-      'Delete transaction?',
-      'This can’t be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            try {
-              
-              actions.deleteTransaction(editingTxn.id);
-              navigation.goBack();
-            } catch (e: any) {
-              Alert.alert('Delete failed', e?.message ?? 'Please try again.');
-            }
-          },
-        },
-      ],
-      { cancelable: true }
-    );
   };
 
   // Simple “picker” without adding dependencies:
@@ -326,13 +344,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           {isEditing ? 'Save changes' : 'Save transaction'}
         </Text>
       </Pressable>
-
-      {/* Delete only when editing */}
-      {isEditing && (
-        <Pressable onPress={handleDelete} style={styles.dangerBtn}>
-          <Text style={styles.dangerBtnText}>Delete transaction</Text>
-        </Pressable>
-      )}
     </ScrollView>
   );
 }
