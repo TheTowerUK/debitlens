@@ -157,7 +157,8 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
   const validation = useMemo(() => {
     const trimmedName = name.trim();
-    if (!trimmedName) return { ok: false, reason: 'Add a name' };
+    if (!trimmedName) return { ok: false, reason: 'Please enter a name to enable Save' };
+
 
     if (!accountId) return { ok: false, reason: 'Choose an account' };
 
