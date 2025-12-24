@@ -331,10 +331,9 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
       {/* Save disabled state + hint */}
       {!canSave && (
-        <View style={styles.validationBox}>
-          <Text style={styles.validationText}>{validation.reason}</Text>
-        </View>
+        <Text style={styles.subtle}>{validation.reason}</Text>
       )}
+
 
 
       <Pressable
@@ -417,6 +416,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   validationText: { color: '#F97373', fontWeight: '800' },
+  subtle: { color: '#9CA3AF', marginTop: 4, marginBottom: 12 },
+
 
   // --- Primary / danger buttons (match card tone) ---
   primaryBtn: {

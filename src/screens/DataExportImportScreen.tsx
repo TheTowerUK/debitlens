@@ -1136,7 +1136,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
           </Pressable>
         </View>
 
-        <Text style={styles.textBoxLabel}>Or paste CSV text here</Text>
+        <Text></Text>
+        <Text style={styles.textBoxLabel}>Or paste CSV text below. (Scroll down if Apply button is missing)</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline
