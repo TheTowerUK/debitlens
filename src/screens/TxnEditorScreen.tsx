@@ -341,8 +341,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         <Text style={styles.subtle}>{validation.reason}</Text>
       )}
 
-
-
       <Pressable
         onPress={handleSave}
         style={[styles.primaryBtn, !canSave && styles.primaryBtnDisabled]}
