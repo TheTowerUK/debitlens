@@ -20,6 +20,7 @@ import DataExportImportScreen from '../screens/DataExportImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
 import SplashAuthScreen from '../screens/SplashAuthScreen';
 import BudgetEditorScreen from '../screens/BudgetEditorScreen';
+import ReportDetailScreen from '../screens/ReportDetailScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -29,6 +30,12 @@ export type RootStackParamList = {
   AddAccount: undefined;
   Transfer: { fromAccountId?: string } | undefined;
   RecentActivity: undefined;
+
+  ReportDetail: {
+    categoryKey: string;
+    period: 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
+    monthKey?: string; // 'YYYY-MM' when period === 'month'
+  };
 
   TxnEditor:
     | {
@@ -89,7 +96,10 @@ export default function RootNavigator() {
       <Stack.Screen name="Reports" component={ReportsScreen} />
 
       <Stack.Screen name="DataExportImport" component={DataExportImportScreen} />
-      <Stack.Screen name="ImportCSV" component={ImportCsvScreen} />
+      <Stack.Screen name="ImportCSV" component={ImportCsvScreen} /> 
+      <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
+
+
     </Stack.Navigator>
   );
 }
