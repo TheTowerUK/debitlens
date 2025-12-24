@@ -336,6 +336,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         </View>
       )}
 
+
       <Pressable
         onPress={handleSave}
         style={[styles.primaryBtn, !canSave && styles.primaryBtnDisabled]}
