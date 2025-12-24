@@ -330,11 +330,11 @@ const RecurringScreen: React.FC = () => {
         const amountStr = `£${Number(r.amount).toFixed(2)}`;
         const freqStr = FREQUENCY_LABEL[r.frequency];
 
-        let extraStr = '';
+        let extraStr = null;
         if (isTransfer && r.fromAccountId && r.toAccountId) {
           const fromAcc = accounts.find((a: any) => a.id === r.fromAccountId);
           const toAcc = accounts.find((a: any) => a.id === r.toAccountId);
-          const fromName = fromAcc?.name || 'From';
+          const fromName = fromAcc?.name || <Text>From</Text>;
           const toName = toAcc?.name || 'To';
           extraStr = `Transfer ${fromName} → ${toName}`;
         } else if (r.type) {

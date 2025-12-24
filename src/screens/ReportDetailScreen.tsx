@@ -58,7 +58,7 @@ function formatGBP(n: number) {
       currency: 'GBP',
     }).format(v);
   } catch {
-    const sign = v < 0 ? '-' : '';
+    const sign = v < 0 ? '-' : null
     const abs = Math.abs(v);
     return `${sign}£${abs.toFixed(2)}`;
   }
@@ -107,7 +107,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   // ✅ Includes both income + expense to match Reports breakdown
   const filteredTxs = useMemo(() => {
     const { start, end } = range;
-    const cat = (categoryKey || '').trim();
+    const cat = (categoryKey || null).trim();
 
     return txs.filter((t) => {
       if (!t.date) return false;
@@ -223,7 +223,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
               {formatGBP(totals.net)}
             </Text>
             <Text style={styles.summarySub}>
-              {sortedTxs.length} transaction{sortedTxs.length === 1 ? '' : 's'} in this period
+              {sortedTxs.length} transaction{sortedTxs.length === 1 ? null: 's'} in this period
             </Text>
           </View>
           <View style={styles.summaryItem} />
@@ -246,8 +246,8 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
             const amt = Number(t.amount) || 0;
             const isIncome = t.type === 'income';
             const accountName = t.accountId ? accountNameById.get(t.accountId) : undefined;
-            const note = t.description || '';
-            const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : '';
+            const note = t.description || null;
+            const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : null;
 
             return (
               <View key={t.id} style={styles.txRow}>
@@ -265,7 +265,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
                   {note ? <Text style={styles.txNote}>{note}</Text> : null}
 
                   <Text style={styles.txMeta}>
-                    {(accountName || 'Account') + (dateLabel ? ` • ${dateLabel}` : '')}
+                    {(accountName || 'Account') + (dateLabel ? ` • ${dateLabel}` : null)}
                   </Text>
                 </View>
               </View>
