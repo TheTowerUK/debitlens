@@ -24,7 +24,6 @@ import { TransactionList } from '../components/reports/TransactionList';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;
 
-// Helps silence “Text string 'month'...” watcher in some setups
 const PERIOD_MONTH: 'month' = 'month';
 
 const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
@@ -64,36 +63,38 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const monthSwitcherVisible = period === PERIOD_MONTH;
 
   return (
-<View style={styles.safeWrap}>
-  <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      {/* Header row */}
-      <View style={styles.headerRow}>
-        <Pressable onPress={onBack} style={styles.backBtn}>
-          <Text style={styles.backText}>{'‹'} Back</Text>
-        </Pressable>
+    <View style={styles.safeWrap}>
+      <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+        {/* Header row */}
+        <View style={styles.headerRow}>
+          <Pressable onPress={onBack} style={styles.backBtn}>
+            <Text style={styles.backText}>{'‹'} Back</Text>
+          </Pressable>
 
-        <View style={{ flex: 1 }}>
-          <Text style={styles.h1}>{title}</Text>
-          <Text style={styles.subtle}>Period: {label}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.h1}>{title}</Text>
+            <Text style={styles.subtle}>Period: {label}</Text>
+          </View>
         </View>
-      </View>
 
-      {/* Month switcher */}
-      <MonthSwitcher
-        visible={monthSwitcherVisible}
-        monthKey={effectiveMonthKey || ''}
-        onChange={onChangeMonthKey}
-        styles={styles}
-      />
+        {/* Month switcher (props match your component contract) */}
+        <MonthSwitcher
+          visible={monthSwitcherVisible}
+          monthKey={effectiveMonthKey || ''}
+          onChange={onChangeMonthKey}
+          styles={styles}
+          // if your MonthSwitcher internally renders "Prev/This month/Next"
+          // the spacing is handled by the style below (pillText padding)
+        />
 
-      {/* Summary */}
-      <SummaryCard totals={totals} count={sortedTxs.length} styles={styles} />
+        {/* Summary */}
+        <SummaryCard totals={totals} count={sortedTxs.length} styles={styles} />
 
-      {/* Transactions */}
-      <Text style={styles.sectionTitle}>Transactions</Text>
+        {/* Transactions */}
+        <Text style={styles.sectionTitle}>Transactions</Text>
 
-      <TransactionList txs={sortedTxs} accounts={accounts} styles={styles} />
-    </ScrollView>
+        <TransactionList txs={sortedTxs} accounts={accounts} styles={styles} />
+      </ScrollView>
     </View>
   );
 };
@@ -125,7 +126,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backText: {
-    color: '#93C5FD', // ✅ blue accent instead of grey
+    color: '#93C5FD',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -139,10 +140,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  // Month switcher pills (used by MonthSwitcher)
   headerPillsRow: {
     flexDirection: 'row',
     columnGap: 8,
-    marginTop: 10,
+    marginBottom: 16,
   },
   headerPill: {
     paddingHorizontal: 10,
@@ -150,17 +152,19 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#1F2937',
-    backgroundColor: '#111827', // ✅ blue theme card color
+    backgroundColor: '#111827',
   },
   headerPillText: {
     color: '#BFDBFE',
     fontSize: 13,
     fontWeight: '600',
+    // ✅ "space after Prev / This month / Next" – add a tiny right padding
+    paddingRight: 1,
   },
 
-  // SUMMARY CARD
+  // SUMMARY CARD (used by SummaryCard)
   summaryCard: {
-    backgroundColor: '#111827', // ✅
+    backgroundColor: '#111827',
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
@@ -177,7 +181,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     columnGap: 12,
   },
-  summaryItem: { flex: 1 },
+  summaryItem: {
+    flex: 1,
+  },
   summaryLabel: {
     color: '#9CA3AF',
     fontSize: 12,
@@ -193,26 +199,49 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
+
   positiveText: { color: '#22C55E' },
   negativeText: { color: '#F97373' },
 
-  // LIST/CARD
+  // SECTION
   sectionTitle: {
     color: '#E5E7EB',
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 8,
   },
+
+  // LIST / CARD (used by TransactionList)
   card: {
-    backgroundColor: '#111827', // ✅
+    backgroundColor: '#111827',
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#1F2937',
   },
+  txRow: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1F2937',
+  },
+  txLabel: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#F9FAFB', // ✅ ensures not black even if overrides fail
+  },
+  txNote: {
+    color: '#9CA3AF',
+    fontSize: 13,
+    marginTop: 2,
+  },
+  txMeta: {
+    color: '#9CA3AF',
+    fontSize: 11,
+    marginTop: 4,
+  },
 
-  // Empty state (if your TransactionList uses these)
+  // Empty state (if TransactionList uses these)
   emptyBox: {
     marginTop: 4,
     marginBottom: 12,
