@@ -64,7 +64,8 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const monthSwitcherVisible = period === PERIOD_MONTH;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.wrap}>
+<View style={styles.safeWrap}>
+  <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
       {/* Header row */}
       <View style={styles.headerRow}>
         <Pressable onPress={onBack} style={styles.backBtn}>
@@ -93,24 +94,30 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
       <TransactionList txs={sortedTxs} accounts={accounts} styles={styles} />
     </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  screen: {
+  safeWrap: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#050816', // ✅ blue theme background
   },
   wrap: {
+    flex: 1,
+  },
+  content: {
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 56 : 24,
+    paddingTop: 35,
     paddingBottom: 32,
   },
 
+  // HEADER
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
   },
   backBtn: {
     marginRight: 8,
@@ -118,29 +125,113 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backText: {
-    color: '#9CA3AF',
+    color: '#93C5FD', // ✅ blue accent instead of grey
     fontSize: 14,
+    fontWeight: '700',
   },
   h1: {
     color: '#ffffff',
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
   },
   subtle: {
     color: '#9CA3AF',
-    marginTop: 2,
+    marginTop: 4,
   },
 
+  headerPillsRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginTop: 10,
+  },
+  headerPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+    backgroundColor: '#111827', // ✅ blue theme card color
+  },
+  headerPillText: {
+    color: '#BFDBFE',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // SUMMARY CARD
+  summaryCard: {
+    backgroundColor: '#111827', // ✅
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  summaryTitle: {
+    color: '#E5E7EB',
+    fontWeight: '700',
+    marginBottom: 6,
+    fontSize: 16,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    columnGap: 12,
+  },
+  summaryItem: { flex: 1 },
+  summaryLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  summaryValue: {
+    color: '#F9FAFB',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  summarySub: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  positiveText: { color: '#22C55E' },
+  negativeText: { color: '#F97373' },
+
+  // LIST/CARD
   sectionTitle: {
     color: '#E5E7EB',
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 8,
   },
+  card: {
+    backgroundColor: '#111827', // ✅
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
 
-  // Note: your existing styles file previously contained many more keys
-  // (headerPill, summaryCard, etc). If MonthSwitcher/SummaryCard/TransactionList
-  // reference those style keys via styles.<key>, keep them here too.
+  // Empty state (if your TransactionList uses these)
+  emptyBox: {
+    marginTop: 4,
+    marginBottom: 12,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  emptyTitle: {
+    color: '#E5E7EB',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: '#9CA3AF',
+    fontSize: 14,
+  },
 });
 
 export default ReportDetailScreen;
