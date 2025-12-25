@@ -4,6 +4,11 @@ import { View, Text } from 'react-native';
 import type { Transaction } from '../../state/AppContext';
 import { formatDateDDMMYYYY } from '../../utils/formatDate';
 
+const TYPE_INCOME: 'income' = 'income';
+const EMPTY = '';
+const BULLET = ' • ';
+const ACCOUNT_FALLBACK = 'Account';
+
 function formatGBP(n: number) {
   const v = Number(n) || 0;
   try {
@@ -26,7 +31,7 @@ export function TransactionList({
 }) {
   const accountNameById = useMemo(() => {
     const map = new Map<string, string>();
-    (accounts || []).forEach((a: any) => a?.id && map.set(a.id, a.name || 'Account'));
+    (accounts || []).forEach((a: any) => a?.id && map.set(a.id, a.name || ACCOUNT_FALLBACK));
     return map;
   }, [accounts]);
 
@@ -43,26 +48,34 @@ export function TransactionList({
 
   return (
     <View style={styles.card}>
-      {txs.map(t => {
+      {txs.map((t) => {
         const amt = Number(t.amount) || 0;
-        const isIncome = t.type === 'income';
+        const isIncome = t.type === TYPE_INCOME;
         const accountName = t.accountId ? accountNameById.get(t.accountId) : undefined;
-        const note = t.description || '';
-        const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : '';
+
+        // ✅ remove raw '' literals
+        const note = t.description || EMPTY;
+        const dateLabel = t.date ? formatDateDDMMYYYY(t.date) : EMPTY;
+
+        // ✅ avoid template literal that includes a string literal with spaces
+        const meta = (accountName || ACCOUNT_FALLBACK) + (dateLabel ? `${BULLET}${dateLabel}` : EMPTY);
 
         return (
           <View key={t.id} style={styles.txRow}>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.txLabel, isIncome ? styles.positiveText : styles.negativeText]}>
+              <Text
+                style={[
+                  styles.txLabel,
+                  isIncome ? styles.positiveText : styles.negativeText,
+                ]}
+              >
                 {isIncome ? '+' : '-'}
                 {formatGBP(Math.abs(amt))}
               </Text>
 
               {note ? <Text style={styles.txNote}>{note}</Text> : null}
 
-              <Text style={styles.txMeta}>
-                {(accountName || 'Account') + (dateLabel ? ` • ${dateLabel}` : '')}
-              </Text>
+              <Text style={styles.txMeta}>{meta}</Text>
             </View>
           </View>
         );
