@@ -74,7 +74,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
         {/* Header row */}
         <View style={styles.headerRow}>
           <Pressable onPress={onBack} style={styles.backBtn}>
-            <Text style={styles.backText}>{'‹'} Back</Text>
+            <Text style={styles.backText}>{'‹'} GoBack</Text>
           </Pressable>
 
           <View style={{ flex: 1 }}>
