@@ -384,7 +384,7 @@ export default function DashboardScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('Reports')}
               hitSlop={6}
             >
-              <Text style={styles.gridTitle}>Reports</Text>
+              <Text style={styles.gridTitle}>ReportsScreen</Text>
               <Text style={styles.gridSub}>See trends & breakdowns</Text>
             </Pressable>
 

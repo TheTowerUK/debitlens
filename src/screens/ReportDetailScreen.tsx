@@ -109,6 +109,7 @@ const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
     backgroundColor: theme.bg, 
+    paddingTop: Platform.OS === 'ios' ? 56 : 24,
   },
   wrap: {
     flex: 1,
