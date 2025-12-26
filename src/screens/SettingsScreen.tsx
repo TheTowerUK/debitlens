@@ -7,7 +7,6 @@ import {
   Pressable,
   Alert,
   Platform,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system';
@@ -16,6 +15,7 @@ import { resetDatabase } from '../dev/resetDb';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CSV_TEMPLATE = `date,amount,type,account,category,note
 2025-10-01,12.50,expense,Main,Groceries,Milk & bread

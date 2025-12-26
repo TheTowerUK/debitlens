@@ -6,13 +6,13 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
-  SafeAreaView,
   Platform,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp, type Transaction } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 

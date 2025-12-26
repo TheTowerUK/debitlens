@@ -5,13 +5,13 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Pressable,
-  SafeAreaView,
+  Pressable,  
 } from 'react-native';
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 

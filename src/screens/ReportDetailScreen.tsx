@@ -22,6 +22,7 @@ import { MonthSwitcher } from '../components/reports/MonthSwitcher';
 import { SummaryCard } from '../components/reports/SummaryCard';
 import { TransactionList } from '../components/reports/TransactionList';
 import { colors as theme } from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;
 
@@ -64,8 +65,12 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const monthSwitcherVisible = period === PERIOD_MONTH;
 
   return (
-    <View style={styles.safeWrap}>
-      <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+  <SafeAreaView style={styles.safeWrap}>
+    <ScrollView
+      style={styles.wrap}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+    >
         {/* Header row */}
         <View style={styles.headerRow}>
           <Pressable onPress={onBack} style={styles.backBtn}>
@@ -96,14 +101,14 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 
         <TransactionList txs={sortedTxs} accounts={accounts} styles={styles} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
-    backgroundColor: theme.bg, // ✅ blue theme background
+    backgroundColor: theme.bg, 
   },
   wrap: {
     flex: 1,
