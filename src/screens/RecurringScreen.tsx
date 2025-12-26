@@ -17,6 +17,7 @@ import {
 } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 import { colors as theme } from '../theme/colors';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
   daily: 'Daily',

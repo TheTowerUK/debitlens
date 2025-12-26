@@ -65,7 +65,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
   const monthSwitcherVisible = period === PERIOD_MONTH;
 
   return (
-  <SafeAreaView style={styles.safeWrap}>
+  <SafeAreaView style={styles.safeWrap} edges={['top', 'left', 'right']}>
     <ScrollView
       style={styles.wrap}
       contentContainerStyle={styles.content}
@@ -112,11 +112,13 @@ const styles = StyleSheet.create({
   },
   wrap: {
     flex: 1,
+    backgroundColor: theme.bg,
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 35,
     paddingBottom: 32,
+    backgroundColor: theme.bg,
   },
 
   // HEADER
