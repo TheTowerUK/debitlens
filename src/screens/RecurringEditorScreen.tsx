@@ -64,7 +64,7 @@ const RecurringEditorScreen: React.FC = () => {
 const styles = StyleSheet.create({
   wrap: {
     flexGrow: 1,
-    backgroundColor: theme.bg,
+    backgroundColor: '#020617',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 56 : 24,
     paddingBottom: 32,
