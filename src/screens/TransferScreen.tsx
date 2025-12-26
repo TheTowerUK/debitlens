@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 16,
   },
   warningBox: {
@@ -319,8 +319,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   input: {
-    backgroundColor: '#111827',
-    color: '#f9fafb',
+    backgroundColor: theme.cardAlt,
+    color: theme.text,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   chipTextSelected: {
-    color: '#f9fafb',
+    color: theme.text,
     fontWeight: '600',
   },
   buttonRow: {
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   cancelBtn: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 999,
     paddingVertical: 14,
     paddingHorizontal: 18,
@@ -380,7 +380,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveText: {
-    color: '#f9fafb',
+    color: theme.text,
     fontWeight: '600',
     fontSize: 16,
   },

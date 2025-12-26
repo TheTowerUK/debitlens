@@ -10,6 +10,8 @@ import {
   AccessibilityRole,
 } from 'react-native';
 
+import { colors as theme } from '../theme/colors';
+
 type ActionItem = {
   key: string;
   label: string;
@@ -121,7 +123,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   itemButton: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,

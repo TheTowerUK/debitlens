@@ -11,6 +11,7 @@ import {
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -417,7 +418,7 @@ export default function DashboardScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
-    backgroundColor: '#050816',
+    backgroundColor: theme.bg,
   },
   wrap: {
     flex: 1,
@@ -441,7 +442,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 4,
   },
   headerPillsRow: {
@@ -454,10 +455,10 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   logoutPill: {
-    borderColor: '#F97373',
+    borderColor: theme.negative,
   },
   headerPillText: {
     color: '#E5E7EB',
@@ -467,12 +468,12 @@ const styles = StyleSheet.create({
 
   // SUMMARY CARD
   summaryCard: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   summaryTitle: {
     color: '#E5E7EB',
@@ -488,35 +489,35 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginBottom: 2,
   },
   summaryValue: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 18,
     fontWeight: '800',
   },
   summarySub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
   positiveText: {
-    color: '#22C55E',
+    color: theme.positive,
   },
   negativeText: {
-    color: '#F97373',
+    color: theme.negative,
   },
 
   // CARD
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -530,7 +531,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardLink: {
-    color: '#93C5FD',
+    color: theme.link,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -541,16 +542,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 6,
     borderTopWidth: 1,
-    borderTopColor: '#111827',
+    borderTopColor: theme.cardAlt,
     marginTop: 4,
   },
   upcomingTitle: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 14,
     fontWeight: '600',
   },
   upcomingSub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
   },
   upcomingAmount: {
@@ -561,7 +562,7 @@ const styles = StyleSheet.create({
 
   // ACCOUNTS
   emptyText: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 10,
   },
   accountRow: {
@@ -569,14 +570,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1F2937',
+    borderTopColor: theme.border,
   },
   accountName: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontWeight: '800',
   },
   accountMeta: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
@@ -588,7 +589,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   accountChevron: {
-    color: '#93C5FD',
+    color: theme.link,
     fontSize: 22,
     paddingLeft: 6,
   },
@@ -604,19 +605,19 @@ const styles = StyleSheet.create({
   },
   gridCard: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   gridTitle: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontWeight: '700',
     marginBottom: 4,
   },
   gridSub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
   },
 
@@ -624,12 +625,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   smallBtnText: {
-    color: '#BFDBFE',
+    color: theme.pillText,
     fontWeight: '700',
   },
 

@@ -51,5 +51,5 @@ export default function ReportChart({ txns, mode = 'daily' }: Props) {
 const styles = StyleSheet.create({
   wrap: { marginVertical: 16 },
   title: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  empty: { color: '#9CA3AF', fontStyle: 'italic', marginTop: 12 },
+  empty: { color: theme.textDim, fontStyle: 'italic', marginTop: 12 },
 });

@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Payments'>;
 
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4 },
+  subtle: { color: theme.textDim, marginTop: 4 },
 
   headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
   headerPill: {
@@ -284,17 +285,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
 
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -307,12 +308,12 @@ const styles = StyleSheet.create({
   searchInput: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#F9FAFB',
+    color: theme.text,
   },
 
   pill: {
@@ -320,14 +321,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
   },
   pillActive: {
-    borderColor: '#93C5FD',
+    borderColor: theme.link,
   },
   pillText: { color: '#E5E7EB', fontWeight: '700', fontSize: 13 },
-  pillTextActive: { color: '#BFDBFE' },
+  pillTextActive: { color: theme.pillText },
 
   groupHeading: {
     color: '#E5E7EB',
@@ -341,17 +342,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1F2937',
+    borderTopColor: theme.border,
   },
-  txTitle: { color: '#F9FAFB', fontWeight: '800' },
-  txMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  txTitle: { color: theme.text, fontWeight: '800' },
+  txMeta: { color: theme.textDim, fontSize: 12, marginTop: 2 },
 
   txAmount: { fontWeight: '800' },
-  positiveText: { color: '#22C55E' },
-  negativeText: { color: '#F97373' },
+  positiveText: { color: theme.positive },
+  negativeText: { color: theme.negative },
 
-  chevron: { color: '#93C5FD', fontSize: 22, marginTop: 2 },
+  chevron: { color: theme.link, fontSize: 22, marginTop: 2 },
 
-  emptyTitle: { color: '#F9FAFB', fontWeight: '900', fontSize: 16, marginTop: 4 },
-  emptySub: { color: '#9CA3AF', marginTop: 6 },
+  emptyTitle: { color: theme.text, fontWeight: '900', fontSize: 16, marginTop: 4 },
+  emptySub: { color: theme.textDim, marginTop: 6 },
 });

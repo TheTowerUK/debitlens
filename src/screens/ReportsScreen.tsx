@@ -12,6 +12,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp, type Transaction } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 
@@ -247,7 +248,7 @@ export default function ReportsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
-    backgroundColor: '#050816',
+    backgroundColor: 'theme.bg',
   },
   wrap: {
     flex: 1,
@@ -271,7 +272,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 4,
   },
 
@@ -286,23 +287,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
   },
   headerPillText: {
-    color: '#BFDBFE',
+    color: theme.pillText,
     fontSize: 13,
     fontWeight: '600',
   },
 
   // SUMMARY CARD
   summaryCard: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   summaryTitle: {
     color: '#E5E7EB',
@@ -318,31 +319,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginBottom: 2,
   },
   summaryValue: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 18,
     fontWeight: '800',
   },
   summarySub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
-  positiveText: { color: '#22C55E' },
-  negativeText: { color: '#F97373' },
+  positiveText: { color: theme.positive },
+  negativeText: { color: theme.negative },
 
   // CARD
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -356,13 +357,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   cardLink: {
-    color: '#93C5FD',
+    color: theme.link,
     fontSize: 13,
     fontWeight: '600',
   },
 
   emptyText: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 10,
   },
 
@@ -372,14 +373,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1F2937',
+    borderTopColor: theme.border,
   },
   accountName: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontWeight: '800',
   },
   accountMeta: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
@@ -391,7 +392,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   accountChevron: {
-    color: '#93C5FD',
+    color: theme.link,
     fontSize: 22,
     paddingLeft: 6,
   },

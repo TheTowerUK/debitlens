@@ -15,17 +15,17 @@ export default function PaymentForm({ onSubmit }) {
 
   return (
     <View style={{
-      backgroundColor: '#111827',
+      backgroundColor: theme.cardAlt,
       borderRadius: 14,
       padding: 16,
       borderWidth: 1,
-      borderColor: '#1F2937'
+      borderColor: theme.border
     }}>
       <Text style={{ color: 'white', fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
         New Payment
       </Text>
 
-      <Text style={{ color: '#9CA3AF' }}>Payee</Text>
+      <Text style={{ color: theme.textDim }}>Payee</Text>
       <TextInput
         placeholder="e.g., John Smith"
         placeholderTextColor="#6B7280"
@@ -38,7 +38,7 @@ export default function PaymentForm({ onSubmit }) {
         }}
       />
 
-      <Text style={{ color: '#9CA3AF' }}>Amount (£)</Text>
+      <Text style={{ color: theme.textDim }}>Amount (£)</Text>
       <TextInput
         placeholder="0.00"
         placeholderTextColor="#6B7280"

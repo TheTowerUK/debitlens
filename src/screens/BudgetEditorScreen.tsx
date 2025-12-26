@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4 },
+  subtle: { color: theme.textDim, marginTop: 4 },
 
   headerPill: {
     paddingHorizontal: 10,
@@ -179,26 +179,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
 
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
-  label: { color: '#9CA3AF', fontSize: 12, marginBottom: 6, fontWeight: '700' },
+  label: { color: theme.textDim, fontSize: 12, marginBottom: 6, fontWeight: '700' },
   input: {
-    color: '#F9FAFB',
-    backgroundColor: '#111827',
+    color: theme.text,
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
 
   btnPrimary: {
@@ -210,14 +210,14 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: '#fff', fontWeight: '800' },
 
   btnSecondary: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
   },
-  btnSecondaryText: { color: '#BFDBFE', fontWeight: '800' },
+  btnSecondaryText: { color: theme.pillText, fontWeight: '800' },
 
   btnDanger: {
     borderColor: '#7F1D1D',

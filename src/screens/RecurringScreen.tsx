@@ -16,6 +16,7 @@ import {
   type Transaction,
 } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
+import { colors as theme } from '../theme/colors';
 
 const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
   daily: 'Daily',
@@ -388,7 +389,7 @@ const RecurringScreen: React.FC = () => {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#050816',
+    backgroundColor: 'theme.bg',
     paddingHorizontal: 16,
     paddingTop: 24,
   },
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   subtle: {
-    color: '#9ca3af',
+    color: theme.textDim,
     marginBottom: 8,
   },
   applyButton: {
@@ -416,11 +417,11 @@ const styles = StyleSheet.create({
     borderColor: '#4b5563',
   },
   applyButtonText: {
-    color: '#bfdbfe',
+    color: theme.pillText,
     fontWeight: '600',
   },
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -431,7 +432,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   itemSubtitle: {
-    color: '#9ca3af',
+    color: theme.textDim,
     marginTop: 4,
   },
   rowActions: {
@@ -448,7 +449,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   badgeActive: {
-    color: '#22c55e',
+    color: theme.positive,
   },
   badgePaused: {
     color: '#fbbf24',
@@ -472,13 +473,13 @@ const styles = StyleSheet.create({
     borderColor: '#2563EB',
   },
     buttonText: {
-    color: '#f9fafb',
+    color: theme.text,
     fontWeight: '600',
     fontSize: 16,
   },
   divider: { 
     height: 1, 
-    backgroundColor: '#1F2937', 
+    backgroundColor: theme.border, 
     opacity: 0.8, 
     marginBottom: 16 },
 });

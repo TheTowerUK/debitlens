@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
+import { colors as theme } from '../theme/colors';
+
 const RecurringEditorScreen: React.FC = () => {
   const navigation = useNavigation<any>();
 
@@ -62,7 +64,7 @@ const RecurringEditorScreen: React.FC = () => {
 const styles = StyleSheet.create({
   wrap: {
     flexGrow: 1,
-    backgroundColor: '#050816',
+    backgroundColor: theme.bg,
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 56 : 24,
     paddingBottom: 32,
@@ -74,7 +76,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 16,
     fontSize: 14,
     lineHeight: 20,
@@ -83,18 +85,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#020617',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     padding: 14,
     marginBottom: 20,
   },
   cardTitle: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 16,
     fontWeight: '700',
     marginBottom: 6,
   },
   cardText: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -111,12 +113,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontWeight: '600',
     fontSize: 16,
   },
   secondaryBtn: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 999,
     paddingVertical: 14,
     paddingHorizontal: 18,

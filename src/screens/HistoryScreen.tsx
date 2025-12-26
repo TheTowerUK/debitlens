@@ -212,27 +212,27 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   h1: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 22,
     fontWeight: '800',
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 4,
   },
   backLink: {
-    color: '#93C5FD',
+    color: theme.link,
     fontWeight: '600',
   },
 
   filtersBlock: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 16,
     padding: 12,
     marginBottom: 12,
   },
   filterLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginBottom: 4,
   },
@@ -256,11 +256,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pillTextActive: {
-    color: '#F9FAFB',
+    color: theme.text,
   },
 
   empty: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 16,
     textAlign: 'center',
   },
@@ -271,18 +271,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   rowLeft: {
     flexShrink: 1,
     paddingRight: 8,
   },
   rowTitle: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontWeight: '700',
   },
   rowSub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
@@ -294,6 +294,6 @@ const styles = StyleSheet.create({
     color: '#4ADE80',
   },
   rowAmountExpense: {
-    color: '#F97373',
+    color: theme.negative,
   },
 });

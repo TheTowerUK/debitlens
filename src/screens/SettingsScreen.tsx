@@ -112,10 +112,10 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 4 },
-  subtle: { color: '#9CA3AF', marginBottom: 12 },
+  subtle: { color: theme.textDim, marginBottom: 12 },
 
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 16,
     padding: 16,
     marginTop: 4,
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnGhost: { backgroundColor: '#1F2937' },
+  btnGhost: { backgroundColor: theme.border },
   btnDanger: { backgroundColor: '#7F1D1D' },
   btnText: { color: '#fff', fontWeight: '700' },
 });

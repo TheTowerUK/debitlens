@@ -221,7 +221,7 @@ export default function BudgetsScreen({ navigation }: any) {
           ) : (
             <Text style={styles.subtle}>
               {summary.exceeded} exceeded • {summary.warning} near limit • Remaining{' '}
-              <Text style={{ color: '#F9FAFB', fontWeight: '800' }}>
+              <Text style={{ color: theme.text, fontWeight: '800' }}>
                 {formatGBP(summary.totalRemaining)}
               </Text>
             </Text>
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
-  subtle: { color: '#9CA3AF', marginTop: 4 },
+  subtle: { color: theme.textDim, marginTop: 4 },
 
   headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
   headerPill: {
@@ -334,17 +334,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '600' },
 
   summaryCard: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   summaryTopRow: {
     flexDirection: 'row',
@@ -355,12 +355,12 @@ const styles = StyleSheet.create({
   summaryTitle: { color: '#E5E7EB', fontWeight: '700', fontSize: 16 },
 
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -374,13 +374,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
-  smallBtnText: { color: '#BFDBFE', fontWeight: '700', fontSize: 13 },
+  smallBtnText: { color: theme.pillText, fontWeight: '700', fontSize: 13 },
 
-  emptyText: { color: '#9CA3AF', marginTop: 10 },
+  emptyText: { color: theme.textDim, marginTop: 10 },
 
   // Budget row (polished)
   budgetRow: {
@@ -388,35 +388,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1F2937',
+    borderTopColor: theme.border,
     marginTop: 8,
   },
-  budgetCategory: { color: '#F9FAFB', fontWeight: '800' },
-  budgetMeta: { color: '#9CA3AF', fontSize: 12, marginTop: 2 },
+  budgetCategory: { color: theme.text, fontWeight: '800' },
+  budgetMeta: { color: theme.textDim, fontSize: 12, marginTop: 2 },
   budgetRemaining: { marginTop: 6, fontWeight: '700' },
 
-  okText: { color: '#22C55E' },
+  okText: { color: theme.positive },
   warnText: { color: '#FBBF24' },
-  dangerText: { color: '#F97373' },
+  dangerText: { color: theme.negative },
 
   progressTrack: {
     height: 8,
     borderRadius: 999,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     marginTop: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   progressFill: {
     height: 8,
     borderRadius: 999,
   },
-  progressFillOk: { backgroundColor: '#93C5FD' },
+  progressFillOk: { backgroundColor: theme.link },
   progressFillWarning: { backgroundColor: '#FBBF24' },
-  progressFillExceeded: { backgroundColor: '#F97373' },
+  progressFillExceeded: { backgroundColor: theme.negative },
 
-  chevron: { color: '#93C5FD', fontSize: 22, paddingLeft: 10 },
+  chevron: { color: theme.link, fontSize: 22, paddingLeft: 10 },
 
   badge: {
     minWidth: 22,

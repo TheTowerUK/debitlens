@@ -144,7 +144,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
       headerRight: isEditing
         ? () => (
             <Pressable onPress={handleDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: '#F97373', fontWeight: '900' }}>Delete</Text>
+              <Text style={{ color: theme.negative, fontWeight: '900' }}>Delete</Text>
             </Pressable>
           )
         : undefined,
@@ -369,14 +369,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
   },
   segmentOn: {
-    borderColor: '#93C5FD',
+    borderColor: theme.link,
   },
   segmentText: { color: '#E5E7EB', fontWeight: '800', fontSize: 13 },
-  segmentTextOn: { color: '#BFDBFE' },
+  segmentTextOn: { color: theme.pillText },
 
   // --- Form ---
   label: {
@@ -388,12 +388,12 @@ const styles = StyleSheet.create({
 
   input: {
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#F9FAFB',
+    color: theme.text,
     marginBottom: 12,
   },
   inputMultiline: { minHeight: 90, textAlignVertical: 'top' },
@@ -401,37 +401,37 @@ const styles = StyleSheet.create({
   // --- Account picker (looks like a card/input) ---
   accountPick: {
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 12,
     marginBottom: 12,
   },
-  accountPickText: { color: '#F9FAFB', fontWeight: '800' },
-  accountPickHint: { color: '#9CA3AF', marginTop: 4 },
+  accountPickText: { color: theme.text, fontWeight: '800' },
+  accountPickHint: { color: theme.textDim, marginTop: 4 },
 
   // --- Validation ---
   validationBox: {
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#0B1020',
+    borderColor: theme.border,
+    backgroundColor: theme.card,
     padding: 12,
     borderRadius: 12,
     marginBottom: 12,
   },
-  validationText: { color: '#F97373', fontWeight: '800' },
+  validationText: { color: theme.negative, fontWeight: '800' },
   subtle: { color: '#b1a76eff', marginTop: 4, marginBottom: 12 },
 
 
   // --- Primary / danger buttons (match card tone) ---
   primaryBtn: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     marginTop: 4,
   },
   primaryBtnDisabled: { opacity: 0.5 },
@@ -439,13 +439,13 @@ const styles = StyleSheet.create({
 
   dangerBtn: {
     marginTop: 12,
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 14,
     paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
-  dangerBtnText: { color: '#F97373', fontWeight: '900' },
+  dangerBtnText: { color: theme.negative, fontWeight: '900' },
 });
 

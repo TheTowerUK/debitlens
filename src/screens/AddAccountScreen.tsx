@@ -10,6 +10,7 @@ import {
   Pressable,
 } from 'react-native';
 import { useApp } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 type Props = {
   navigation: any; // you can tighten this later with your stack types
@@ -74,7 +75,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 35,
     paddingBottom: 32,
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   heading: {
     fontSize: 22,
@@ -96,18 +97,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 12,
     color: '#E5E7EB',
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
   },
   buttonRow: {
     marginTop: 10,
   },
   btnPrimary: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     alignItems: 'center',
   },
   btnPrimaryText: {
@@ -120,7 +121,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#4B5563',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     alignItems: 'center',
   },
   btnSecondaryText: {

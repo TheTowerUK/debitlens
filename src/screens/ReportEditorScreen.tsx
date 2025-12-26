@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#fff', fontWeight: '700' },
   ghost: {
-    backgroundColor: '#1F2937',
+    backgroundColor: theme.border,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',

@@ -239,13 +239,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 16,
   },
   input: {
     backgroundColor: '#0F172A',
     color: '#fff',
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     borderWidth: 1,
     borderRadius: 10,
     padding: 12,
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   ghost: {
-    backgroundColor: '#1F2937',
+    backgroundColor: theme.border,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',

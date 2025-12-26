@@ -17,6 +17,8 @@ import {
   type BackupReminderMode,
 } from '../utils/backupReminder';
 
+import { colors as theme } from '../theme/colors';
+
 const FS: any = FileSystem as any;
 
 export default function BackupRestoreScreen() {
@@ -253,7 +255,7 @@ export default function BackupRestoreScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 16, backgroundColor: '#0B1020' },
+  wrap: { flex: 1, padding: 16, backgroundColor: theme.card },
   h1: { fontSize: 26, fontWeight: '800', marginBottom: 6, color: '#fff' },
   subtle: { opacity: 0.8, marginBottom: 14, color: '#fff' },
 
@@ -262,7 +264,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     marginBottom: 12,
   },
   cardTitle: { fontWeight: '800', color: '#fff', marginBottom: 8, fontSize: 16 },
@@ -274,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     alignItems: 'center',
   },
   btnText: { color: '#fff', fontWeight: '800' },
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     alignItems: 'center',
   },
   btnSecondaryText: { color: '#fff', fontWeight: '700' },
@@ -313,7 +315,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   previewTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
   previewLine: { color: '#fff', opacity: 0.9, marginBottom: 4 },

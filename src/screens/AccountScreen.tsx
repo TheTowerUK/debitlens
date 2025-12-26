@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, Pressable, FlatList, Switch } from 'react-nativ
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
     padding: 35,
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
   },
   h1: {
     fontSize: 26,
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
   },
   summaryLabel: {
     opacity: 0.8,
@@ -301,7 +302,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
   },
   quickIncome: {},
   quickExpense: {},
@@ -331,7 +332,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#222',
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
   },
   emptyTitle: {
     fontWeight: '800',

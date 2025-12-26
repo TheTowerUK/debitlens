@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 4,
   },
-  subtle: { color: '#9CA3AF', marginBottom: 16 },
+  subtle: { color: theme.textDim, marginBottom: 16 },
 
   emptyBox: {
     marginTop: 8,
@@ -114,21 +114,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 4,
   },
-  emptyText: { color: '#9CA3AF', fontSize: 14 },
+  emptyText: { color: theme.textDim, fontSize: 14 },
 
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#111827',
+    borderBottomColor: colors.cardAlt,
   },
-  txLabel: { color: '#F9FAFB', fontSize: 14, fontWeight: '700' },
-  txNote: { color: '#9CA3AF', fontSize: 12 },
+  txLabel: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  txNote: { color: theme.textDim, fontSize: 12 },
   txMeta: { color: '#6B7280', fontSize: 11, marginTop: 2 },
   txAmount: { fontSize: 15, fontWeight: '800', marginLeft: 12 },
-  incomeText: { color: '#22C55E' },
-  expenseText: { color: '#F97373' },
+  incomeText: { color: theme.positive },
+  expenseText: { color: theme.negative },
 });
 
 export default RecentActivityScreen;

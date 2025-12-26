@@ -21,6 +21,7 @@ import { useTotals } from '../hooks/reports/useTotals';
 import { MonthSwitcher } from '../components/reports/MonthSwitcher';
 import { SummaryCard } from '../components/reports/SummaryCard';
 import { TransactionList } from '../components/reports/TransactionList';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;
 
@@ -102,7 +103,7 @@ const ReportDetailScreen: React.FC<Props> = ({ navigation, route }) => {
 const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
-    backgroundColor: '#050816', // ✅ blue theme background
+    backgroundColor: theme.bg, // ✅ blue theme background
   },
   wrap: {
     flex: 1,
@@ -126,7 +127,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backText: {
-    color: '#93C5FD',
+    color: theme.link,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -136,7 +137,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginTop: 4,
   },
 
@@ -151,11 +152,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1F2937',
-    backgroundColor: '#111827',
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
   },
   headerPillText: {
-    color: '#BFDBFE',
+    color: theme.pillText,
     fontSize: 13,
     fontWeight: '600',
     // ✅ "space after Prev / This month / Next" – add a tiny right padding
@@ -164,12 +165,12 @@ const styles = StyleSheet.create({
 
   // SUMMARY CARD (used by SummaryCard)
   summaryCard: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   summaryTitle: {
     color: '#E5E7EB',
@@ -185,23 +186,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginBottom: 2,
   },
   summaryValue: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 18,
     fontWeight: '800',
   },
   summarySub: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
 
-  positiveText: { color: '#22C55E' },
-  negativeText: { color: '#F97373' },
+  positiveText: { color: theme.positive },
+  negativeText: { color: theme.negative },
 
   // SECTION
   sectionTitle: {
@@ -213,30 +214,30 @@ const styles = StyleSheet.create({
 
   // LIST / CARD (used by TransactionList)
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 14,
     padding: 14,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   txRow: {
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: theme.border,
   },
   txLabel: {
     fontSize: 15,
     fontWeight: '900',
-    color: '#F9FAFB', // ✅ ensures not black even if overrides fail
+    color: theme.text, // ✅ ensures not black even if overrides fail
   },
   txNote: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 13,
     marginTop: 2,
   },
   txMeta: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 11,
     marginTop: 4,
   },
@@ -247,9 +248,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   emptyTitle: {
     color: '#E5E7EB',
@@ -258,7 +259,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   emptyText: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 14,
   },
 });

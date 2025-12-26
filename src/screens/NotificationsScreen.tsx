@@ -89,14 +89,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 16,
   },
   card: {
     backgroundColor: '#020617',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     padding: 16,
   },
   row: {
@@ -105,18 +105,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   label: {
-    color: '#F9FAFB',
+    color: theme.text,
     fontSize: 16,
     fontWeight: '700',
   },
   caption: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     marginVertical: 6,
   },
   infoBox: {
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
   },
   infoText: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 13,
   },
 });

@@ -19,6 +19,7 @@ type Props = {
   };
 };
 
+import { colors as theme } from '../theme/colors';
 const AccountEditorScreen: React.FC<Props> = ({ navigation, route }) => {
   const { state, actions } = useApp();
   const accountId = route.params?.accountId;

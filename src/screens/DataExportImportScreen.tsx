@@ -21,6 +21,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors as theme } from '../theme/colors';
 
 import {
   createBackupV1,
@@ -1219,7 +1220,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-    backgroundColor: '#050816',
+    backgroundColor: theme.bg,
   },
   content: {
     paddingHorizontal: 16,
@@ -1233,16 +1234,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtle: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 16,
   },
   card: {
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 12,
     padding: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   sectionTitle: {
     color: 'white',
@@ -1313,7 +1314,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#111827',
+    borderColor: theme.cardAlt,
   },
   optionsTitle: {
     color: '#E5E7EB',
@@ -1337,12 +1338,12 @@ const styles = StyleSheet.create({
     maxHeight: 260,
   },
   textBoxLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     marginBottom: 4,
   },
   textBoxScroll: {
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     borderRadius: 8,
     padding: 8,
     backgroundColor: '#020617',
@@ -1358,7 +1359,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
     borderRadius: 8,
     padding: 8,
     backgroundColor: '#020617',
@@ -1371,13 +1372,13 @@ const styles = StyleSheet.create({
   statusBox: {
     marginTop: 8,
     padding: 10,
-    backgroundColor: '#0B1020',
+    backgroundColor: theme.card,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   statusLabel: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontWeight: '600',
     marginBottom: 2,
   },
@@ -1391,10 +1392,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: theme.border,
   },
   previewMeta: {
-    color: '#9CA3AF',
+    color: theme.textDim,
     fontSize: 12,
     marginBottom: 8,
   },

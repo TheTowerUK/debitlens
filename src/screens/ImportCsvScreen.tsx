@@ -53,10 +53,10 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'ios' ? 44 : 16,
   },
   h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 8 },
-  subtle: { color: '#9CA3AF', marginBottom: 16 },
+  subtle: { color: theme.textDim, marginBottom: 16 },
 
   card: {
-    backgroundColor: '#111827',
+    backgroundColor: theme.cardAlt,
     borderRadius: 16,
     padding: 16,
     marginTop: 12,
@@ -71,6 +71,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  btnGhost: { backgroundColor: '#1F2937' },
+  btnGhost: { backgroundColor: theme.border },
   btnText: { color: '#fff', fontWeight: '700' },
 });
