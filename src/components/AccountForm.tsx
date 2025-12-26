@@ -2,6 +2,8 @@
 import React from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 
+import { colors as theme } from '../theme/colors';
+
 export default function AccountForm({ name, type, setName, setType, onSave, onCancel }) {
   return (
     <View>

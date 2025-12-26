@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RecentActivity'>;
 
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: colors.cardAlt,
+    borderBottomColor: theme.cardAlt,
   },
   txLabel: { color: theme.text, fontSize: 14, fontWeight: '700' },
   txNote: { color: theme.textDim, fontSize: 12 },

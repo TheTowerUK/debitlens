@@ -8,6 +8,8 @@ import {
   Platform,
 } from 'react-native';
 
+import { colors as theme } from '../theme/colors';
+
 type Props = {
   navigation: any;
 };

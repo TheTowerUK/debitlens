@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Button, Alert } from 'react-native';
+import { colors as theme } from '../theme/colors';
 
 export default function PaymentForm({ onSubmit }) {
   const [payee, setPayee] = useState('');

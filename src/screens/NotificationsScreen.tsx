@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import {  View,  Text,  StyleSheet,  Switch,  Platform,} from 'react-native';
 // If you want to use the app context later, you can:
 // import { useApp } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 export default function NotificationsScreen() {
   // Local UI state for now – avoids relying on missing AppState/AppActions fields

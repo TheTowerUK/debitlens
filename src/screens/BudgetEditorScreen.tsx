@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 function uid() {
   return Math.random().toString(16).slice(2) + Date.now().toString(16);

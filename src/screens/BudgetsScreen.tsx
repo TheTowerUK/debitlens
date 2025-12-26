@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '../state/AppContext';
+import { colors as theme } from '../theme/colors';
 
 type SortMode = 'status' | 'largestRemaining' | 'a-z';
 type Status = 'ok' | 'warning' | 'exceeded';

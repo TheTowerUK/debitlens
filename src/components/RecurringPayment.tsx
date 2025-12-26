@@ -1,4 +1,5 @@
 import { View, Text } from 'react-native';
+import { colors as theme } from '../theme/colors';
 
 export default function RecurringPayment({ name, amount, schedule, nextDate }) {
   return (

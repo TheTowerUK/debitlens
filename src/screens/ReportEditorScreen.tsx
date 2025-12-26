@@ -4,6 +4,7 @@ import { View, Text, Pressable, Alert, StyleSheet } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { getReport, saveReport, saveReportFromDefinition, ReportFilter, ReportRow } from '../services/reporting';
+import { colors as theme } from '../theme/colors';
 
 // Props: navigator props plus an executor for DB queries and either a saved report definition
 // or an in-memory set of rows. Adapt the injection of `executor` to your app (context/hook).

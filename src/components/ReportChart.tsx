@@ -10,6 +10,7 @@ import {
 
 import { byDay, byCategory } from '../utils/reportUtils';
 import type { Transaction } from '../types/finance';
+import { colors as theme } from '../theme/colors';
 
 type Props = {
   txns: Transaction[];
