@@ -34,7 +34,7 @@ export type Transaction = {
 
 /* ===== Recurring (match existing screens) ===== */
 
-export type RecurringFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type RecurringFrequency = 'daily' | 'weekly' | 'fortnightly' | 'monthly' | 'yearly';
 
 export type RecurringItem = {
   id: string;

@@ -124,6 +124,12 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
     return monthKey || toMonthKey(new Date());
   }, [period, monthKey]);
 
+  const isMonthView = period === 'month' && !!mkCurrent;
+
+  const monthTitle = isMonthView
+    ? formatDisplayMonth(mkCurrent!)
+    : '';
+
   const formatMoney = (v: number) => `£${(Number(v) || 0).toFixed(2)}`;
 
   const title =
@@ -213,13 +219,13 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
         </View>
 
         {/* Month switcher (only when period === 'month') */}
-        {period === 'month' && mkCurrent ? (
+        {isMonthView ? (
           <View style={styles.monthRow}>
             <Pressable style={styles.monthBtn} onPress={goPrevMonth} hitSlop={8}>
               <Text style={styles.monthBtnText}>‹</Text>
             </Pressable>
 
-            <Text style={styles.monthTitle}>{formatDisplayMonth(mkCurrent)}</Text>
+            <Text style={styles.monthTitle}>{monthTitle}</Text>
 
             <Pressable style={styles.monthBtn} onPress={goNextMonth} hitSlop={8}>
               <Text style={styles.monthBtnText}>›</Text>

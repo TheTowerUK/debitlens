@@ -49,20 +49,15 @@ export default function RecurringScreen({ navigation }: Props) {
       const amt = Number(r.amount) || 0;
       const freq = r.frequency || 'monthly';
 
-      // ✅ THIS is where your snippet belongs
-      if (freq === 'daily') {
-        monthlyApprox += amt * 30;
-      } else if (freq === 'yearly') {
-        monthlyApprox += amt / 12;
-      } else {
-        monthlyApprox += amt; // monthly
-      }
+      if (freq === 'daily') monthlyApprox += amt * 30;
+      else if (freq === 'weekly') monthlyApprox += amt * 4;
+      else if (freq === 'fortnightly') monthlyApprox += amt * 2;
+      else if (freq === 'yearly') monthlyApprox += amt / 12;
+      else monthlyApprox += amt; // monthly
     }
 
     return { activeCount, monthlyApprox };
   }, [recurring]);
-
-
 
   const toggleActive = (item: RecurringItem) => {
     const fn = (actions as any)?.updateRecurring;

@@ -112,6 +112,10 @@ export default function ReportsScreen({ navigation }: Props) {
     return period;
   }, [period, monthKey]);
 
+  const isMonthView = period === 'month';
+
+  const monthTitle = isMonthView ? formatDisplayMonth(monthKey) : '';
+
   const openCategory = (categoryKey: string) => {
     if (period === 'month') {
       navigation.navigate('ReportDetail', { categoryKey, period, monthKey });
@@ -183,7 +187,7 @@ export default function ReportsScreen({ navigation }: Props) {
         </View>
 
         {/* Month switcher (only for period === 'month') */}
-        {period === 'month' ? (
+        {isMonthView ? (
           <View style={styles.monthRow}>
             <Pressable
               style={styles.monthBtn}
@@ -193,7 +197,7 @@ export default function ReportsScreen({ navigation }: Props) {
               <Text style={styles.monthBtnText}>‹</Text>
             </Pressable>
 
-            <Text style={styles.monthTitle}>{formatDisplayMonth(monthKey)}</Text>
+            <Text style={styles.monthTitle}>{monthTitle}</Text>
 
             <Pressable
               style={styles.monthBtn}
@@ -204,6 +208,7 @@ export default function ReportsScreen({ navigation }: Props) {
             </Pressable>
           </View>
         ) : null}
+
 
         {/* Summary */}
         <View style={styles.card}>
