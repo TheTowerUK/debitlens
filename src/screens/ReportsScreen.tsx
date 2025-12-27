@@ -1,122 +1,132 @@
 // src/screens/ReportsScreen.tsx
 import React, { useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Platform,
-} from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/types';
-import { useApp, type Transaction } from '../state/AppContext';
-import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useApp } from '../state/AppContext';
+import type { RootStackParamList } from '../navigations/types';
+import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reports'>;
 
-function startOfMonth(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
 }
 
-function monthKeyFromDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}`; // YYYY-MM
+function toMonthKey(d: Date) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
 }
 
-function addMonths(d: Date, delta: number) {
-  return new Date(d.getFullYear(), d.getMonth() + delta, 1);
+function monthKeyToStart(monthKey: string) {
+  const [yStr, mStr] = monthKey.split('-');
+  const y = Number(yStr);
+  const m = Number(mStr);
+  if (!y || !m) return null;
+  return new Date(y, m - 1, 1);
 }
 
-function rangeForMonth(d: Date) {
-  const start = new Date(d.getFullYear(), d.getMonth(), 1);
-  const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-  return { start, end };
+function addMonths(monthKey: string, delta: number) {
+  const start = monthKeyToStart(monthKey);
+  if (!start) return monthKey;
+  const d = new Date(start.getFullYear(), start.getMonth() + delta, 1);
+  return toMonthKey(d);
 }
 
-function formatMonthLabel(d: Date) {
-  try {
-    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(d);
-  } catch {
-    return monthKeyFromDate(d);
-  }
-}
-
-function formatGBP(n: number) {
-  const v = Number(n) || 0;
-  try {
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v);
-  } catch {
-    const sign = v < 0 ? '-' : '';
-    const abs = Math.abs(v);
-    return `${sign}£${abs.toFixed(2)}`;
-  }
+function formatDisplayMonth(monthKey: string) {
+  const start = monthKeyToStart(monthKey);
+  if (!start) return monthKey;
+  return start.toLocaleDateString(undefined, { year: 'numeric', month: 'long' });
 }
 
 export default function ReportsScreen({ navigation }: Props) {
   const { state } = useApp();
-  const txs: Transaction[] = state.transactions || [];
+  const txs = state.transactions || [];
 
-  const [activeMonth, setActiveMonth] = useState<Date>(() => startOfMonth(new Date()));
+  const [period, setPeriod] =
+    useState<RootStackParamList['ReportDetail']['period']>('thisMonth');
 
-  const { start, end } = useMemo(() => rangeForMonth(activeMonth), [activeMonth]);
-  const activeMonthKey = useMemo(() => monthKeyFromDate(activeMonth), [activeMonth]);
-  const activeMonthLabel = useMemo(() => formatMonthLabel(activeMonth), [activeMonth]);
+  const [monthKey, setMonthKey] = useState<string>(toMonthKey(new Date()));
 
-  const monthTxs = useMemo(() => {
-    return (txs || []).filter((t) => {
-      if (!t?.date) return false;
+  const range = useMemo(() => {
+    const now = new Date();
+
+    if (period === 'allTime') return { start: null as Date | null, end: null as Date | null };
+
+    if (period === 'thisMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      return { start, end };
+    }
+
+    if (period === 'lastMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start, end };
+    }
+
+    // period === 'month'
+    const start = monthKeyToStart(monthKey) ?? new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
+    return { start, end };
+  }, [period, monthKey]);
+
+  const formatMoney = (v: number) => `£${(Number(v) || 0).toFixed(2)}`;
+
+  const { totalExpense, categories } = useMemo(() => {
+    const { start, end } = range;
+
+    const byCat: Record<string, number> = {};
+    let total = 0;
+
+    for (const t of txs) {
+      if (!t?.date) continue;
       const d = new Date(t.date);
-      if (isNaN(d.getTime())) return false;
-      return d >= start && d < end;
-    });
-  }, [txs, start, end]);
+      if (isNaN(d.getTime())) continue;
 
-  const summary = useMemo(() => {
-    let income = 0;
-    let expense = 0;
+      if (start && d < start) continue;
+      if (end && d >= end) continue;
 
-    for (const t of monthTxs) {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') income += amt;
-      else if (t.type === 'expense') expense += amt;
+      // Reports are usually expense-focused. Adjust if you want income too.
+      if (t.type !== 'expense') continue;
+
+      const cat = String(t.category || 'Uncategorised').trim();
+      const amt = Math.abs(Number(t.amount) || 0);
+
+      total += amt;
+      byCat[cat] = (byCat[cat] || 0) + amt;
     }
 
-    return { income, expense, net: income - expense };
-  }, [monthTxs]);
+    const list = Object.entries(byCat)
+      .map(([key, value]) => ({ key, value }))
+      .sort((a, b) => b.value - a.value);
 
-  const rows = useMemo(() => {
-    // category -> totals
-    const map = new Map<
-      string,
-      { category: string; income: number; expense: number; net: number; count: number }
-    >();
+    return { totalExpense: total, categories: list };
+  }, [txs, range]);
 
-    for (const t of monthTxs) {
-      const category = (t.category ?? 'Uncategorised').trim() || 'Uncategorised';
-      const current = map.get(category) || {
-        category,
-        income: 0,
-        expense: 0,
-        net: 0,
-        count: 0,
-      };
+  const periodLabel = useMemo(() => {
+    if (period === 'thisMonth') return 'This month';
+    if (period === 'lastMonth') return 'Last month';
+    if (period === 'allTime') return 'All time';
+    if (period === 'month') return formatDisplayMonth(monthKey);
+    return period;
+  }, [period, monthKey]);
 
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') current.income += amt;
-      else if (t.type === 'expense') current.expense += amt;
-
-      current.net = current.income - current.expense;
-      current.count += 1;
-
-      map.set(category, current);
+  const openCategory = (categoryKey: string) => {
+    if (period === 'month') {
+      navigation.navigate('ReportDetail', { categoryKey, period, monthKey });
+    } else {
+      navigation.navigate('ReportDetail', { categoryKey, period });
     }
+  };
 
-    // sort: highest absolute net first
-    return Array.from(map.values()).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-  }, [monthTxs]);
+  const openAll = () => {
+    if (period === 'month') {
+      navigation.navigate('ReportDetail', { categoryKey: 'all', period, monthKey });
+    } else {
+      navigation.navigate('ReportDetail', { categoryKey: 'all', period });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeWrap}>
@@ -125,119 +135,123 @@ export default function ReportsScreen({ navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>Reports</Text>
-            <Text style={styles.subtle}>Month: {activeMonthLabel}</Text>
+            <Text style={styles.subtle}>{periodLabel}</Text>
           </View>
-        </View>
 
-        {/* Month pills + Back aligned right */}
-        <View style={styles.headerPillsRow}>
-          <Pressable
-            style={styles.headerPill}
-            onPress={() => setActiveMonth((m) => addMonths(m, -1))}
-          >
-            <Text style={styles.headerPillText}>◀ Prev </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.headerPill}
-            onPress={() => setActiveMonth(() => startOfMonth(new Date()))}
-          >
-            <Text style={styles.headerPillText}>This month </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.headerPill}
-            onPress={() => setActiveMonth((m) => addMonths(m, 1))}
-          >
-            <Text style={styles.headerPillText}>Next ▶ </Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.headerPill, { marginLeft: 'auto' }]}
-            onPress={() => navigation.goBack()}
-            hitSlop={8}
-          >
+          <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
             <Text style={styles.headerPillText}>Back</Text>
           </Pressable>
         </View>
 
-        {/* Summary */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Summary</Text>
+        {/* Period selector */}
+        <View style={styles.periodRow}>
+          <Pressable
+            style={[styles.periodBtn, period === 'thisMonth' && styles.periodBtnActive]}
+            onPress={() => setPeriod('thisMonth')}
+          >
+            <Text style={[styles.periodText, period === 'thisMonth' && styles.periodTextActive]}>
+              This month
+            </Text>
+          </Pressable>
 
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Income</Text>
-              <Text style={[styles.summaryValue, styles.positiveText]}>
-                {formatGBP(summary.income)}
-              </Text>
-            </View>
+          <Pressable
+            style={[styles.periodBtn, period === 'lastMonth' && styles.periodBtnActive]}
+            onPress={() => setPeriod('lastMonth')}
+          >
+            <Text style={[styles.periodText, period === 'lastMonth' && styles.periodTextActive]}>
+              Last month
+            </Text>
+          </Pressable>
 
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Expenses</Text>
-              <Text style={[styles.summaryValue, styles.negativeText]}>
-                {formatGBP(summary.expense)}
-              </Text>
-            </View>
-          </View>
+          <Pressable
+            style={[styles.periodBtn, period === 'allTime' && styles.periodBtnActive]}
+            onPress={() => setPeriod('allTime')}
+          >
+            <Text style={[styles.periodText, period === 'allTime' && styles.periodTextActive]}>
+              All time
+            </Text>
+          </Pressable>
 
-          <View style={{ height: 10 }} />
-
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Net</Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  summary.net >= 0 ? styles.positiveText : styles.negativeText,
-                ]}
-              >
-                {formatGBP(summary.net)}
-              </Text>
-              <Text style={styles.summarySub}>
-                {monthTxs.length} transaction{monthTxs.length === 1 ? '' : 's'} in this month
-              </Text>
-            </View>
-            <View style={styles.summaryItem} />
-          </View>
+          <Pressable
+            style={[styles.periodBtn, period === 'month' && styles.periodBtnActive]}
+            onPress={() => setPeriod('month')}
+          >
+            <Text style={[styles.periodText, period === 'month' && styles.periodTextActive]}>
+              Month
+            </Text>
+          </Pressable>
         </View>
 
-        {/* Categories */}
+        {/* Month switcher (only for period === 'month') */}
+        {period === 'month' ? (
+          <View style={styles.monthRow}>
+            <Pressable
+              style={styles.monthBtn}
+              onPress={() => setMonthKey((mk) => addMonths(mk, -1))}
+              hitSlop={8}
+            >
+              <Text style={styles.monthBtnText}>‹</Text>
+            </Pressable>
+
+            <Text style={styles.monthTitle}>{formatDisplayMonth(monthKey)}</Text>
+
+            <Pressable
+              style={styles.monthBtn}
+              onPress={() => setMonthKey((mk) => addMonths(mk, +1))}
+              hitSlop={8}
+            >
+              <Text style={styles.monthBtnText}>›</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* Summary */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardTitle}>By category</Text>
-            <Text style={styles.cardLink}>Tap to drill in</Text>
+            <Text style={styles.cardTitle}>Spending</Text>
+            <Pressable onPress={openAll} hitSlop={8}>
+              <Text style={styles.cardLink}>View all</Text>
+            </Pressable>
           </View>
 
-          {rows.length === 0 ? (
-            <Text style={styles.emptyText}>No transactions in this month.</Text>
-          ) : (
-            rows.map((r) => {
-              const netStyle = r.net >= 0 ? styles.positiveText : styles.negativeText;
-              return (
-                <Pressable
-                  key={r.category}
-                  style={styles.accountRow}
-                  onPress={() =>
-                    navigation.navigate('ReportDetail', {
-                      categoryKey: r.category,
-                      period: 'month',
-                      monthKey: activeMonthKey,
-                    })
-                  }
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.accountName}>{r.category}</Text>
-                    <Text style={[styles.accountMeta, styles.accountMetaDim]}>
-                      {r.count} tx • Income {formatGBP(r.income)} • Expense {formatGBP(r.expense)}
-                    </Text>
-                  </View>
+          <Text style={styles.bigMoney}>{formatMoney(totalExpense)}</Text>
+          <Text style={styles.subtle}>Total expenses for {periodLabel.toLowerCase()}</Text>
+        </View>
 
-                  <Text style={[styles.accountBalance, netStyle]}>{formatGBP(r.net)}</Text>
-                  <Text style={styles.accountChevron}>›</Text>
-                </Pressable>
-              );
-            })
+        {/* Category breakdown */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Top categories</Text>
+
+          {categories.length === 0 ? (
+            <Text style={styles.subtle}>No expenses found for this period.</Text>
+          ) : (
+            <View style={{ marginTop: 8 }}>
+              {categories.slice(0, 12).map((c) => {
+                const pct = totalExpense > 0 ? Math.round((c.value / totalExpense) * 100) : 0;
+                return (
+                  <Pressable
+                    key={c.key}
+                    style={styles.catRow}
+                    onPress={() => openCategory(c.key)}
+                    hitSlop={6}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.catTitle}>{c.key}</Text>
+                      <Text style={styles.catSub}>
+                        {formatMoney(c.value)} • {pct}%
+                      </Text>
+                    </View>
+                    <Text style={styles.chevron}>›</Text>
+                  </Pressable>
+                );
+              })}
+
+              {categories.length > 12 ? (
+                <Text style={[styles.subtle, { marginTop: 8 }]}>
+                  Showing top 12 categories (tap “View all” to see every transaction).
+                </Text>
+              ) : null}
+            </View>
           )}
         </View>
       </ScrollView>
@@ -246,43 +260,36 @@ export default function ReportsScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  safeWrap: {
-    flex: 1,
-    backgroundColor: 'theme.bg',
-  },
-  wrap: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 24 : 20,
-    paddingBottom: 32,
-  },
+  safeWrap: { flex: 1, backgroundColor: theme.bg },
+  wrap: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
 
-  // HEADER
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
+    columnGap: 10,
     marginBottom: 12,
   },
-  h1: {
-    color: '#ffffff',
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  subtle: {
-    color: theme.textDim,
-    marginTop: 4,
-  },
+  h1: { color: theme.text, fontSize: 22, fontWeight: '800' },
+  subtle: { color: theme.textDim, marginTop: 4 },
 
-  headerPillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    columnGap: 8,
-    marginBottom: 16,
-  },
   headerPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+  },
+  headerPillText: { color: '#E5E7EB', fontWeight: '700', fontSize: 13 },
+
+  periodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  periodBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
@@ -290,60 +297,42 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     backgroundColor: theme.cardAlt,
   },
-  headerPillText: {
-    color: theme.pillText,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  periodBtnActive: { backgroundColor: theme.card, borderColor: theme.link },
+  periodText: { color: theme.textDim, fontWeight: '700', fontSize: 12 },
+  periodTextActive: { color: theme.text },
 
-  // SUMMARY CARD
-  summaryCard: {
+  monthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: theme.card,
     borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    marginBottom: 12,
+  },
+  monthTitle: { color: theme.text, fontWeight: '800' },
+  monthBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.cardAlt,
     borderWidth: 1,
     borderColor: theme.border,
   },
-  summaryTitle: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    marginBottom: 6,
-    fontSize: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    columnGap: 12,
-  },
-  summaryItem: {
-    flex: 1,
-  },
-  summaryLabel: {
-    color: theme.textDim,
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  summaryValue: {
-    color: theme.text,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  summarySub: {
-    color: theme.textDim,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  positiveText: { color: theme.positive },
-  negativeText: { color: theme.negative },
+  monthBtnText: { color: theme.link, fontSize: 22, fontWeight: '900' },
 
-  // CARD
   card: {
     backgroundColor: theme.card,
     borderRadius: 14,
     padding: 14,
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: theme.border,
+    marginBottom: 12,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -351,49 +340,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
-  cardTitle: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  cardLink: {
-    color: theme.link,
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
+  cardLink: { color: theme.link, fontSize: 13, fontWeight: '700' },
 
-  emptyText: {
-    color: theme.textDim,
-    marginTop: 10,
-  },
+  bigMoney: { color: theme.text, fontSize: 28, fontWeight: '900', marginTop: 2 },
 
-  // ROWS (reusing your "accounts" row styling pattern)
-  accountRow: {
+  catRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.border,
   },
-  accountName: {
-    color: theme.text,
-    fontWeight: '800',
-  },
-  accountMeta: {
-    color: theme.textDim,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  accountMetaDim: { opacity: 0.8 },
+  catTitle: { color: theme.text, fontWeight: '800' },
+  catSub: { color: theme.textDim, fontSize: 12, marginTop: 2 },
 
-  accountBalance: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-    marginRight: 6,
-  },
-  accountChevron: {
-    color: theme.link,
-    fontSize: 22,
-    paddingLeft: 6,
-  },
+  chevron: { color: theme.link, fontSize: 22, paddingLeft: 6 },
 });
