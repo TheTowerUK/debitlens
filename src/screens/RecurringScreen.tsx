@@ -1,488 +1,291 @@
 // src/screens/RecurringScreen.tsx
-import React from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  Alert,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import {
-  useApp,
-  type RecurringItem,
-  type RecurringFrequency,
-  type Transaction,
-} from '../state/AppContext';
-import { formatDateDDMMYYYY } from '../utils/formatDate';
-import { colors as theme } from '../theme/colors';
+import React, { useMemo } from 'react';
+import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
-const FREQUENCY_LABEL: Record<RecurringFrequency, string> = {
-  daily: 'Daily',
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  yearly: 'Yearly',
-};
+import { useApp, type RecurringItem } from '../state/AppContext';
+import type { RootStackParamList } from '../navigations/types';
+import { colors as theme } from '../theme/colors';
 
-const advanceDate = (date: Date, frequency: RecurringFrequency): Date => {
-  const d = new Date(date.getTime());
-  switch (frequency) {
-    case 'daily':
-      d.setDate(d.getDate() + 1);
-      break;
-    case 'weekly':
-      d.setDate(d.getDate() + 7);
-      break;
-    case 'monthly':
-      d.setMonth(d.getMonth() + 1);
-      break;
-    case 'yearly':
-      d.setFullYear(d.getFullYear() + 1);
-      break;
-  }
-  return d;
-};
+type Props = NativeStackScreenProps<RootStackParamList, 'Recurring'>;
 
-const RecurringScreen: React.FC = () => {
-  const navigation = useNavigation<any>();
+function formatMoney(v: number) {
+  return `£${(Number(v) || 0).toFixed(2)}`;
+}
+
+function niceDate(d?: string) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString();
+}
+
+function cap(s: string) {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+export default function RecurringScreen({ navigation }: Props) {
   const { state, actions } = useApp();
-
   const recurring: RecurringItem[] = state.recurring || [];
-  const accounts = state.accounts || [];
-  const txs: Transaction[] = state.transactions || [];
 
-  const handleToggleActive = (item: RecurringItem) => {
-    actions.updateRecurring(item.id, { active: !item.active });
-  };
+  const list = useMemo(() => {
+    return [...recurring].sort((a, b) => {
+      const da = a.nextDueDate ? new Date(a.nextDueDate).getTime() : 0;
+      const db = b.nextDueDate ? new Date(b.nextDueDate).getTime() : 0;
+      return da - db;
+    });
+  }, [recurring]);
 
-  const handleDelete = (item: RecurringItem) => {
-    actions.deleteRecurring(item.id);
-  };
+  const totals = useMemo(() => {
+    let activeCount = 0;
+    let monthlyApprox = 0;
 
-  const handleEdit = (item: RecurringItem) => {
-    navigation.navigate('RecurringEditor', { id: item.id });
-  };
+    for (const r of recurring) {
+      if (r.active === false) continue;
+      activeCount++;
 
-  const handleAddNew = () => {
-    navigation.navigate('RecurringEditor');
-  };
+      const amt = Number(r.amount) || 0;
+      const freq = r.frequency || 'monthly';
 
-  const handleApplyDueNow = () => {
-    if (!accounts.length) {
-      Alert.alert(
-        'No accounts',
-        'You need at least one account before applying recurring items.'
-      );
-      return;
-    }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let created = 0;
-
-    recurring.forEach((r) => {
-      if (r.active === false) return;
-
-      const nextDate = r.nextDueDate ? new Date(r.nextDueDate) : today;
-      nextDate.setHours(0, 0, 0, 0);
-
-      if (nextDate > today) return;
-
-      const amountNum = Number(r.amount) || 0;
-      if (!amountNum) return;
-
-      // --- Recurring transfer ---
-      if (r.isTransfer && r.fromAccountId && r.toAccountId) {
-        if (accounts.length < 2) return;
-        if (r.fromAccountId === r.toAccountId) return;
-
-        const fromAcc = accounts.find((a: any) => a.id === r.fromAccountId);
-        const toAcc = accounts.find((a: any) => a.id === r.toAccountId);
-        if (!fromAcc || !toAcc) return;
-
-        const now = new Date();
-        const isoDate = now.toISOString();
-
-        const outNote = r.title || 'Transfer out';
-        const inNote = r.title || 'Transfer in';
-
-        // Outgoing (expense)
-        actions.addTransaction({
-          accountId: r.fromAccountId,
-          amount: amountNum,
-          type: 'expense',
-          date: isoDate,
-          category: 'Transfer',
-          description: outNote,
-        } as Transaction);
-
-        // Incoming (income)
-        actions.addTransaction({
-          accountId: r.toAccountId,
-          amount: amountNum,
-          type: 'income',
-          date: isoDate,
-          category: 'Transfer',
-          description: inNote,
-        } as Transaction);
-
-        const newNext = advanceDate(nextDate, r.frequency);
-        actions.updateRecurring(r.id, {
-          nextDueDate: newNext.toISOString(),
-        });
-
-        created += 2;
-        return;
+      // ✅ THIS is where your snippet belongs
+      if (freq === 'daily') {
+        monthlyApprox += amt * 30;
+      } else if (freq === 'yearly') {
+        monthlyApprox += amt / 12;
+      } else {
+        monthlyApprox += amt; // monthly
       }
-
-      // --- Single-account recurring ---
-      const fallbackAccountId = accounts[0].id;
-      const accountId = r.accountId || fallbackAccountId;
-      const txType: 'income' | 'expense' = r.type ?? 'expense';
-
-      actions.addTransaction({
-        accountId,
-        amount: amountNum,
-        type: txType,
-        date: new Date().toISOString(),
-        description: r.title,
-        category: r.type === 'income' ? 'Recurring income' : 'Recurring payment',
-      } as Transaction);
-
-      const newNext = advanceDate(nextDate, r.frequency);
-      actions.updateRecurring(r.id, {
-        nextDueDate: newNext.toISOString(),
-      });
-
-      created += 1;
-    });
-
-    if (created === 0) {
-      Alert.alert('Nothing due', 'No recurring items were due today.');
-    } else {
-      Alert.alert(
-        'Recurring applied',
-        `Created ${created} transaction${created === 1 ? '' : 's'}.`
-      );
     }
+
+    return { activeCount, monthlyApprox };
+  }, [recurring]);
+
+
+
+  const toggleActive = (item: RecurringItem) => {
+    const fn = (actions as any)?.updateRecurring;
+    if (typeof fn !== 'function') return;
+
+    fn(item.id, { active: item.active === false ? true : false });
   };
 
-  /**
-   * Detect recurring payments from history, focusing on
-   * transactions whose category is "Direct Debit".
-   */
-  const handleDetectFromHistory = () => {
-    if (!txs.length) {
-      Alert.alert('No transactions', 'There are no transactions to analyse.');
-      return;
-    }
+  const confirmDelete = (item: RecurringItem) => {
+    const fn = (actions as any)?.deleteRecurring;
+    if (typeof fn !== 'function') return;
 
-    // 1) Filter: expenses with category "Direct Debit" (case-insensitive)
-    const ddCandidates = txs.filter((t) => {
-      if (!t.category || !t.accountId) return false;
-      const cat = String(t.category).trim().toLowerCase();
-      return t.type === 'expense' && cat === 'direct debit';
-    });
+    Alert.alert(
+      'Delete recurring item?',
+      'This will remove it permanently.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => fn(item.id) },
+      ]
+    );
+  };
 
-    if (!ddCandidates.length) {
-      Alert.alert(
-        'No Direct Debits found',
-        'No expense transactions with category "Direct Debit" were found.'
-      );
-      return;
-    }
+  const goAdd = () => {
+    // Only wire if you actually have RecurringEditor in your navigator
+    // navigation.navigate('RecurringEditor');
+    Alert.alert('Add recurring', 'Hook this to your RecurringEditor when ready.');
+  };
 
-    // 2) Group by account + title + amount
-    //    Title derived from description || category.
-    type GroupKey = string;
-    const groups: Record<GroupKey, Transaction[]> = {};
-
-    for (const t of ddCandidates) {
-      const titleSource =
-        (t.description || t.category || '').trim() || 'Direct Debit';
-      const amountAbs = Math.abs(Number(t.amount) || 0);
-      if (!t.accountId || !amountAbs) continue;
-
-      const key: GroupKey = `${t.accountId}||${titleSource.toLowerCase()}||${amountAbs.toFixed(
-        2
-      )}`;
-
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(t);
-    }
-
-    let created = 0;
-
-    // 3) For each group, create a monthly recurring if not already present
-    Object.entries(groups).forEach(([key, list]) => {
-      if (!list.length) return;
-
-      // Take the latest transaction as the template
-      const sorted = list
-        .filter((t) => !!t.date)
-        .slice()
-        .sort((a, b) => {
-          const da = a.date ? Date.parse(a.date) : 0;
-          const db = b.date ? Date.parse(b.date) : 0;
-          return db - da;
-        });
-
-      const sample = sorted[0] ?? list[0];
-      if (!sample.accountId) return;
-
-      const amountAbs = Math.abs(Number(sample.amount) || 0);
-      if (!amountAbs) return;
-
-      const titleSource =
-        (sample.description || sample.category || '').trim() || 'Direct Debit';
-
-      // Avoid duplicates: check if similar recurring already exists
-      const exists = recurring.some((r) => {
-        if (r.isTransfer) return false;
-        if (!r.accountId) return false;
-
-        const rTitle = (r.title || '').trim().toLowerCase();
-        const sTitle = titleSource.toLowerCase();
-        const rAmt = Math.abs(Number(r.amount) || 0);
-
-        return (
-          r.accountId === sample.accountId &&
-          rTitle === sTitle &&
-          rAmt === amountAbs
-        );
-      });
-
-      if (exists) return;
-
-      const nextDueDate =
-        sample.date && typeof sample.date === 'string'
-          ? sample.date
-          : new Date().toISOString();
-
-      const item: RecurringItem = {
-        id: `rec_auto_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        title: titleSource,
-        amount: amountAbs,
-        frequency: 'monthly', // assume monthly for Direct Debits
-        accountId: sample.accountId,
-        type: 'expense',
-        active: true,
-        nextDueDate,
-        isTransfer: false,
-        fromAccountId: undefined,
-        toAccountId: undefined,
-      };
-
-      actions.addRecurring(item);
-      created++;
-    });
-
-    if (created === 0) {
-      Alert.alert(
-        'Already covered',
-        'No new recurring items were created. Existing recurring items already cover these Direct Debits.'
-      );
-    } else {
-      Alert.alert(
-        'Recurring detected',
-        `Created ${created} recurring Direct Debit item${
-          created === 1 ? '' : 's'
-        } from history.`
-      );
-    }
+  const goEdit = (item: RecurringItem) => {
+    // Only wire if you actually have RecurringEditor in your navigator
+    // navigation.navigate('RecurringEditor', { id: item.id });
+    Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
   return (
-    <ScrollView
-      style={styles.wrap}
-      contentContainerStyle={{ paddingBottom: 32 }}
-    >
-      <Text style={styles.h1}>Recurring Payments</Text>
+    <SafeAreaView style={styles.safeWrap}>
+      <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.h1}>Recurring</Text>
+            <Text style={styles.subtle}>Direct debits & standing orders</Text>
+          </View>
 
-      <Pressable style={styles.applyButton} onPress={handleApplyDueNow}>
-        <Text style={styles.applyButtonText}>Apply due now</Text>
-      </Pressable>
+          <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
+            <Text style={styles.headerPillText}>Back</Text>
+          </Pressable>
 
-      <Pressable
-        style={[styles.applyButton, styles.detectButton]}
-        onPress={handleDetectFromHistory}
-      >
-        <Text style={styles.applyButtonText}>Detect from history</Text>
-      </Pressable>
+          <Pressable style={[styles.headerPill, styles.addPill]} onPress={goAdd} hitSlop={8}>
+            <Text style={styles.headerPillText}>Add</Text>
+          </Pressable>
+        </View>
 
+        {/* Summary */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Overview</Text>
 
-      <Pressable style={[styles.button, styles.primaryButton]} onPress={handleAddNew}>
-        <Text style={styles.buttonText}>Add Recurring</Text>
-      </Pressable>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Active items</Text>
+              <Text style={styles.summaryValue}>{totals.activeCount}</Text>
+              <Text style={styles.summarySub}>Excludes paused items</Text>
+            </View>
 
-      <View style={styles.divider} />
-
-
-      {recurring.length === 0 && (
-        <Text style={styles.subtle}>
-          No recurring items yet. Tap &quot;Add Recurring&quot; to create one.
-        </Text>
-      )}
-
-      {recurring.map((r) => {
-        const isTransfer = !!r.isTransfer;
-        const amountStr = `£${Number(r.amount).toFixed(2)}`;
-        const freqStr = FREQUENCY_LABEL[r.frequency];
-
-        let extraStr = null;
-        if (isTransfer && r.fromAccountId && r.toAccountId) {
-          const fromAcc = accounts.find((a: any) => a.id === r.fromAccountId);
-          const toAcc = accounts.find((a: any) => a.id === r.toAccountId);
-          const fromName = fromAcc?.name || <Text>From</Text>;
-          const toName = toAcc?.name || 'To';
-          extraStr = `Transfer ${fromName} → ${toName}`;
-        } else if (r.type) {
-          extraStr = r.type === 'income' ? 'Income' : 'Expense';
-        }
-
-        const subtitleParts = [amountStr, freqStr];
-        if (extraStr) subtitleParts.push(extraStr);
-        const subtitle = subtitleParts.join(' • ');
-     
-        return (
-          <View key={r.id} style={styles.card}>
-            <Pressable onPress={() => handleEdit(r)}>
-              <Text style={styles.itemTitle}>
-                {r.title ||
-                  (isTransfer ? 'Recurring transfer' : 'Recurring item')}
-              </Text>
-              <Text style={styles.itemSubtitle}>{subtitle}</Text>
-              {r.nextDueDate && (
-                <Text style={styles.subtle}>
-                  Next due: {formatDateDDMMYYYY(r.nextDueDate)}
-                </Text>
-              )}
-            </Pressable>
-           
-            <View style={styles.rowActions}>
-              <Pressable onPress={() => handleToggleActive(r)}>
-                <Text
-                  style={[
-                    styles.badge,
-                    r.active !== false ? styles.badgeActive : styles.badgePaused,
-                  ]}
-                >
-                  {r.active !== false ? 'Active' : 'Paused'}
-                </Text>
-              </Pressable>
-
-              <Pressable onPress={() => handleDelete(r)}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </Pressable>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Monthly estimate</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totals.monthlyApprox)}</Text>
+              <Text style={styles.summarySub}>Approx. based on frequency</Text>
             </View>
           </View>
-        );
-      })}
+        </View>
 
+        {/* List */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Text style={styles.cardTitle}>Your recurring items</Text>
+          </View>
 
-    </ScrollView>
+          {list.length === 0 ? (
+            <Text style={styles.subtle}>No recurring items yet.</Text>
+          ) : (
+            <View style={{ marginTop: 6 }}>
+              {list.map((item) => {
+                const isPaused = item.active === false;
+                const title =
+                  item.title || (item.isTransfer ? 'Recurring transfer' : 'Recurring item');
+
+                return (
+                  <Pressable
+                    key={item.id}
+                    style={[styles.row, isPaused && styles.rowPaused]}
+                    onPress={() => goEdit(item)}
+                    hitSlop={6}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle}>
+                        {title}{' '}
+                        {isPaused ? <Text style={styles.pausedTag}> (Paused)</Text> : null}
+                      </Text>
+
+                      <Text style={styles.rowSub}>
+                        {cap(String(item.frequency || 'monthly'))} • Next due: {niceDate(item.nextDueDate)}
+                      </Text>
+
+                      {item.category ? (
+                        <Text style={styles.rowSubDim}>Category: {String(item.category)}</Text>
+                      ) : null}
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.rowAmt}>{formatMoney(Number(item.amount || 0))}</Text>
+
+                      <View style={styles.rowActions}>
+                        <Pressable
+                          style={styles.actionBtn}
+                          onPress={() => toggleActive(item)}
+                          hitSlop={8}
+                        >
+                          <Text style={styles.actionBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+                        </Pressable>
+
+                        <Pressable
+                          style={[styles.actionBtn, styles.deleteBtn]}
+                          onPress={() => confirmDelete(item)}
+                          hitSlop={8}
+                        >
+                          <Text style={styles.actionBtnText}>Del</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-    backgroundColor: 'theme.bg',
-    paddingHorizontal: 16,
-    paddingTop: 24,
-  },
-  h1: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 16,
-  },
-  subtle: {
-    color: theme.textDim,
-    marginBottom: 8,
-  },
-  applyButton: {
-    backgroundColor: '#0f172a',
-    borderRadius: 999,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2563eb',
-    marginBottom: 8,
-  },
-  detectButton: {
-    borderColor: '#4b5563',
-  },
-  applyButtonText: {
-    color: theme.pillText,
-    fontWeight: '600',
-  },
-  card: {
-    backgroundColor: theme.cardAlt,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  itemTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  itemSubtitle: {
-    color: theme.textDim,
-    marginTop: 4,
-  },
-  rowActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-    columnGap: 16,
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    fontSize: 12,
-    overflow: 'hidden',
-  },
-  badgeActive: {
-    color: theme.positive,
-  },
-  badgePaused: {
-    color: '#fbbf24',
-  },
-  deleteText: {
-    color: '#f87171',
-    fontSize: 14,
-  },
-  button: {
-    marginTop: 24,
-    backgroundColor: '#0f172a',        // base (secondary look)
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: '#4b5563',
-  },
-  primaryButton: {
-    backgroundColor: '#2563EB',        // primary look
-    borderColor: '#2563EB',
-  },
-    buttonText: {
-    color: theme.text,
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  divider: { 
-    height: 1, 
-    backgroundColor: theme.border, 
-    opacity: 0.8, 
-    marginBottom: 16 },
-});
+  safeWrap: { flex: 1, backgroundColor: theme.bg },
+  wrap: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
 
-export default RecurringScreen;
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    columnGap: 8,
+  },
+  h1: { color: theme.text, fontSize: 26, fontWeight: '800' },
+  subtle: { color: theme.textDim, marginTop: 4, flexShrink: 1 },
+
+  headerPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+  },
+  addPill: {
+    borderColor: theme.link,
+  },
+  headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '700' },
+
+  summaryCard: {
+    backgroundColor: theme.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  summaryTitle: { color: '#E5E7EB', fontWeight: '700', marginBottom: 6, fontSize: 16 },
+  summaryRow: { flexDirection: 'row', columnGap: 12 },
+  summaryItem: { flex: 1 },
+  summaryLabel: { color: theme.textDim, fontSize: 12, marginBottom: 2 },
+  summaryValue: { color: theme.text, fontSize: 18, fontWeight: '900' },
+  summarySub: { color: theme.textDim, fontSize: 12, marginTop: 2 },
+
+  card: {
+    backgroundColor: theme.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '800' },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.border,
+  },
+  rowPaused: { opacity: 0.75 },
+
+  rowTitle: { color: theme.text, fontWeight: '900' },
+  pausedTag: { color: theme.textDim, fontWeight: '800' },
+
+  rowSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
+  rowSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
+
+  rowAmt: { color: '#E5E7EB', fontWeight: '900' },
+
+  rowActions: { flexDirection: 'row', columnGap: 8, marginTop: 8 },
+  actionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: theme.cardAlt,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  deleteBtn: {
+    borderColor: '#B91C1C',
+  },
+  actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
+});
