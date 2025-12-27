@@ -42,22 +42,31 @@ export default function RecurringScreen({ navigation }: Props) {
     let activeCount = 0;
     let monthlyApprox = 0;
 
+    // approx “payments per month”
+    const multipliers: Record<string, number> = {
+      daily: 30,
+      weekly: 4,
+      fortnightly: 2,
+      monthly: 1,
+      yearly: 1 / 12,
+    };
+
     for (const r of recurring) {
       if (r.active === false) continue;
       activeCount++;
 
       const amt = Number(r.amount) || 0;
-      const freq = r.frequency || 'monthly';
 
-      if (freq === 'daily') monthlyApprox += amt * 30;
-      else if (freq === 'weekly') monthlyApprox += amt * 4;
-      else if (freq === 'fortnightly') monthlyApprox += amt * 2;
-      else if (freq === 'yearly') monthlyApprox += amt / 12;
-      else monthlyApprox += amt; // monthly
+      // treat as string so we can handle real-world values even if the TS union is narrower
+      const freq = String(r.frequency || 'monthly').toLowerCase().trim();
+
+      const mult = multipliers[freq] ?? 1; // default monthly
+      monthlyApprox += amt * mult;
     }
 
     return { activeCount, monthlyApprox };
   }, [recurring]);
+
 
   const toggleActive = (item: RecurringItem) => {
     const fn = (actions as any)?.updateRecurring;
