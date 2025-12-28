@@ -77,8 +77,9 @@ export default function RecurringScreen({ navigation }: Props) {
   // Group by (category + description + amount)
   const groups: Record<
     string,
-    { title: string; amount: number; dates: Date[]; category?: string }
+    { title: string; sumAmount: number; count: number; dates: Date[]; category?: string }
   > = {};
+
 
   for (const t of expenses) {
     const cat = String((t as any).category || 'Uncategorised').trim();
@@ -98,21 +99,25 @@ export default function RecurringScreen({ navigation }: Props) {
 
     if (!groups[key]) {
       groups[key] = {
-        title,               // ← uses category
-        amount: amt,         // or amountBand if you prefer
+        title,
+        sumAmount: 0,
+        count: 0,
         dates: [],
         category: cat,
       };
     }
 
     groups[key].dates.push(d);
+    groups[key].sumAmount += amt;
+    groups[key].count += 1;
+
   }
 
 
     const candidates = Object.values(groups)
       .map((g) => {
         const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-        if (dates.length < 1) return null; // need at least 3 occurrences to be confident
+        if (dates.length < 2) return null; // need at least 2 occurrences
 
         const intervals: number[] = [];
         for (let i = 1; i < dates.length; i++) {
@@ -128,7 +133,7 @@ export default function RecurringScreen({ navigation }: Props) {
 
         return {
           title: g.title,
-          amount: g.amount,
+          amount: g.count ? g.sumAmount / g.count : 0,
           category: g.category,
           count: dates.length,
           frequency,
@@ -283,7 +288,7 @@ export default function RecurringScreen({ navigation }: Props) {
 
             {detectCandidates.length === 0 ? (
               <Text style={styles.subtle}>
-                No strong recurring patterns found yet (need ~3+ repeats with a consistent interval).
+                No strong recurring patterns found yet (need ~2+ repeats with a consistent interval).
               </Text>
             ) : (
               <View style={{ marginTop: 8 }}>
