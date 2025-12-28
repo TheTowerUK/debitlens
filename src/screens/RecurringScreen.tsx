@@ -1,5 +1,5 @@
 // src/screens/RecurringScreen.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -9,6 +9,39 @@ import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Recurring'>;
+
+function normalizeTitle(s: string) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[0-9]/g, '')       // remove digits (often reference numbers)
+    .replace(/[^a-z\s]/g, '')    // remove punctuation
+    .trim();
+}
+
+function inferFrequencyFromIntervals(days: number[]) {
+  // very simple heuristic: choose the closest “bucket”
+  // (you can tune tolerances later)
+  const avg = days.reduce((a, b) => a + b, 0) / (days.length || 1);
+
+  const near = (target: number, tol: number) => Math.abs(avg - target) <= tol;
+
+  if (near(7, 2)) return 'weekly';
+  if (near(14, 3)) return 'fortnightly';
+  if (near(30, 6)) return 'monthly';
+  if (near(365, 30)) return 'yearly';
+  return 'monthly';
+}
+
+function nextDueDateFromLast(last: Date, freq: string) {
+  const d = new Date(last);
+  if (freq === 'weekly') d.setDate(d.getDate() + 7);
+  else if (freq === 'fortnightly') d.setDate(d.getDate() + 14);
+  else if (freq === 'yearly') d.setFullYear(d.getFullYear() + 1);
+  else d.setMonth(d.getMonth() + 1); // monthly default
+  return d.toISOString().slice(0, 10);
+}
+
 
 function formatMoney(v: number) {
   return `£${(Number(v) || 0).toFixed(2)}`;
@@ -29,6 +62,76 @@ function cap(s: string) {
 export default function RecurringScreen({ navigation }: Props) {
   const { state, actions } = useApp();
   const recurring: RecurringItem[] = state.recurring || [];
+  const txs = state.transactions || [];
+  const [showDetect, setShowDetect] = useState(false);
+
+  const detectCandidates = useMemo(() => {
+    // Only look at expenses (most recurring items are outgoing)
+    const expenses = txs.filter((t) => t?.type === 'expense' && t?.date && t?.name);
+
+    // Group by (normalized title + amount)
+    const groups: Record<string, { title: string; amount: number; dates: Date[]; category?: string }> = {};
+
+    for (const t of expenses) {
+      const title = String(t.name || '').trim();
+      const norm = normalizeTitle(title);
+      const amt = Math.abs(Number(t.amount) || 0);
+
+      if (!norm || amt <= 0) continue;
+
+      const key = `${norm}__${amt.toFixed(2)}`;
+
+      const d = new Date(t.date);
+      if (isNaN(d.getTime())) continue;
+
+      if (!groups[key]) {
+        groups[key] = { title, amount: amt, dates: [], category: t.category || undefined };
+      }
+      groups[key].dates.push(d);
+    }
+
+    const candidates = Object.values(groups)
+      .map((g) => {
+        const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
+        if (dates.length < 3) return null; // need at least 3 occurrences to be confident
+
+        const intervals: number[] = [];
+        for (let i = 1; i < dates.length; i++) {
+          const diffMs = dates[i].getTime() - dates[i - 1].getTime();
+          const diffDays = diffMs / (1000 * 60 * 60 * 24);
+          if (diffDays > 0) intervals.push(diffDays);
+        }
+        if (intervals.length < 2) return null;
+
+        const frequency = inferFrequencyFromIntervals(intervals);
+        const last = dates[dates.length - 1];
+        const nextDueDate = nextDueDateFromLast(last, frequency);
+
+        return {
+          title: g.title,
+          amount: g.amount,
+          category: g.category,
+          count: dates.length,
+          frequency,
+          lastDate: last.toISOString().slice(0, 10),
+          nextDueDate,
+        };
+      })
+      .filter(Boolean)
+      // show the most “repeat-y” items first
+      .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0));
+
+    return candidates as Array<{
+      title: string;
+      amount: number;
+      category?: string;
+      count: number;
+      frequency: string;
+      lastDate: string;
+      nextDueDate: string;
+    }>;
+  }, [txs]);
+
 
   const list = useMemo(() => {
     return [...recurring].sort((a, b) => {
@@ -138,6 +241,75 @@ export default function RecurringScreen({ navigation }: Props) {
             </View>
           </View>
         </View>
+
+        {showDetect ? (
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>Detect recurring candidates</Text>
+            </View>
+
+            {detectCandidates.length === 0 ? (
+              <Text style={styles.subtle}>
+                No strong recurring patterns found yet (need ~3+ repeats with a consistent interval).
+              </Text>
+            ) : (
+              <View style={{ marginTop: 8 }}>
+                {detectCandidates.slice(0, 12).map((c, idx) => (
+                  <View key={`${c.title}-${c.amount}-${idx}`} style={styles.detectRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.detectTitle}>{c.title}</Text>
+                      <Text style={styles.detectSub}>
+                        {c.count} repeats • {String(c.frequency).toUpperCase()} • Last: {c.lastDate}
+                      </Text>
+                      <Text style={styles.detectSubDim}>
+                        Next due: {c.nextDueDate} • {formatMoney(c.amount)}
+                      </Text>
+                    </View>
+
+                    <Pressable
+                      style={styles.actionBtn}
+                      onPress={() => {
+                        const addFn = (actions as any)?.addRecurring;
+                        if (typeof addFn !== 'function') {
+                          Alert.alert(
+                            'Not wired yet',
+                            'addRecurring action is not available yet. Tell me your AppContext actions and I’ll wire it.'
+                          );
+                          return;
+                        }
+
+                        addFn({
+                          title: c.title,
+                          amount: c.amount,
+                          frequency: c.frequency, // weekly/fortnightly/monthly/yearly
+                          nextDueDate: c.nextDueDate,
+                          active: true,
+                          category: c.category,
+                        });
+
+                        Alert.alert('Added', 'Recurring item created from detected pattern.');
+                      }}
+                      hitSlop={8}
+                    >
+                      <Text style={styles.actionBtnText}>Add</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        ) : null}
+
+
+        <Pressable
+          style={[styles.headerPill, styles.detectPill]}
+          onPress={() => setShowDetect((v) => !v)}
+          hitSlop={8}
+        >
+          <Text style={styles.headerPillText}>{showDetect ? 'Hide detect' : 'Detect'}</Text>
+        </Pressable>
+
+
 
         {/* List */}
         <View style={styles.card}>
@@ -291,5 +463,21 @@ const styles = StyleSheet.create({
   deleteBtn: {
     borderColor: '#B91C1C',
   },
+  detectPill: {
+  borderColor: theme.link,
+},
+
+detectRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  paddingVertical: 12,
+  borderTopWidth: StyleSheet.hairlineWidth,
+  borderTopColor: theme.border,
+  columnGap: 10,
+},
+detectTitle: { color: theme.text, fontWeight: '900' },
+detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
+detectSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
+
   actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
 });
