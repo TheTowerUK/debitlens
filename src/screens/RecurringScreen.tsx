@@ -81,11 +81,10 @@ export default function RecurringScreen({ navigation }: Props) {
   > = {};
 
   for (const t of expenses) {
-    const title = String((t as any).description || '').trim(); // ✅ your field
-    const normTitle = normalizeTitle(title);
-
     const cat = String((t as any).category || 'Uncategorised').trim();
     const normCat = normalizeTitle(cat);
+
+    const title = cat; // ✅ category-driven title
 
     const amt = Math.abs(Number((t as any).amount) || 0);
     if (amt <= 0) continue;
@@ -93,12 +92,14 @@ export default function RecurringScreen({ navigation }: Props) {
     const d = new Date((t as any).date);
     if (isNaN(d.getTime())) continue;
 
-    const key = `${normCat}__${normTitle || 'no-desc'}__${amt.toFixed(2)}`;
+    // Group by category + amount band
+    const amountBand = Math.round(amt / 5) * 5; // £5 buckets
+    const key = `${normCat}__${amountBand}`;
 
     if (!groups[key]) {
       groups[key] = {
-        title: title || cat || 'Recurring item',
-        amount: amt,
+        title,               // ← uses category
+        amount: amt,         // or amountBand if you prefer
         dates: [],
         category: cat,
       };
@@ -111,7 +112,7 @@ export default function RecurringScreen({ navigation }: Props) {
     const candidates = Object.values(groups)
       .map((g) => {
         const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-        if (dates.length < 2) return null; // need at least 3 occurrences to be confident
+        if (dates.length < 1) return null; // need at least 3 occurrences to be confident
 
         const intervals: number[] = [];
         for (let i = 1; i < dates.length; i++) {
@@ -246,8 +247,11 @@ export default function RecurringScreen({ navigation }: Props) {
               onPress={() => setShowDetect((v) => !v)}
               hitSlop={8}
             >
-              <Text style={styles.headerPillText}>{showDetect ? 'Hide detect' : 'Detect'}</Text>
+              <Text style={[styles.headerPillText, styles.detectPillText]}>
+                {showDetect ? 'Hide detect' : 'Detect'}
+              </Text>
             </Pressable>
+
           </View>
         </View>
 
@@ -328,17 +332,6 @@ export default function RecurringScreen({ navigation }: Props) {
             )}
           </View>
         ) : null}
-
-
-        <Pressable
-          style={[styles.headerPill, styles.detectPill]}
-          onPress={() => setShowDetect((v) => !v)}
-          hitSlop={8}
-        >
-          <Text style={styles.headerPillText}>{showDetect ? 'Hide detect' : 'Detect'}</Text>
-        </Pressable>
-
-
 
         {/* List */}
         <View style={styles.card}>
@@ -492,10 +485,6 @@ const styles = StyleSheet.create({
   deleteBtn: {
     borderColor: '#B91C1C',
   },
-  detectPill: {
-  borderColor: theme.link,
-},
-
   detectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -505,19 +494,21 @@ const styles = StyleSheet.create({
     columnGap: 10,
   },
   pillsRow: {
-    marginTop: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: theme.card,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.border,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
     columnGap: 10,
     rowGap: 8, // ✅ the “single space underneath”
   },
+  detectPill: {
+  backgroundColor: theme.cardAlt,      // same base as DataExportImport
+  borderColor: theme.link,             // light blue outline
+  },
+
+  detectPillText: {
+    color: theme.link,                   // light blue text
+  },
+
 
   detectTitle: { color: theme.text, fontWeight: '900' },
   detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
