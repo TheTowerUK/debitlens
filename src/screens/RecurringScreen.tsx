@@ -10,20 +10,42 @@ import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Recurring'>;
 
+// --- Helpers ---
 function normalizeTitle(s: string) {
   return String(s || '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
-    .replace(/[0-9]/g, '')       // remove digits (often reference numbers)
-    .replace(/[^a-z\s]/g, '')    // remove punctuation
+    .replace(/[0-9]/g, '')
+    .replace(/[^a-z\s]/g, '')
     .trim();
 }
 
-function inferFrequencyFromIntervals(days: number[]) {
-  // very simple heuristic: choose the closest “bucket”
-  // (you can tune tolerances later)
-  const avg = days.reduce((a, b) => a + b, 0) / (days.length || 1);
+function parseTxnDate(value: unknown): Date | null {
+  const s = String(value || '').trim();
+  if (!s) return null;
 
+  // ISO: YYYY-MM-DD or YYYY-MM-DDTHH:mm...
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // UK CSV: DD/MM/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    const yyyy = Number(m[3]);
+    const d = new Date(yyyy, mm - 1, dd);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function inferFrequencyFromIntervals(days: number[]) {
+  const avg = days.reduce((a, b) => a + b, 0) / (days.length || 1);
   const near = (target: number, tol: number) => Math.abs(avg - target) <= tol;
 
   if (near(7, 2)) return 'weekly';
@@ -42,34 +64,8 @@ function nextDueDateFromLast(last: Date, freq: string) {
   return d.toISOString().slice(0, 10);
 }
 
-
 function formatMoney(v: number) {
   return `£${(Number(v) || 0).toFixed(2)}`;
-}
-
-function parseTxnDate(value: unknown): Date | null {
-  const s = String(value || '').trim();
-  if (!s) return null;
-
-  // ISO: YYYY-MM-DD (or YYYY-MM-DDTHH:mm...)
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  // UK CSV: DD/MM/YYYY
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m) {
-    const dd = Number(m[1]);
-    const mm = Number(m[2]);
-    const yyyy = Number(m[3]);
-    const d = new Date(yyyy, mm - 1, dd);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  // Fallback
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
 }
 
 function niceDate(d?: string) {
@@ -90,55 +86,51 @@ export default function RecurringScreen({ navigation }: Props) {
   const txs = state.transactions || [];
   const [showDetect, setShowDetect] = useState(false);
 
+  // ---- Detection ----
   const detectCandidates = useMemo(() => {
+    let debugExpensesCount = 0;
+    let debugGroupsCount = 0;
 
-  const expenses = txs.filter((t) => {
-    const amt = Number((t as any)?.amount) || 0;
-    const d = parseTxnDate((t as any)?.date);
-    const desc = String((t as any)?.description || '').trim();
-    return amt < 0 && !!d && !!desc;
-  });
+    const expenses = txs.filter((t) => {
+      const amt = Number((t as any)?.amount) || 0;
+      const d = parseTxnDate((t as any)?.date);
+      const desc = String((t as any)?.description || '').trim();
+      const ok = amt < 0 && !!d && !!desc;
+      if (ok) debugExpensesCount += 1;
+      return ok;
+    });
 
-  // Group by (category + description + amount)
-  const groups: Record<
-    string,
-    { title: string; sumAmount: number; count: number; dates: Date[]; category?: string }
-  > = {};
+    // Group by category + amount band (category-driven)
+    const groups: Record<
+      string,
+      { title: string; sumAmount: number; count: number; dates: Date[]; category?: string }
+    > = {};
 
+    for (const t of expenses) {
+      const cat = String((t as any).category || 'Uncategorised').trim();
+      const normCat = normalizeTitle(cat);
 
-  for (const t of expenses) {
-    const cat = String((t as any).category || 'Uncategorised').trim();
-    const normCat = normalizeTitle(cat);
+      const title = cat; // category-driven title
 
-    const title = cat; // ✅ category-driven title
+      const amt = Math.abs(Number((t as any).amount) || 0);
+      if (amt <= 0) continue;
 
-    const amt = Math.abs(Number((t as any).amount) || 0);
-    if (amt <= 0) continue;
+      const d = parseTxnDate((t as any).date);
+      if (!d) continue;
 
-    const d = parseTxnDate((t as any).date);
-    if (!d) continue;
+      // Amount band keeps noisy categories from exploding into false matches.
+      const amountBand = Math.round(amt / 5) * 5; // £5 buckets
+      const key = `${normCat}__${amountBand}`;
 
+      if (!groups[key]) {
+        debugGroupsCount += 1;
+        groups[key] = { title, sumAmount: 0, count: 0, dates: [], category: cat };
+      }
 
-    // Group by category + amount band
-    const amountBand = Math.round(amt / 5) * 5; // £5 buckets
-    const key = `${normCat}__${amountBand}`;
-
-    if (!groups[key]) {
-      groups[key] = {
-        title,
-        sumAmount: 0,
-        count: 0,
-        dates: [],
-        category: cat,
-      };
+      groups[key].dates.push(d);
+      groups[key].sumAmount += amt;
+      groups[key].count += 1;
     }
-
-    groups[key].dates.push(d);
-    groups[key].sumAmount += amt;
-    groups[key].count += 1;
-
-  }
-
 
     const candidates = Object.values(groups)
       .map((g) => {
@@ -157,9 +149,11 @@ export default function RecurringScreen({ navigation }: Props) {
         const last = dates[dates.length - 1];
         const nextDueDate = nextDueDateFromLast(last, frequency);
 
+        const avgAmount = g.count ? g.sumAmount / g.count : 0;
+
         return {
           title: g.title,
-          amount: g.count ? g.sumAmount / g.count : 0,
+          amount: avgAmount,
           category: g.category,
           count: dates.length,
           frequency,
@@ -168,10 +162,7 @@ export default function RecurringScreen({ navigation }: Props) {
         };
       })
       .filter(Boolean)
-      // show the most “repeat-y” items first
-      .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0));
-
-    return candidates as Array<{
+      .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0)) as Array<{
       title: string;
       amount: number;
       category?: string;
@@ -180,9 +171,14 @@ export default function RecurringScreen({ navigation }: Props) {
       lastDate: string;
       nextDueDate: string;
     }>;
+
+    // Attach debug meta
+    (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
+
+    return candidates;
   }, [txs]);
 
-
+  // ---- Existing recurring list ----
   const list = useMemo(() => {
     return [...recurring].sort((a, b) => {
       const da = a.nextDueDate ? new Date(a.nextDueDate).getTime() : 0;
@@ -191,11 +187,11 @@ export default function RecurringScreen({ navigation }: Props) {
     });
   }, [recurring]);
 
+  // ---- Totals ----
   const totals = useMemo(() => {
     let activeCount = 0;
     let monthlyApprox = 0;
 
-    // approx “payments per month”
     const multipliers: Record<string, number> = {
       daily: 30,
       weekly: 4,
@@ -209,22 +205,19 @@ export default function RecurringScreen({ navigation }: Props) {
       activeCount++;
 
       const amt = Number(r.amount) || 0;
-
-      // treat as string so we can handle real-world values even if the TS union is narrower
       const freq = String(r.frequency || 'monthly').toLowerCase().trim();
+      const mult = multipliers[freq] ?? 1;
 
-      const mult = multipliers[freq] ?? 1; // default monthly
       monthlyApprox += amt * mult;
     }
 
     return { activeCount, monthlyApprox };
   }, [recurring]);
 
-
+  // ---- Actions ----
   const toggleActive = (item: RecurringItem) => {
     const fn = (actions as any)?.updateRecurring;
     if (typeof fn !== 'function') return;
-
     fn(item.id, { active: item.active === false ? true : false });
   };
 
@@ -232,25 +225,17 @@ export default function RecurringScreen({ navigation }: Props) {
     const fn = (actions as any)?.deleteRecurring;
     if (typeof fn !== 'function') return;
 
-    Alert.alert(
-      'Delete recurring item?',
-      'This will remove it permanently.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => fn(item.id) },
-      ]
-    );
+    Alert.alert('Delete recurring item?', 'This will remove it permanently.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => fn(item.id) },
+    ]);
   };
 
   const goAdd = () => {
-    // Only wire if you actually have RecurringEditor in your navigator
-    // navigation.navigate('RecurringEditor');
     Alert.alert('Add recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
   const goEdit = (item: RecurringItem) => {
-    // Only wire if you actually have RecurringEditor in your navigator
-    // navigation.navigate('RecurringEditor', { id: item.id });
     Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
@@ -282,10 +267,8 @@ export default function RecurringScreen({ navigation }: Props) {
                 {showDetect ? 'Hide detect' : 'Detect'}
               </Text>
             </Pressable>
-
           </View>
         </View>
-
 
         {/* Summary */}
         <View style={styles.summaryCard}>
@@ -306,11 +289,19 @@ export default function RecurringScreen({ navigation }: Props) {
           </View>
         </View>
 
+        {/* Detect panel */}
         {showDetect ? (
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
               <Text style={styles.cardTitle}>Detect recurring candidates</Text>
             </View>
+
+            {(detectCandidates as any)._debug ? (
+              <Text style={[styles.subtle, { marginBottom: 8 }]}>
+                Debug · Expenses considered: {(detectCandidates as any)._debug.expenses} · Groups built:{' '}
+                {(detectCandidates as any)._debug.groups}
+              </Text>
+            ) : null}
 
             {detectCandidates.length === 0 ? (
               <Text style={styles.subtle}>
@@ -345,7 +336,7 @@ export default function RecurringScreen({ navigation }: Props) {
                         addFn({
                           title: c.title,
                           amount: c.amount,
-                          frequency: c.frequency, // weekly/fortnightly/monthly/yearly
+                          frequency: c.frequency,
                           nextDueDate: c.nextDueDate,
                           active: true,
                           category: c.category,
@@ -364,7 +355,7 @@ export default function RecurringScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {/* List */}
+        {/* Existing recurring list */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Your recurring items</Text>
@@ -377,7 +368,9 @@ export default function RecurringScreen({ navigation }: Props) {
               {list.map((item) => {
                 const isPaused = item.active === false;
                 const title =
-                  item.title || (item.isTransfer ? 'Recurring transfer' : 'Recurring item');
+                  (item as any).title ||
+                  ((item as any).name as string) ||
+                  ((item as any).isTransfer ? 'Recurring transfer' : 'Recurring item');
 
                 return (
                   <Pressable
@@ -388,28 +381,24 @@ export default function RecurringScreen({ navigation }: Props) {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rowTitle}>
-                        {title}{' '}
-                        {isPaused ? <Text style={styles.pausedTag}> (Paused)</Text> : null}
+                        {title} {isPaused ? <Text style={styles.pausedTag}> (Paused)</Text> : null}
                       </Text>
 
                       <Text style={styles.rowSub}>
-                        {cap(String(item.frequency || 'monthly'))} • Next due: {niceDate(item.nextDueDate)}
+                        {cap(String((item as any).frequency || 'monthly'))} • Next due:{' '}
+                        {niceDate((item as any).nextDueDate)}
                       </Text>
 
-                      {item.category ? (
-                        <Text style={styles.rowSubDim}>Category: {String(item.category)}</Text>
+                      {(item as any).category ? (
+                        <Text style={styles.rowSubDim}>Category: {String((item as any).category)}</Text>
                       ) : null}
                     </View>
 
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.rowAmt}>{formatMoney(Number(item.amount || 0))}</Text>
+                      <Text style={styles.rowAmt}>{formatMoney(Number((item as any).amount || 0))}</Text>
 
                       <View style={styles.rowActions}>
-                        <Pressable
-                          style={styles.actionBtn}
-                          onPress={() => toggleActive(item)}
-                          hitSlop={8}
-                        >
+                        <Pressable style={styles.actionBtn} onPress={() => toggleActive(item)} hitSlop={8}>
                           <Text style={styles.actionBtnText}>{isPaused ? 'Resume' : 'Pause'}</Text>
                         </Pressable>
 
@@ -448,6 +437,14 @@ const styles = StyleSheet.create({
   h1: { color: theme.text, fontSize: 26, fontWeight: '800' },
   subtle: { color: theme.textDim, marginTop: 4, flexShrink: 1 },
 
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    columnGap: 10,
+    rowGap: 8,
+  },
+
   headerPill: {
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -456,10 +453,10 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     backgroundColor: theme.card,
   },
-  addPill: {
-    borderColor: theme.link,
-  },
+  addPill: { borderColor: theme.link },
+  detectPill: { backgroundColor: theme.cardAlt, borderColor: theme.link },
   headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '700' },
+  detectPillText: { color: theme.link },
 
   summaryCard: {
     backgroundColor: theme.card,
@@ -495,13 +492,10 @@ const styles = StyleSheet.create({
     borderTopColor: theme.border,
   },
   rowPaused: { opacity: 0.75 },
-
   rowTitle: { color: theme.text, fontWeight: '900' },
   pausedTag: { color: theme.textDim, fontWeight: '800' },
-
   rowSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
   rowSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
-
   rowAmt: { color: '#E5E7EB', fontWeight: '900' },
 
   rowActions: { flexDirection: 'row', columnGap: 8, marginTop: 8 },
@@ -513,9 +507,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
-  deleteBtn: {
-    borderColor: '#B91C1C',
-  },
+  deleteBtn: { borderColor: '#B91C1C' },
+  actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
+
   detectRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -524,26 +518,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.border,
     columnGap: 10,
   },
-  pillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    columnGap: 10,
-    rowGap: 8, // ✅ the “single space underneath”
-  },
-  detectPill: {
-  backgroundColor: theme.cardAlt,      // same base as DataExportImport
-  borderColor: theme.link,             // light blue outline
-  },
-
-  detectPillText: {
-    color: theme.link,                   // light blue text
-  },
-
-
   detectTitle: { color: theme.text, fontWeight: '900' },
   detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
   detectSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
-
-  actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
 });
