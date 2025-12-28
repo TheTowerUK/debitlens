@@ -505,10 +505,17 @@ const styles = StyleSheet.create({
     columnGap: 10,
   },
   pillsRow: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: theme.card,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-    columnGap: 8,
+    columnGap: 10,
     rowGap: 8, // ✅ the “single space underneath”
   },
 
