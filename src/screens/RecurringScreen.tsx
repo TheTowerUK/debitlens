@@ -214,14 +214,25 @@ export default function RecurringScreen({ navigation }: Props) {
             <Text style={styles.subtle}>Direct debits & standing orders</Text>
           </View>
 
-          <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
-            <Text style={styles.headerPillText}>Back</Text>
-          </Pressable>
+          <View style={styles.pillsRow}>
+            <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
+              <Text style={styles.headerPillText}>Back</Text>
+            </Pressable>
 
-          <Pressable style={[styles.headerPill, styles.addPill]} onPress={goAdd} hitSlop={8}>
-            <Text style={styles.headerPillText}>Add</Text>
-          </Pressable>
+            <Pressable style={[styles.headerPill, styles.addPill]} onPress={goAdd} hitSlop={8}>
+              <Text style={styles.headerPillText}>Add</Text>
+            </Pressable>
+
+            <Pressable
+              style={[styles.headerPill, styles.detectPill]}
+              onPress={() => setShowDetect((v) => !v)}
+              hitSlop={8}
+            >
+              <Text style={styles.headerPillText}>{showDetect ? 'Hide detect' : 'Detect'}</Text>
+            </Pressable>
+          </View>
         </View>
+
 
         {/* Summary */}
         <View style={styles.summaryCard}>
@@ -467,17 +478,25 @@ const styles = StyleSheet.create({
   borderColor: theme.link,
 },
 
-detectRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  paddingVertical: 12,
-  borderTopWidth: StyleSheet.hairlineWidth,
-  borderTopColor: theme.border,
-  columnGap: 10,
-},
-detectTitle: { color: theme.text, fontWeight: '900' },
-detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
-detectSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
+  detectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.border,
+    columnGap: 10,
+  },
+  pillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    columnGap: 8,
+    rowGap: 8, // ✅ the “single space underneath”
+  },
+
+  detectTitle: { color: theme.text, fontWeight: '900' },
+  detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
+  detectSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
 
   actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
 });
