@@ -66,34 +66,52 @@ export default function RecurringScreen({ navigation }: Props) {
   const [showDetect, setShowDetect] = useState(false);
 
   const detectCandidates = useMemo(() => {
-    // Only look at expenses (most recurring items are outgoing)
-    const expenses = txs.filter((t) => t?.type === 'expense' && t?.date && t?.name);
 
-    // Group by (normalized title + amount)
-    const groups: Record<string, { title: string; amount: number; dates: Date[]; category?: string }> = {};
+  const expenses = txs.filter((t) => {
+    const amt = Number((t as any)?.amount) || 0;
+    const date = (t as any)?.date;
+    const desc = String((t as any)?.description || '').trim(); // ✅ your field
+    return amt < 0 && !!date && !!desc;
+  });
 
-    for (const t of expenses) {
-      const title = String(t.name || '').trim();
-      const norm = normalizeTitle(title);
-      const amt = Math.abs(Number(t.amount) || 0);
+  // Group by (category + description + amount)
+  const groups: Record<
+    string,
+    { title: string; amount: number; dates: Date[]; category?: string }
+  > = {};
 
-      if (!norm || amt <= 0) continue;
+  for (const t of expenses) {
+    const title = String((t as any).description || '').trim(); // ✅ your field
+    const normTitle = normalizeTitle(title);
 
-      const key = `${norm}__${amt.toFixed(2)}`;
+    const cat = String((t as any).category || 'Uncategorised').trim();
+    const normCat = normalizeTitle(cat);
 
-      const d = new Date(t.date);
-      if (isNaN(d.getTime())) continue;
+    const amt = Math.abs(Number((t as any).amount) || 0);
+    if (amt <= 0) continue;
 
-      if (!groups[key]) {
-        groups[key] = { title, amount: amt, dates: [], category: t.category || undefined };
-      }
-      groups[key].dates.push(d);
+    const d = new Date((t as any).date);
+    if (isNaN(d.getTime())) continue;
+
+    const key = `${normCat}__${normTitle || 'no-desc'}__${amt.toFixed(2)}`;
+
+    if (!groups[key]) {
+      groups[key] = {
+        title: title || cat || 'Recurring item',
+        amount: amt,
+        dates: [],
+        category: cat,
+      };
     }
+
+    groups[key].dates.push(d);
+  }
+
 
     const candidates = Object.values(groups)
       .map((g) => {
         const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-        if (dates.length < 3) return null; // need at least 3 occurrences to be confident
+        if (dates.length < 2) return null; // need at least 3 occurrences to be confident
 
         const intervals: number[] = [];
         for (let i = 1; i < dates.length; i++) {
@@ -101,7 +119,7 @@ export default function RecurringScreen({ navigation }: Props) {
           const diffDays = diffMs / (1000 * 60 * 60 * 24);
           if (diffDays > 0) intervals.push(diffDays);
         }
-        if (intervals.length < 2) return null;
+        if (intervals.length < 1) return null;
 
         const frequency = inferFrequencyFromIntervals(intervals);
         const last = dates[dates.length - 1];
