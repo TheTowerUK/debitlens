@@ -47,6 +47,31 @@ function formatMoney(v: number) {
   return `£${(Number(v) || 0).toFixed(2)}`;
 }
 
+function parseTxnDate(value: unknown): Date | null {
+  const s = String(value || '').trim();
+  if (!s) return null;
+
+  // ISO: YYYY-MM-DD (or YYYY-MM-DDTHH:mm...)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // UK CSV: DD/MM/YYYY
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    const yyyy = Number(m[3]);
+    const d = new Date(yyyy, mm - 1, dd);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Fallback
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 function niceDate(d?: string) {
   if (!d) return '—';
   const dt = new Date(d);
@@ -69,9 +94,9 @@ export default function RecurringScreen({ navigation }: Props) {
 
   const expenses = txs.filter((t) => {
     const amt = Number((t as any)?.amount) || 0;
-    const date = (t as any)?.date;
-    const desc = String((t as any)?.description || '').trim(); // ✅ your field
-    return amt < 0 && !!date && !!desc;
+    const d = parseTxnDate((t as any)?.date);
+    const desc = String((t as any)?.description || '').trim();
+    return amt < 0 && !!d && !!desc;
   });
 
   // Group by (category + description + amount)
@@ -90,8 +115,9 @@ export default function RecurringScreen({ navigation }: Props) {
     const amt = Math.abs(Number((t as any).amount) || 0);
     if (amt <= 0) continue;
 
-    const d = new Date((t as any).date);
-    if (isNaN(d.getTime())) continue;
+    const d = parseTxnDate((t as any).date);
+    if (!d) continue;
+
 
     // Group by category + amount band
     const amountBand = Math.round(amt / 5) * 5; // £5 buckets
