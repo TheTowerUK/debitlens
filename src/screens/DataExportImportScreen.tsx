@@ -29,6 +29,8 @@ import {
   type BackupLatest,
 } from '../utils/backup';
 
+import type { TransactionType } from '../state/AppContext';
+
 const FS: any = FileSystem as any;
 const norm = (s: string) => s.trim().toLowerCase();
 
@@ -811,13 +813,11 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 continue;
               }
 
-              const typeFromCell = parseTypeCell(typeStrRaw);
+              let finalType: TransactionType;
 
-              // Determine final type:
-              // 1) If Type column is provided (Expense/Income/Transfer), trust it
-              // 2) Else infer from amount sign
-              // 3) Else fall back to your normalizeType helper
-              let finalType: 'income' | 'expense' | 'transfer';
+              const typeFromCell = parseTypeCell(typeStrRaw); 
+              // parseTypeCell returns: 'income' | 'expense' | 'transfer' | null
+
               if (typeFromCell) {
                 finalType = typeFromCell;
               } else if (amountNum < 0) {
@@ -825,9 +825,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
               } else if (amountNum > 0) {
                 finalType = 'income';
               } else {
-                // amount is 0; try your existing helper (likely returns income/expense)
-                finalType = (normalizeType(typeStrRaw, amountNum) as any) || 'expense';
+                finalType = 'expense'; // safe fallback
               }
+
 
               // Store amount as absolute (consistent with the rest of your app),
               // but be aware: transfers might want separate handling later.
@@ -854,15 +854,13 @@ export default function DataExportImportScreen({ navigation }: Props) {
               actions.addTransaction({
                 accountId: accountForRow.id,
                 amount: amountAbs,
-                type: finalType as any,
+                type: finalType,
                 date: dateISO,
-
-                // ✅ Keep BOTH:
-                name: descClean || undefined, // merchant-normalised for recurring detection
-                description: descFinal || undefined, // original bank text for reference
-
+                name: descClean || undefined,
+                description: descFinal || undefined,
                 category: String(category || '').trim() || undefined,
               });
+
 
 
               importedCount++;

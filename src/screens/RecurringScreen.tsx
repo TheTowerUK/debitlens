@@ -94,90 +94,184 @@ export default function RecurringScreen({ navigation }: Props) {
    * { date, accountId, amount, description, category }
    * But it is defensive about date formats (ISO or DD/MM/YYYY).
    */
-  const detectCandidates = useMemo(() => {
-    let debugExpensesCount = 0;
-    let debugGroupsCount = 0;
+const detectCandidates = useMemo(() => {
+  let debugExpensesCount = 0;
+  let debugGroupsCount = 0;
 
-    // Outgoing only (amount < 0), must have date + description
-    const expenses = txs.filter((t) => {
-      const amt = Number((t as any)?.amount) || 0;
-      const d = parseTxnDate((t as any)?.date);
-      const desc = String((t as any)?.description || '').replace(/\u00A0/g, ' ').trim();
-      const ok = amt < 0 && !!d && !!desc;
-      if (ok) debugExpensesCount += 1;
-      return ok;
-    });
+  // ---- Merchant helpers ----
+  const STOPWORDS = new Set([
+    'ltd', 'limited', 'plc', 'co', 'company', 'uk', 'the', 'and', 'of', 'to',
+    'payment', 'card', 'visa', 'mastercard', 'debit', 'credit', 'direct', 'debit',
+    'dd', 'pos', 'contactless', 'online',
+    'store', 'stores', 'superstore', 'market', 'supermarket',
+  ]);
 
-    /**
-     * IMPORTANT:
-     * We do NOT group purely by category (too many false positives like Groceries).
-     * We group by:
-     *   normalized category + amount band (£5 buckets)
-     *
-     * If you want "category only" detection later, we can add a whitelist of categories.
-     */
-    const groups: Record<
-      string,
-      { title: string; sumAmount: number; count: number; dates: Date[]; category?: string }
-    > = {};
+  // Merchants we usually DON'T want recurring detection for (too noisy/variable)
+  const NOISY_MERCHANT_PATTERNS: RegExp[] = [
+    /^amzn/i,
+    /^amazon/i,
+    /amznmktplace/i,
+    /amzn/i,
+    /marks\s*&\s*spencer/i,
+    /morrison/i,
+    /tesco/i,
+    /sainsbury/i,
+    /asda/i,
+    /aldi/i,
+    /paypal/i, // often mixed
+  ];
 
-    for (const t of expenses) {
-      const cat = String((t as any).category || 'Uncategorised').replace(/\u00A0/g, ' ').trim();
-      const normCat = normalizeTitle(cat);
+  function merchantKeyFromTxn(t: any) {
+    const nameRaw = String(t?.name || '').replace(/\u00A0/g, ' ').trim();
+    const descRaw = String(t?.description || '').replace(/\u00A0/g, ' ').trim();
+    let s = (nameRaw || descRaw || '').trim();
+    if (!s) return null;
 
-      const title = cat; // category-driven title
+    // Lowercase
+    s = s.toLowerCase();
 
-      const amt = Math.abs(Number((t as any).amount) || 0);
-      if (amt <= 0) continue;
+    // Strip common reference noise
+    s = s
+      .replace(/\*[a-z0-9]{3,}/g, ' ')         // *32993 / *2o4pz etc
+      .replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ')   // 353-12477661
+      .replace(/\b\d{6,}\b/g, ' ')             // long digit sequences
+      .replace(/[\(\)\[\]\{\}]/g, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-      const d = parseTxnDate((t as any).date);
-      if (!d) continue;
+    // Remove trailing locations like "london", "st albans" etc (basic)
+    // (optional; keep simple)
+    s = s.replace(/\b(london|st albans|hatfield|bedford|stevenage|uxbridge)\b/g, ' ').replace(/\s+/g, ' ').trim();
 
-      const amountBand = Math.round(amt / 5) * 5; // £5 buckets
-      const key = `${normCat}__${amountBand}`;
+    // Token filter
+    const tokens = s
+      .split(' ')
+      .filter(Boolean)
+      .filter((tok) => tok.length >= 2 && !STOPWORDS.has(tok));
 
-      if (!groups[key]) {
-        debugGroupsCount += 1;
-        groups[key] = { title, sumAmount: 0, count: 0, dates: [], category: cat };
-      }
+    if (tokens.length === 0) return null;
 
-      groups[key].dates.push(d);
-      groups[key].sumAmount += amt;
-      groups[key].count += 1;
+    const key = tokens.slice(0, 5).join(' '); // stable merchant core
+    return key;
+  }
+
+  function isNoisyMerchant(key: string) {
+    return NOISY_MERCHANT_PATTERNS.some((re) => re.test(key));
+  }
+
+  function amountBucketKey(amountAbs: number) {
+    // For recurring, amounts can drift slightly (e.g., insurance/utilities)
+    // We'll group by rounded £ value first (coarse) then enforce tolerance in group step.
+    return String(Math.round(amountAbs)); // e.g., 277
+  }
+
+  // ---- Expenses only, must have date + merchant ----
+  const expenses = txs.filter((t: any) => {
+    const amt = Number(t?.amount) || 0;
+    const d = parseTxnDate(t?.date);
+    const key = merchantKeyFromTxn(t);
+    const ok = amt < 0 && !!d && !!key;
+    if (ok) debugExpensesCount += 1;
+    return ok;
+  });
+
+  // Group structure
+  type Group = {
+    merchantKey: string;
+    displayTitle: string;
+    category?: string;
+    dates: Date[];
+    amounts: number[];
+    sumAmount: number;
+    count: number;
+  };
+
+  // 1st pass group: merchantKey + rough amount bucket
+  const groups: Record<string, Group> = {};
+
+  for (const t of expenses) {
+    const merchantKey = merchantKeyFromTxn(t);
+    if (!merchantKey) continue;
+    if (isNoisyMerchant(merchantKey)) continue;
+
+    const amtAbs = Math.abs(Number(t?.amount) || 0);
+    if (!(amtAbs > 0)) continue;
+
+    const d = parseTxnDate(t?.date);
+    if (!d) continue;
+
+    const bucket = amountBucketKey(amtAbs);
+    const key = `${merchantKey}__${bucket}`;
+
+    if (!groups[key]) {
+      debugGroupsCount += 1;
+      const displayTitle =
+        String(t?.name || '').trim() ||
+        String(t?.description || '').trim() ||
+        merchantKey;
+
+      groups[key] = {
+        merchantKey,
+        displayTitle,
+        category: String(t?.category || '').trim() || undefined,
+        dates: [],
+        amounts: [],
+        sumAmount: 0,
+        count: 0,
+      };
     }
 
-    const candidates = Object.values(groups)
-      .map((g) => {
-        const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-        if (dates.length < 2) return null; // need at least 2 occurrences to infer a cadence
+    groups[key].dates.push(d);
+    groups[key].amounts.push(amtAbs);
+    groups[key].sumAmount += amtAbs;
+    groups[key].count += 1;
+  }
 
-        const intervals: number[] = [];
-        for (let i = 1; i < dates.length; i++) {
-          const diffMs = dates[i].getTime() - dates[i - 1].getTime();
-          const diffDays = diffMs / (1000 * 60 * 60 * 24);
-          if (diffDays > 0) intervals.push(diffDays);
-        }
-        if (intervals.length < 1) return null;
+  // 2nd pass: enforce amount consistency within each group (tolerance)
+  // (prevents grouping random purchases that happen to share merchant key)
+  const TOLERANCE_PCT = 0.03; // ±3%
+  const candidates = Object.values(groups)
+    .map((g) => {
+      const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
+      if (dates.length < 2) return null;
 
-        const frequency = inferFrequencyFromIntervals(intervals);
-        const last = dates[dates.length - 1];
-        const nextDueDate = nextDueDateFromLast(last, frequency);
+      const avgAmount = g.count ? g.sumAmount / g.count : 0;
+      if (!(avgAmount > 0)) return null;
 
-        const avgAmount = g.count ? g.sumAmount / g.count : 0;
+      // Amount consistency check
+      const maxAllowedDiff = avgAmount * TOLERANCE_PCT;
+      const withinTol = g.amounts.every((a) => Math.abs(a - avgAmount) <= Math.max(0.75, maxAllowedDiff));
+      if (!withinTol) return null;
 
-        return {
-          title: g.title,
-          amount: avgAmount,
-          category: g.category,
-          count: dates.length,
-          frequency,
-          lastDate: last.toISOString().slice(0, 10),
-          nextDueDate,
-        };
-      })
-      .filter(Boolean)
-      .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0)) as Array<{
+      // Interval inference
+      const intervals: number[] = [];
+      for (let i = 1; i < dates.length; i++) {
+        const diffMs = dates[i].getTime() - dates[i - 1].getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (diffDays > 0) intervals.push(diffDays);
+      }
+      if (intervals.length < 1) return null;
+
+      const frequency = inferFrequencyFromIntervals(intervals);
+      const last = dates[dates.length - 1];
+      const nextDueDate = nextDueDateFromLast(last, frequency);
+
+      return {
+        title: g.displayTitle,          // show merchant-ish title
+        merchantKey: g.merchantKey,     // internal
+        amount: avgAmount,
+        category: g.category,
+        count: dates.length,
+        frequency,
+        lastDate: last.toISOString().slice(0, 10),
+        nextDueDate,
+      };
+    })
+    .filter(Boolean)
+    .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0)) as Array<{
       title: string;
+      merchantKey: string;
       amount: number;
       category?: string;
       count: number;
@@ -186,9 +280,10 @@ export default function RecurringScreen({ navigation }: Props) {
       nextDueDate: string;
     }>;
 
-    (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
-    return candidates;
-  }, [txs]);
+  (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
+  return candidates;
+}, [txs]);
+
 
   const list = useMemo(() => {
     return [...recurring].sort((a, b) => {
@@ -349,6 +444,7 @@ export default function RecurringScreen({ navigation }: Props) {
                           nextDueDate: c.nextDueDate,
                           active: true,
                           category: c.category,
+                          merchantKey: (c as any).merchantKey,
                         });
 
                         Alert.alert('Added', 'Recurring item created from detected pattern.');
