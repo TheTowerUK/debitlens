@@ -10,10 +10,11 @@ import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Recurring'>;
 
-// --- Helpers ---
+// ---------------- Helpers ----------------
 function normalizeTitle(s: string) {
   return String(s || '')
     .toLowerCase()
+    .replace(/\u00A0/g, ' ') // NBSP -> space
     .replace(/\s+/g, ' ')
     .replace(/[0-9]/g, '')
     .replace(/[^a-z\s]/g, '')
@@ -24,7 +25,7 @@ function parseTxnDate(value: unknown): Date | null {
   const s = String(value || '').trim();
   if (!s) return null;
 
-  // ISO: YYYY-MM-DD or YYYY-MM-DDTHH:mm...
+  // ISO: YYYY-MM-DD (or YYYY-MM-DDTHH:mm...)
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
@@ -40,6 +41,7 @@ function parseTxnDate(value: unknown): Date | null {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // Fallback
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
@@ -80,34 +82,47 @@ function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// ---------------- Screen ----------------
 export default function RecurringScreen({ navigation }: Props) {
   const { state, actions } = useApp();
   const recurring: RecurringItem[] = state.recurring || [];
   const txs = state.transactions || [];
   const [showDetect, setShowDetect] = useState(false);
 
-  // ---- Detection ----
+  /**
+   * Detection expects transactions shaped like:
+   * { date, accountId, amount, description, category }
+   * But it is defensive about date formats (ISO or DD/MM/YYYY).
+   */
   const detectCandidates = useMemo(() => {
     let debugExpensesCount = 0;
     let debugGroupsCount = 0;
 
+    // Outgoing only (amount < 0), must have date + description
     const expenses = txs.filter((t) => {
       const amt = Number((t as any)?.amount) || 0;
       const d = parseTxnDate((t as any)?.date);
-      const desc = String((t as any)?.description || '').trim();
+      const desc = String((t as any)?.description || '').replace(/\u00A0/g, ' ').trim();
       const ok = amt < 0 && !!d && !!desc;
       if (ok) debugExpensesCount += 1;
       return ok;
     });
 
-    // Group by category + amount band (category-driven)
+    /**
+     * IMPORTANT:
+     * We do NOT group purely by category (too many false positives like Groceries).
+     * We group by:
+     *   normalized category + amount band (£5 buckets)
+     *
+     * If you want "category only" detection later, we can add a whitelist of categories.
+     */
     const groups: Record<
       string,
       { title: string; sumAmount: number; count: number; dates: Date[]; category?: string }
     > = {};
 
     for (const t of expenses) {
-      const cat = String((t as any).category || 'Uncategorised').trim();
+      const cat = String((t as any).category || 'Uncategorised').replace(/\u00A0/g, ' ').trim();
       const normCat = normalizeTitle(cat);
 
       const title = cat; // category-driven title
@@ -118,7 +133,6 @@ export default function RecurringScreen({ navigation }: Props) {
       const d = parseTxnDate((t as any).date);
       if (!d) continue;
 
-      // Amount band keeps noisy categories from exploding into false matches.
       const amountBand = Math.round(amt / 5) * 5; // £5 buckets
       const key = `${normCat}__${amountBand}`;
 
@@ -135,7 +149,7 @@ export default function RecurringScreen({ navigation }: Props) {
     const candidates = Object.values(groups)
       .map((g) => {
         const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-        if (dates.length < 2) return null; // need at least 2 occurrences
+        if (dates.length < 2) return null; // need at least 2 occurrences to infer a cadence
 
         const intervals: number[] = [];
         for (let i = 1; i < dates.length; i++) {
@@ -172,13 +186,10 @@ export default function RecurringScreen({ navigation }: Props) {
       nextDueDate: string;
     }>;
 
-    // Attach debug meta
     (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
-
     return candidates;
   }, [txs]);
 
-  // ---- Existing recurring list ----
   const list = useMemo(() => {
     return [...recurring].sort((a, b) => {
       const da = a.nextDueDate ? new Date(a.nextDueDate).getTime() : 0;
@@ -187,7 +198,6 @@ export default function RecurringScreen({ navigation }: Props) {
     });
   }, [recurring]);
 
-  // ---- Totals ----
   const totals = useMemo(() => {
     let activeCount = 0;
     let monthlyApprox = 0;
@@ -204,8 +214,8 @@ export default function RecurringScreen({ navigation }: Props) {
       if (r.active === false) continue;
       activeCount++;
 
-      const amt = Number(r.amount) || 0;
-      const freq = String(r.frequency || 'monthly').toLowerCase().trim();
+      const amt = Number((r as any).amount) || 0;
+      const freq = String((r as any).frequency || 'monthly').toLowerCase().trim();
       const mult = multipliers[freq] ?? 1;
 
       monthlyApprox += amt * mult;
@@ -214,7 +224,6 @@ export default function RecurringScreen({ navigation }: Props) {
     return { activeCount, monthlyApprox };
   }, [recurring]);
 
-  // ---- Actions ----
   const toggleActive = (item: RecurringItem) => {
     const fn = (actions as any)?.updateRecurring;
     if (typeof fn !== 'function') return;
@@ -369,7 +378,6 @@ export default function RecurringScreen({ navigation }: Props) {
                 const isPaused = item.active === false;
                 const title =
                   (item as any).title ||
-                  ((item as any).name as string) ||
                   ((item as any).isTransfer ? 'Recurring transfer' : 'Recurring item');
 
                 return (
@@ -454,7 +462,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.card,
   },
   addPill: { borderColor: theme.link },
-  detectPill: { backgroundColor: theme.cardAlt, borderColor: theme.link },
+
+  // Detect pill matches the DataExportImport “light blue” feel
+  detectPill: {
+    backgroundColor: theme.cardAlt,
+    borderColor: theme.link,
+  },
+
   headerPillText: { color: '#E5E7EB', fontSize: 13, fontWeight: '700' },
   detectPillText: { color: theme.link },
 
