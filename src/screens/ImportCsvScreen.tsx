@@ -37,14 +37,16 @@ const Sharing: any = (() => {
 })();
 
 function buildCsvTemplate(): string {
-  return 'Date,Account,Amount,Description,Category,Type\n';
   const header = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
 
-  const rows = [
-    ['2025-10-27', 'First Direct', '-72.59', 'BRITISH GAS', 'Direct Debit', 'Expense'],
-    ['2025-10-27', 'First Direct', '-11.99', 'Prime Video', 'TV Subscriptions', 'Expense'],
-    ['2025-10-25', 'First Direct', '1621.20', 'Sterling Solutions Ltd', 'Salary', 'Income'],
-    ['2025-10-25', 'First Direct', '-50.00', 'Transfer to Savings', 'Money Transfer', 'Transfer'],
+  // Instruction row – users replace or delete this
+  const instructionRow = [
+    'YYYY-MM-DD',
+    'Account name',
+    '-12.34',
+    'Merchant or Payee',
+    'Category',
+    'Expense|Income|Transfer',
   ];
 
   const esc = (v: string) => {
@@ -53,9 +55,14 @@ function buildCsvTemplate(): string {
     return s;
   };
 
-  const lines = [header.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))];
+  const lines = [
+    header.map(esc).join(','),
+    instructionRow.map(esc).join(','),
+  ];
+
   return lines.join('\n') + '\n';
 }
+
 
 export default function ImportCsvScreen({ navigation }: Props) {
   const [showTemplate, setShowTemplate] = useState(false);
