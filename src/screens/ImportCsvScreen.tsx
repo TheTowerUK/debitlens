@@ -37,6 +37,7 @@ const Sharing: any = (() => {
 })();
 
 function buildCsvTemplate(): string {
+  return 'Date,Account,Amount,Description,Category,Type\n';
   const header = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
 
   const rows = [
