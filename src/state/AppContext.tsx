@@ -23,14 +23,14 @@ export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export type Transaction = {
   id: string;
-  name?: string;
+  date: string; // ISO: YYYY-MM-DD
   accountId: string;
-  date: string; // YYYY-MM-DD
+  amount: number;
   type: TransactionType;
   category?: string;
-  amount: number;
   description?: string;
 };
+
 
 /* ===== Recurring (match existing screens) ===== */
 

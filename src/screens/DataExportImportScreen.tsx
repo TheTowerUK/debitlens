@@ -1055,8 +1055,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const name = description || category || 'Imported';
 
       builtTxs.push({
-        id: makeId('tx'),
-        name,
+        id: makeId('tx'),   
         accountId: acct.id,
         date: isoDate,
         type: finalType,

@@ -279,7 +279,7 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
                 return (
                   <View key={t.id} style={styles.txRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.txTitle}>{t.name || 'Transaction'}</Text>
+                      <Text style={styles.txTitle}>{t.description || 'Transaction'}</Text>
                       <Text style={styles.txSub}>
                         {new Date(t.date).toLocaleDateString()} • {cat}
                       </Text>

@@ -207,7 +207,8 @@ const detectCandidates = useMemo(() => {
     if (!groups[key]) {
       debugGroupsCount += 1;
       const displayTitle =
-        String(t?.name || '').trim() ||
+        String(t?.description || '').trim() ||
+        'Transaction';
         String(t?.description || '').trim() ||
         merchantKey;
 
