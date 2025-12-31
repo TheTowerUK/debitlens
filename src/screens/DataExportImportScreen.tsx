@@ -203,6 +203,38 @@ function normalizeType(typeRaw: string, amountRaw: number): 'income' | 'expense'
    File write + share (single path)
 =========================== */
 
+async function pickAndReadTextFile(options: {
+  types: string[];
+  fallbackName: string;
+}): Promise<{ text: string; filename: string } | null> {
+  const res = await DocumentPicker.getDocumentAsync({
+    type: options.types,
+    copyToCacheDirectory: true,
+    multiple: false,
+  });
+
+  if (res.canceled) return null;
+
+  const asset = res.assets?.[0];
+  if (!asset?.uri) throw new Error('No file selected.');
+
+  const filename = asset.name || options.fallbackName;
+
+  const dest = `${FileSystem.cacheDirectory}${filename}`;
+  try {
+    await FileSystem.deleteAsync(dest, { idempotent: true });
+  } catch {}
+
+  await FileSystem.copyAsync({ from: asset.uri, to: dest });
+
+  const text = await FileSystem.readAsStringAsync(dest, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+
+  return { text, filename };
+}
+
+
 async function writeAndShareFile(filename: string, contents: string, mimeType: string) {
   const baseDir: string | undefined = FS.documentDirectory;
   if (!baseDir) throw new Error('File system directory not available.');
@@ -222,98 +254,94 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
   }
 }
 
-/* ===========================
-   CSV import stats persistence
-=========================== */
-
-type CsvImportStats = {
-  importedCount: number;
-  createdAccountsCount: number;
-  skippedUnknownAccount: number;
-  skippedBadAmount: number;
-  skippedMissingAccountName: number;
-  skippedCouldNotCreateAccount: number;
-  skippedDuplicate?: number;
-  finishedAt: string; // ISO
-  source: 'file' | 'manual';
-  operation?: 'import' | 'restore';
-  mode?: RestoreMode;
-};
-
-const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
-
-export default function DataExportImportScreen({ navigation }: Props) {
-  const { state, actions } = useApp() as any;
-
-  const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
-  const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
-  const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
-  const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
-
-  const [lastStatus, setLastStatus] = useState<string>('');
 
   /* ===========================
-     JSON BACKUP (EXPORT + RESTORE)
+    CSV import stats persistence
   =========================== */
 
-  const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
-  const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
-
-  const handleExportJsonFile = async () => {
-    try {
-      const backup = createBackupV1({
-        accounts,
-        transactions: txs,
-        recurring,
-      });
-
-      const json = JSON.stringify(backup, null, 2);
-
-      const filename = `DebitLens_Backup_${new Date()
-        .toISOString()
-        .slice(0, 19)
-        .replace(/[:T]/g, '-')}.json`;
-
-      await writeAndShareFile(filename, json, 'application/json');
-      setLastStatus('Backup JSON exported to Files (via Share).');
-    } catch (err: any) {
-      console.error(err);
-      setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
-      Alert.alert('Export failed', 'Could not export JSON backup.');
-    }
+  type CsvImportStats = {
+    importedCount: number;
+    createdAccountsCount: number;
+    skippedUnknownAccount: number;
+    skippedBadAmount: number;
+    skippedMissingAccountName: number;
+    skippedCouldNotCreateAccount: number;
+    skippedDuplicate?: number;
+    finishedAt: string; // ISO
+    source: 'file' | 'manual';
+    operation?: 'import' | 'restore';
+    mode?: RestoreMode;
   };
 
-  const handlePickJsonBackup = async () => {
-    try {
-      setJsonPreview(null);
-      setLastStatus('');
+  const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
-      const res = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/json', 'text/plain'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+  export default function DataExportImportScreen({ navigation }: Props) {
+    const { state, actions } = useApp() as any;
 
-      if (res.canceled) return;
+    const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
+    const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
+    const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
+    const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
 
-      const asset = res.assets?.[0];
-      if (!asset?.uri) throw new Error('No file selected.');
+    const [lastStatus, setLastStatus] = useState<string>('');
 
-      if (!FS.readAsStringAsync) {
-        throw new Error('expo-file-system is not available. Install expo-file-system.');
+    /* ===========================
+      JSON BACKUP (EXPORT + RESTORE)
+    =========================== */
+
+    const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
+    const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
+
+    const handleExportJsonFile = async () => {
+      try {
+        const backup = createBackupV1({
+          accounts,
+          transactions: txs,
+          recurring,
+        });
+
+        const json = JSON.stringify(backup, null, 2);
+
+        const filename = `DebitLens_Backup_${new Date()
+          .toISOString()
+          .slice(0, 19)
+          .replace(/[:T]/g, '-')}.json`;
+
+        await writeAndShareFile(filename, json, 'application/json');
+        setLastStatus('Backup JSON exported to Files (via Share).');
+      } catch (err: any) {
+        console.error(err);
+        setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
+        Alert.alert('Export failed', 'Could not export JSON backup.');
       }
+    };
 
-      const text = await FS.readAsStringAsync(asset.uri);
-      const parsed = parseAndValidateBackup(text);
+    const handlePickJsonBackup = async () => {
+      try {
+        setJsonPreview(null);
+        setLastStatus('');
 
-      setJsonPreview(parsed);
-      setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
-    } catch (err: any) {
-      console.error(err);
-      setLastStatus(`JSON import failed: ${String(err?.message ?? err)}`);
-      Alert.alert('Import failed', 'Could not read/parse JSON backup.');
-    }
-  };
+        const picked = await pickAndReadTextFile({
+          types: ['application/json', 'text/json', 'text/plain', '*/*'],
+          fallbackName: 'backup.json',
+        });
+
+        if (!picked) {
+          setLastStatus('File selection cancelled.');
+          return;
+        }
+
+        const parsed = parseAndValidateBackup(picked.text);
+
+        setJsonPreview(parsed);
+        setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
+      } catch (err: any) {
+        console.error(err);
+        setLastStatus(`JSON import failed: ${String(err?.message ?? err)}`);
+        Alert.alert('Import failed', 'Could not read/parse JSON backup.');
+      }
+    };
+
 
   const applyJsonReplace = () => {
     if (!jsonPreview) return;
@@ -532,45 +560,35 @@ export default function DataExportImportScreen({ navigation }: Props) {
     [accounts]
   );
 
-  const handlePickCsvFile = async () => {
-    try {
-      setCsvHasHeaderRow(true);
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['text/csv', 'text/plain', 'application/vnd.ms-excel'],
-        copyToCacheDirectory: true,
-      });
+const handlePickCsvFile = async () => {
+  try {
+    setCsvHasHeaderRow(true);
 
-      if (result.canceled) {
-        setLastStatus('File selection cancelled.');
-        return;
-      }
+    const picked = await pickAndReadTextFile({
+      types: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
+      fallbackName: 'import.csv',
+    });
 
-      const asset = result.assets && result.assets[0];
-      if (!asset || !asset.uri) {
-        setLastStatus('No file selected or file has no URI.');
-        return;
-      }
-
-      if (!FS.readAsStringAsync) {
-        throw new Error('expo-file-system is not available. Install expo-file-system.');
-      }
-
-      const fileContents = await FS.readAsStringAsync(asset.uri);
-
-      setImportCsvText(fileContents);
-      setImportSource('file');
-
-      setCsvPreview('');
-      setCsvPreviewSourceName('');
-      setLastImportSummary('');
-
-      setLastStatus(`Loaded CSV from file: ${asset.name ?? 'selected file'}. Preview, import, or restore it.`);
-    } catch (err: any) {
-      console.error('Error picking CSV file', err);
-      Alert.alert('File error', 'Something went wrong while reading the CSV file.');
-      setLastStatus(`File error: ${String(err?.message ?? err)}`);
+    if (!picked) {
+      setLastStatus('File selection cancelled.');
+      return;
     }
-  };
+
+    setImportCsvText(picked.text);
+    setImportSource('file');
+
+    setCsvPreview('');
+    setCsvPreviewSourceName('');
+    setLastImportSummary('');
+
+    setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
+  } catch (err: any) {
+    console.error('Error picking CSV file', err);
+    Alert.alert('File error', 'Something went wrong while reading the CSV file.');
+    setLastStatus(`File error: ${String(err?.message ?? err)}`);
+  }
+};
+
 
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
@@ -672,6 +690,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
 
     // --- Helpers (local to import) ---
+
     const cleanDescription = (s: unknown) => {
       let v = String(s ?? '').replace(/\u00A0/g, ' ').trim();
       if (!v) return '';
