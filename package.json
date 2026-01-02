@@ -44,6 +44,7 @@
     "@babel/core": "^7.25.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "babel-preset-expo": "~54.0.0",
+    "baseline-browser-mapping": "^2.9.11",
     "eslint": "^9.37.0",
     "knip": "^5.74.0",
     "madge": "^8.0.0",
