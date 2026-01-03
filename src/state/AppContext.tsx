@@ -29,6 +29,7 @@ export type Transaction = {
   type: TransactionType;
   category?: string;
   description?: string;
+  name?: string;
 };
 
 

@@ -26,7 +26,7 @@ import { colors as theme } from '../theme/colors';
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
 
 const FS: any = FileSystem as any;
-const norm = (s: string) => String(s ?? '').trim().toLowerCase();
+const norm = (s: any) => String(s ?? '').trim().toLowerCase();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -83,12 +83,10 @@ function buildIdSet(items: any[]) {
 function validateBackup(payload: BackupPayload) {
   const issues: string[] = [];
 
-  // basic shape checks
   if (!isArray(payload.accounts)) issues.push('accounts is not an array');
   if (!isArray(payload.transactions)) issues.push('transactions is not an array');
   if (!isArray(payload.recurring)) issues.push('recurring is not an array');
 
-  // referential check: transaction.accountId must exist in accounts
   const accountIds = buildIdSet(payload.accounts || []);
   let badRefs = 0;
   for (const t of payload.transactions || []) {
@@ -171,10 +169,8 @@ function normalizeDateToISODate(input: string): string {
   const s = String(input || '').trim();
   if (!s) return new Date().toISOString().slice(0, 10);
 
-  // already ISO date
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
 
-  // DD/MM/YY or DD/MM/YYYY
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
   if (m) {
     const dd = m[1].padStart(2, '0');
@@ -200,7 +196,7 @@ function normalizeType(typeRaw: string, amountRaw: number): 'income' | 'expense'
 }
 
 /* ===========================
-   File write + share (single path)
+   File pick/read + write/share
 =========================== */
 
 async function pickAndReadTextFile(options: {
@@ -234,7 +230,6 @@ async function pickAndReadTextFile(options: {
   return { text, filename };
 }
 
-
 async function writeAndShareFile(filename: string, contents: string, mimeType: string) {
   const baseDir: string | undefined = FS.documentDirectory;
   if (!baseDir) throw new Error('File system directory not available.');
@@ -254,94 +249,92 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
   }
 }
 
+/* ===========================
+   Types
+=========================== */
+
+type CsvImportStats = {
+  importedCount: number;
+  createdAccountsCount: number;
+  skippedUnknownAccount: number;
+  skippedBadAmount: number;
+  skippedMissingAccountName: number;
+  skippedCouldNotCreateAccount: number;
+  skippedDuplicate?: number;
+  finishedAt: string; // ISO
+  source: 'file' | 'manual';
+  operation?: 'import' | 'restore';
+  mode?: RestoreMode;
+};
+
+const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
+
+export default function DataExportImportScreen({ navigation }: Props) {
+  const { state, actions } = useApp() as any;
+
+  const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
+  const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
+  const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
+  const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
+
+  const [lastStatus, setLastStatus] = useState<string>('');
 
   /* ===========================
-    CSV import stats persistence
+    JSON BACKUP (EXPORT + RESTORE)
   =========================== */
 
-  type CsvImportStats = {
-    importedCount: number;
-    createdAccountsCount: number;
-    skippedUnknownAccount: number;
-    skippedBadAmount: number;
-    skippedMissingAccountName: number;
-    skippedCouldNotCreateAccount: number;
-    skippedDuplicate?: number;
-    finishedAt: string; // ISO
-    source: 'file' | 'manual';
-    operation?: 'import' | 'restore';
-    mode?: RestoreMode;
+  const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
+  const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
+
+  const handleExportJsonFile = async () => {
+    try {
+      const backup = createBackupV1({
+        accounts,
+        transactions: txs,
+        recurring,
+      });
+
+      const json = JSON.stringify(backup, null, 2);
+
+      const filename = `DebitLens_Backup_${new Date()
+        .toISOString()
+        .slice(0, 19)
+        .replace(/[:T]/g, '-')}.json`;
+
+      await writeAndShareFile(filename, json, 'application/json');
+      setLastStatus('Backup JSON exported to Files (via Share).');
+    } catch (err: any) {
+      console.error(err);
+      setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
+      Alert.alert('Export failed', 'Could not export JSON backup.');
+    }
   };
 
-  const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
+  const handlePickJsonBackup = async () => {
+    try {
+      setJsonPreview(null);
+      setLastStatus('');
 
-  export default function DataExportImportScreen({ navigation }: Props) {
-    const { state, actions } = useApp() as any;
+      const picked = await pickAndReadTextFile({
+        types: ['application/json', 'text/json', 'text/plain', '*/*'],
+        fallbackName: 'backup.json',
+      });
 
-    const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
-    const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
-    const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
-    const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
-
-    const [lastStatus, setLastStatus] = useState<string>('');
-
-    /* ===========================
-      JSON BACKUP (EXPORT + RESTORE)
-    =========================== */
-
-    const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
-    const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
-
-    const handleExportJsonFile = async () => {
-      try {
-        const backup = createBackupV1({
-          accounts,
-          transactions: txs,
-          recurring,
-        });
-
-        const json = JSON.stringify(backup, null, 2);
-
-        const filename = `DebitLens_Backup_${new Date()
-          .toISOString()
-          .slice(0, 19)
-          .replace(/[:T]/g, '-')}.json`;
-
-        await writeAndShareFile(filename, json, 'application/json');
-        setLastStatus('Backup JSON exported to Files (via Share).');
-      } catch (err: any) {
-        console.error(err);
-        setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
-        Alert.alert('Export failed', 'Could not export JSON backup.');
+      if (!picked) {
+        setLastStatus('File selection cancelled.');
+        return;
       }
-    };
 
-    const handlePickJsonBackup = async () => {
-      try {
-        setJsonPreview(null);
-        setLastStatus('');
+      const parsed = parseAndValidateBackup(picked.text);
 
-        const picked = await pickAndReadTextFile({
-          types: ['application/json', 'text/json', 'text/plain', '*/*'],
-          fallbackName: 'backup.json',
-        });
-
-        if (!picked) {
-          setLastStatus('File selection cancelled.');
-          return;
-        }
-
-        const parsed = parseAndValidateBackup(picked.text);
-
-        setJsonPreview(parsed);
-        setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
-      } catch (err: any) {
-        console.error(err);
-        setLastStatus(`JSON import failed: ${String(err?.message ?? err)}`);
-        Alert.alert('Import failed', 'Could not read/parse JSON backup.');
-      }
-    };
-
+      setJsonPreview(parsed);
+      setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
+    } catch (err: any) {
+      console.error(err);
+      setLastStatus(`JSON import failed: ${String(err?.message ?? err)}`);
+      Alert.alert('Import failed', 'Could not read/parse JSON backup.');
+    }
+  };
 
   const applyJsonReplace = () => {
     if (!jsonPreview) return;
@@ -350,7 +343,7 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
       accounts: jsonPreview.app.accounts,
       transactions: jsonPreview.app.transactions,
       recurring: jsonPreview.app.recurring,
-      budgets, // preserve (not in backup yet)
+      budgets, // preserve
     });
   };
 
@@ -417,10 +410,7 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
     return map;
   }, [accounts]);
 
-  // Transactions export text (actual “transactions CSV”)
   const [exportCsvText, setExportCsvText] = useState<string>('');
-
-  // Separate preview text for “template / export preview”
   const [csvExportPreview, setCsvExportPreview] = useState<string>('');
   const [csvExportPreviewSourceName, setCsvExportPreviewSourceName] = useState<string>('');
 
@@ -463,16 +453,13 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
       return;
     }
 
-    // Export in the SAME schema/order as the template to enable round-trip imports.
     const headers = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
 
     const lines: string[] = [];
     lines.push(headers.map(csvEscape).join(','));
 
     for (const t of txs) {
-      const accountCell = csvIncludeAccountName
-        ? accountNameById[t.accountId] ?? ''
-        : t.accountId ?? '';
+      const accountCell = csvIncludeAccountName ? accountNameById[t.accountId] ?? '' : t.accountId ?? '';
 
       const amountSigned =
         String(t.type).toLowerCase() === 'expense' ? -Math.abs(Number(t.amount ?? 0)) : Number(t.amount ?? 0);
@@ -529,8 +516,8 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
   const [importCsvText, setImportCsvText] = useState<string>('');
   const [csvHasHeaderRow, setCsvHasHeaderRow] = useState<boolean>(true);
 
-  const [csvPreview, setCsvPreview] = useState<string>(''); // import preview (read-only)
-  const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>(''); // import preview meta
+  const [csvPreview, setCsvPreview] = useState<string>('');
+  const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>('');
 
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
@@ -560,35 +547,34 @@ async function writeAndShareFile(filename: string, contents: string, mimeType: s
     [accounts]
   );
 
-const handlePickCsvFile = async () => {
-  try {
-    setCsvHasHeaderRow(true);
+  const handlePickCsvFile = async () => {
+    try {
+      setCsvHasHeaderRow(true);
 
-    const picked = await pickAndReadTextFile({
-      types: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
-      fallbackName: 'import.csv',
-    });
+      const picked = await pickAndReadTextFile({
+        types: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
+        fallbackName: 'import.csv',
+      });
 
-    if (!picked) {
-      setLastStatus('File selection cancelled.');
-      return;
+      if (!picked) {
+        setLastStatus('File selection cancelled.');
+        return;
+      }
+
+      setImportCsvText(picked.text);
+      setImportSource('file');
+
+      setCsvPreview('');
+      setCsvPreviewSourceName('');
+      setLastImportSummary('');
+
+      setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
+    } catch (err: any) {
+      console.error('Error picking CSV file', err);
+      Alert.alert('File error', 'Something went wrong while reading the CSV file.');
+      setLastStatus(`File error: ${String(err?.message ?? err)}`);
     }
-
-    setImportCsvText(picked.text);
-    setImportSource('file');
-
-    setCsvPreview('');
-    setCsvPreviewSourceName('');
-    setLastImportSummary('');
-
-    setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
-  } catch (err: any) {
-    console.error('Error picking CSV file', err);
-    Alert.alert('File error', 'Something went wrong while reading the CSV file.');
-    setLastStatus(`File error: ${String(err?.message ?? err)}`);
-  }
-};
-
+  };
 
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
@@ -616,6 +602,25 @@ const handlePickCsvFile = async () => {
         dataRows = restRows;
       }
 
+      // detect columns (preview only)
+      let accountColIndex = -1;
+      let categoryColIndex = -1;
+      let amountColIndex = -1;
+      let dateColIndex = -1;
+      let descColIndex = -1;
+
+      if (headerRow) {
+        const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
+        const findOneOf = (candidates: string[]) => headerLower.findIndex((h) => candidates.includes(h));
+
+        dateColIndex = findOneOf(['date', 'txn_date', 'transaction_date', 'tx_date']);
+        accountColIndex = findOneOf(['account', 'account_name', 'account name']);
+        amountColIndex = findOneOf(['amount', 'value', 'amt']);
+        descColIndex = findOneOf(['description', 'desc', 'name', 'merchant', 'payee', 'details', 'note']);
+        categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
+      }
+
+      // build preview text (SINGLE PASS — fixes TS2451)
       const maxPreviewRows = 10;
       const previewRows = dataRows.slice(0, maxPreviewRows);
 
@@ -631,31 +636,30 @@ const handlePickCsvFile = async () => {
 
       setCsvPreview(previewLines.join('\n'));
 
-      let accountColIndex = -1;
-      if (headerRow) {
-        const headerLower = headerRow.map((h) => String(h).toLowerCase());
-        accountColIndex = headerLower.findIndex(
-          (h) => h === 'account' || h === 'account_name' || h === 'account name'
-        );
-      }
-
+      // account match stats (preview meta)
       if (accountColIndex >= 0) {
         let matchedCount = 0;
         let unknownCount = 0;
 
         for (const row of dataRows) {
           if (accountColIndex >= row.length) continue;
-          const accName = row[accountColIndex].trim();
+          const accName = String(row[accountColIndex] ?? '').trim();
           if (!accName) continue;
           if (knownAccountNames.has(accName)) matchedCount++;
           else unknownCount++;
         }
 
-        setCsvPreviewSourceName(
-          `Detected account column at index ${accountColIndex}. ` +
-            `Known accounts: ${matchedCount}. Unknown: ${unknownCount}. ` +
-            (createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.')
+        const bits: string[] = [];
+        bits.push(
+          `Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`
         );
+        bits.push(categoryColIndex >= 0 ? `Category col: ${categoryColIndex}.` : `No category column detected.`);
+        bits.push(dateColIndex >= 0 ? `Date col: ${dateColIndex}.` : `No date col detected.`);
+        bits.push(amountColIndex >= 0 ? `Amount col: ${amountColIndex}.` : `No amount col detected.`);
+        bits.push(descColIndex >= 0 ? `Description col: ${descColIndex}.` : `No description col detected.`);
+        bits.push(createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.');
+
+        setCsvPreviewSourceName(bits.join(' '));
       } else {
         setCsvPreviewSourceName(
           'No obvious account column detected in header. You can still import/restore, but rows must map correctly by column order.'
@@ -689,15 +693,13 @@ const handlePickCsvFile = async () => {
       return;
     }
 
-    // --- Helpers (local to import) ---
-
     const cleanDescription = (s: unknown) => {
       let v = String(s ?? '').replace(/\u00A0/g, ' ').trim();
       if (!v) return '';
 
-      v = v.replace(/\*[A-Z0-9]{3,}/gi, ' '); // *32993 / *2O4PZ
-      v = v.replace(/\b\d{3,}[-/]\d{2,}\b/g, ' '); // 353-12477661
-      v = v.replace(/\b\d{6,}\b/g, ' '); // long digit sequences
+      v = v.replace(/\*[A-Z0-9]{3,}/gi, ' ');
+      v = v.replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ');
+      v = v.replace(/\b\d{6,}\b/g, ' ');
       v = v.replace(/\s+/g, ' ').trim();
 
       return v;
@@ -733,7 +735,7 @@ const handlePickCsvFile = async () => {
       type: string;
       amountAbs: number;
       descClean: string;
-    }) => {
+      }) => {
       const amt = Number(input.amountAbs || 0).toFixed(2);
       return `${input.accountId}__${input.dateISO}__${input.type}__${amt}__${norm(input.descClean)}`;
     };
@@ -765,14 +767,13 @@ const handlePickCsvFile = async () => {
                 dataRows = restRows;
               }
 
-              // Default order (old): date, account, amount, type, description, category
-              // New template order: Date, Account, Amount, Description, Category, Type
+              // template order: Date, Account, Amount, Description, Category, Type
               let dateCol = 0;
               let accountCol = 1;
               let amountCol = 2;
-              let typeCol = 3;
-              let descriptionCol = 4;
-              let categoryCol = 5;
+              let descriptionCol = 3;
+              let categoryCol = 4;
+              let typeCol = 5;
 
               if (headerRow) {
                 const headerLower = headerRow.map(normalizeHeader);
@@ -780,8 +781,8 @@ const handlePickCsvFile = async () => {
 
                 const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
                 const accIdx = findIndex(['account', 'account_name', 'account name']);
-                const amountIdx = findIndex(['amount', 'value']);
-                const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+                const amountIdx = findIndex(['amount', 'value', 'amt']);
+                const descIdx = findIndex(['description', 'desc', 'details', 'note', 'name', 'merchant', 'payee']);
                 const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
                 const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
 
@@ -792,6 +793,9 @@ const handlePickCsvFile = async () => {
                 if (catIdx >= 0) categoryCol = catIdx;
                 if (typeIdx >= 0) typeCol = typeIdx;
               }
+
+              const safeCell = (row: string[], idx: number) =>
+                idx >= 0 && idx < row.length ? String(row[idx] ?? '').trim() : '';
 
               let importedCount = 0;
               let skippedUnknownAccount = 0;
@@ -818,14 +822,14 @@ const handlePickCsvFile = async () => {
               for (const row of dataRows) {
                 if (!row.length) continue;
 
-                const dateStr = row[dateCol] ?? '';
-                const typeStrRaw = row[typeCol] ?? '';
-                const amountRaw = row[amountCol] ?? '';
-                const rawDesc = row[descriptionCol] ?? '';
-                const category = row[categoryCol] ?? '';
-                const rawAccountName = row[accountCol] ?? '';
+                const dateStr = safeCell(row, dateCol);
+                const typeStrRaw = safeCell(row, typeCol);
+                const amountRaw = safeCell(row, amountCol);
+                const rawDesc = safeCell(row, descriptionCol);
+                const category = safeCell(row, categoryCol);
+                const rawAccountName = safeCell(row, accountCol);
 
-                const accountKey = norm(String(rawAccountName));
+                const accountKey = norm(rawAccountName);
                 const accountName = String(rawAccountName).trim();
 
                 if (!accountName) {
@@ -834,8 +838,7 @@ const handlePickCsvFile = async () => {
                 }
 
                 let accountForRow: any =
-                  createdAccountByName[accountKey] ??
-                  accounts.find((a) => a?.name && norm(a.name) === accountKey);
+                  createdAccountByName[accountKey] ?? accounts.find((a) => a?.name && norm(a.name) === accountKey);
 
                 if (!accountForRow) {
                   if (!createMissingAccounts) {
@@ -879,15 +882,10 @@ const handlePickCsvFile = async () => {
                 let finalType: TransactionType;
 
                 const typeFromCell = parseTypeCell(typeStrRaw);
-                if (typeFromCell) {
-                  finalType = typeFromCell as any;
-                } else if (amountNum < 0) {
-                  finalType = 'expense';
-                } else if (amountNum > 0) {
-                  finalType = 'income';
-                } else {
-                  finalType = 'expense';
-                }
+                if (typeFromCell) finalType = typeFromCell as any;
+                else if (amountNum < 0) finalType = 'expense';
+                else if (amountNum > 0) finalType = 'income';
+                else finalType = 'expense';
 
                 const amountAbs = Math.abs(amountNum);
                 const descClean = cleanDescription(rawDesc);
@@ -912,10 +910,9 @@ const handlePickCsvFile = async () => {
                   amount: amountAbs,
                   type: finalType,
                   date: dateISO,
-                  // Keep BOTH:
-                  name: descClean || undefined, // merchant-normalised for recurring detection
-                  description: descFinal || undefined, // original bank text for reference
-                  category: String(category || '').trim() || undefined,
+                  name: descClean || undefined,
+                  description: descFinal || undefined,
+                  category: category || undefined,
                 });
 
                 importedCount++;
@@ -930,8 +927,7 @@ const handlePickCsvFile = async () => {
               summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
               summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
 
-              const summary = summaryLines.join('\n');
-              setLastImportSummary(summary);
+              setLastImportSummary(summaryLines.join('\n'));
               setLastStatus('CSV import completed. See summary below.');
 
               await persistCsvStats({
@@ -974,22 +970,23 @@ const handlePickCsvFile = async () => {
       dataRows = restRows;
     }
 
+    // template order: Date, Account, Amount, Description, Category, Type
     let dateCol = 0;
     let accountCol = 1;
     let amountCol = 2;
-    let typeCol = 3;
-    let descriptionCol = 4;
-    let categoryCol = 5;
+    let descriptionCol = 3;
+    let categoryCol = 4;
+    let typeCol = 5;
 
     if (headerRow) {
-      const headerLower = headerRow.map((h) => String(h).toLowerCase());
+      const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
       const findIndex = (names: string[]) => headerLower.findIndex((h) => names.includes(h));
 
       const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
       const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
-      const amountIdx = findIndex(['amount', 'value']);
+      const amountIdx = findIndex(['amount', 'value', 'amt']);
       const accIdx = findIndex(['account', 'account_name', 'account name']);
-      const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+      const descIdx = findIndex(['description', 'desc', 'details', 'note', 'name', 'merchant', 'payee']);
       const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
 
       if (dateIdx >= 0) dateCol = dateIdx;
@@ -999,6 +996,9 @@ const handlePickCsvFile = async () => {
       if (descIdx >= 0) descriptionCol = descIdx;
       if (catIdx >= 0) categoryCol = catIdx;
     }
+
+    const safeCell = (row: string[], idx: number) =>
+      idx >= 0 && idx < row.length ? String(row[idx] ?? '').trim() : '';
 
     const accountByName: Record<string, Account> = {};
     for (const a of accounts) {
@@ -1018,19 +1018,19 @@ const handlePickCsvFile = async () => {
     for (const row of dataRows) {
       if (!row.length) continue;
 
-      const rawDate = row[dateCol] ?? '';
-      const rawType = row[typeCol] ?? '';
-      const rawAmountStr = row[amountCol] ?? '';
-      const accountName = String(row[accountCol] ?? '').trim();
-      const description = String(row[descriptionCol] ?? '').trim();
-      const category = String(row[categoryCol] ?? '').trim();
+      const rawDate = safeCell(row, dateCol);
+      const rawType = safeCell(row, typeCol);
+      const rawAmountStr = safeCell(row, amountCol);
+      const accountName = safeCell(row, accountCol);
+      const description = safeCell(row, descriptionCol);
+      const category = safeCell(row, categoryCol);
 
       if (!accountName) {
         skippedMissingAccountName++;
         continue;
       }
 
-      const amountNum = Number(String(rawAmountStr).replace(/,/g, ''));
+      const amountNum = Number(String(rawAmountStr).replace(/[£$\s]/g, '').replace(/,/g, ''));
       if (!isFinite(amountNum) || isNaN(amountNum)) {
         skippedBadAmount++;
         continue;
@@ -1074,11 +1074,12 @@ const handlePickCsvFile = async () => {
       const name = description || category || 'Imported';
 
       builtTxs.push({
-        id: makeId('tx'),   
+        id: makeId('tx'),
         accountId: acct.id,
         date: isoDate,
         type: finalType,
         amount,
+        name,
         category: category || undefined,
         description: description || undefined,
       });
@@ -1121,14 +1122,13 @@ const handlePickCsvFile = async () => {
           try {
             const built = buildCsvTransactions(importCsvText);
 
-            const finalTxs =
-              csvRestoreMode === 'replace' ? built.builtTxs : [...txs, ...built.builtTxs];
+            const finalTxs = csvRestoreMode === 'replace' ? built.builtTxs : [...txs, ...built.builtTxs];
 
             actions.replaceAllData({
               accounts: built.newAccounts,
               transactions: finalTxs,
-              recurring, // unchanged
-              budgets, // preserve
+              recurring,
+              budgets,
             });
 
             const summaryLines: string[] = [];
@@ -1202,10 +1202,7 @@ const handlePickCsvFile = async () => {
               <Text style={styles.optionLabel}>
                 {jsonRestoreMode === 'replace' ? 'Replace (full restore)' : 'Merge (add new only)'}
               </Text>
-              <Switch
-                value={jsonRestoreMode === 'replace'}
-                onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')}
-              />
+              <Switch value={jsonRestoreMode === 'replace'} onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')} />
             </View>
 
             <Text style={styles.hint}>
@@ -1260,9 +1257,7 @@ const handlePickCsvFile = async () => {
 
         {csvExportPreview ? (
           <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>
-              {csvExportPreviewSourceName || 'CSV preview'} (for reference)
-            </Text>
+            <Text style={styles.textBoxLabel}>{csvExportPreviewSourceName || 'CSV preview'} (for reference)</Text>
             <ScrollView style={styles.textBoxScroll}>
               <Text selectable style={styles.monoText}>
                 {csvExportPreview}
@@ -1312,10 +1307,7 @@ const handlePickCsvFile = async () => {
           <Text style={styles.optionLabel}>
             CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
           </Text>
-          <Switch
-            value={csvRestoreMode === 'merge'}
-            onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')}
-          />
+          <Switch value={csvRestoreMode === 'merge'} onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')} />
         </View>
 
         <View style={styles.rowButtons}>
@@ -1332,9 +1324,7 @@ const handlePickCsvFile = async () => {
 
         <Text style={{ height: 12 }} />
 
-        <Text style={styles.textBoxLabel}>
-          Or paste CSV text below. (Scroll down if Apply button is missing)
-        </Text>
+        <Text style={styles.textBoxLabel}>Or paste CSV text below. (Scroll down if Apply button is missing)</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline
@@ -1363,9 +1353,7 @@ const handlePickCsvFile = async () => {
         {csvPreview ? (
           <View style={styles.previewBox}>
             <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
-
             {csvPreviewSourceName ? <Text style={styles.previewMeta}>{csvPreviewSourceName}</Text> : null}
-
             <View style={styles.previewScroll}>
               <Text selectable style={styles.previewText}>
                 {csvPreview}
