@@ -569,6 +569,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setLastImportSummary('');
 
       setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
+
+      actions.rebuildRecurring?.();
+
+
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
