@@ -344,6 +344,9 @@ const detectCandidates = useMemo(() => {
     Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
+  console.log('TX sample', txs.slice(0, 3));
+
+
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
