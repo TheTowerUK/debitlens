@@ -678,6 +678,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   };
 
+console.log('TX has type count', txs.filter(t => !!(t as any).type).length, 'of', txs.length);
+console.log('TX sample keys', Object.keys(txs[0] || {}));
+
+
   const persistCsvStats = async (stats: CsvImportStats) => {
     try {
       setLastCsvStats(stats);

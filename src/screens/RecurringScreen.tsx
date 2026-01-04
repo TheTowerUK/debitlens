@@ -344,7 +344,9 @@ const detectCandidates = useMemo(() => {
     Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
-  console.log('TX sample', txs.slice(0, 3));
+  //console.log('TX sample', txs.slice(0, 3));
+console.log('TX has type count', txs.filter(t => !!(t as any).type).length, 'of', txs.length);
+console.log('TX sample keys', Object.keys(txs[0] || {}));
 
 
   return (
