@@ -14,7 +14,14 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 
-import { useApp, type Account, type Transaction, type TransactionType } from '../state/AppContext';
+import {
+  useApp,
+  type Account,
+  type Transaction,
+  type TransactionType,
+  type RecurringItem,
+  type RecurringFrequency,
+} from '../state/AppContext';
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -42,7 +49,6 @@ function isArray(v: any): v is any[] {
 
 function buildCsvTemplate(): string {
   const header = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
-
   const instructionRow = [
     'YYYY-MM-DD',
     'Account name',
@@ -59,19 +65,6 @@ function buildCsvTemplate(): string {
   };
 
   return [header.map(esc).join(','), instructionRow.map(esc).join(',')].join('\n') + '\n';
-}
-
-function normaliseBackup(raw: any): BackupPayload | null {
-  if (!raw || typeof raw !== 'object') return null;
-
-  // allow either {accounts,transactions,recurring} OR {state:{...}}
-  const root = raw.state && typeof raw.state === 'object' ? raw.state : raw;
-
-  const accounts = isArray(root.accounts) ? root.accounts : [];
-  const transactions = isArray(root.transactions) ? root.transactions : [];
-  const recurring = isArray(root.recurring) ? root.recurring : [];
-
-  return { accounts, transactions, recurring };
 }
 
 function buildIdSet(items: any[]) {
@@ -169,8 +162,10 @@ function normalizeDateToISODate(input: string): string {
   const s = String(input || '').trim();
   if (!s) return new Date().toISOString().slice(0, 10);
 
+  // already ISO date
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
 
+  // DD/MM/YY or DD/MM/YYYY
   const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
   if (m) {
     const dd = m[1].padStart(2, '0');
@@ -270,12 +265,12 @@ type CsvImportStats = {
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
 export default function DataExportImportScreen({ navigation }: Props) {
-  const { state, actions } = useApp() as any;
+  const { state, actions } = useApp();
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
   const txs: Transaction[] = Array.isArray(state?.transactions) ? state.transactions : [];
-  const recurring = Array.isArray(state?.recurring) ? state.recurring : [];
-  const budgets = Array.isArray(state?.budgets) ? state.budgets : [];
+  const recurring: RecurringItem[] = Array.isArray((state as any)?.recurring) ? (state as any).recurring : [];
+  const budgets = Array.isArray((state as any)?.budgets) ? (state as any).budgets : [];
 
   const [lastStatus, setLastStatus] = useState<string>('');
 
@@ -326,7 +321,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
       }
 
       const parsed = parseAndValidateBackup(picked.text);
-
       setJsonPreview(parsed);
       setLastStatus(`Loaded JSON backup v${parsed.version} (${parsed.exportedAt.slice(0, 10)}).`);
     } catch (err: any) {
@@ -343,7 +337,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
       accounts: jsonPreview.app.accounts,
       transactions: jsonPreview.app.transactions,
       recurring: jsonPreview.app.recurring,
-      budgets, // preserve
+      budgets,
     });
   };
 
@@ -354,9 +348,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
     const existingTxs = txs;
     const existingRecurring = recurring;
 
-    const accIds = new Set(existingAccounts.map((a: any) => a.id));
-    const txIds = new Set(existingTxs.map((t: any) => t.id));
-    const recIds = new Set(existingRecurring.map((r: any) => r.id));
+    const accIds = new Set(existingAccounts.map((a) => a.id));
+    const txIds = new Set(existingTxs.map((t) => t.id));
+    const recIds = new Set(existingRecurring.map((r) => r.id));
 
     const addAccounts = jsonPreview.app.accounts.filter((a) => a?.id && !accIds.has(a.id));
     const addTxs = jsonPreview.app.transactions.filter((t) => t?.id && !txIds.has(t.id));
@@ -405,7 +399,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
   const accountNameById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const a of accounts) {
-      if (a && a.id) map[a.id] = a.name ?? a.id;
+      if (a?.id) map[a.id] = a.name ?? a.id;
     }
     return map;
   }, [accounts]);
@@ -454,7 +448,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
 
     const headers = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
-
     const lines: string[] = [];
     lines.push(headers.map(csvEscape).join(','));
 
@@ -462,7 +455,9 @@ export default function DataExportImportScreen({ navigation }: Props) {
       const accountCell = csvIncludeAccountName ? accountNameById[t.accountId] ?? '' : t.accountId ?? '';
 
       const amountSigned =
-        String(t.type).toLowerCase() === 'expense' ? -Math.abs(Number(t.amount ?? 0)) : Number(t.amount ?? 0);
+        String(t.type).toLowerCase() === 'expense'
+          ? -Math.abs(Number(t.amount ?? 0))
+          : Number(t.amount ?? 0);
 
       const typeCell =
         String(t.type).toLowerCase() === 'income'
@@ -569,10 +564,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setLastImportSummary('');
 
       setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
-
-      actions.rebuildRecurring?.();
-
-
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
@@ -606,7 +597,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         dataRows = restRows;
       }
 
-      // detect columns (preview only)
       let accountColIndex = -1;
       let categoryColIndex = -1;
       let amountColIndex = -1;
@@ -624,7 +614,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
         categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
       }
 
-      // build preview text (SINGLE PASS — fixes TS2451)
       const maxPreviewRows = 10;
       const previewRows = dataRows.slice(0, maxPreviewRows);
 
@@ -634,13 +623,10 @@ export default function DataExportImportScreen({ navigation }: Props) {
 
       previewLines.push('--- Sample rows ---');
       for (const row of previewRows) previewLines.push(row.join(' | '));
-      if (dataRows.length > maxPreviewRows) {
-        previewLines.push(`…plus ${dataRows.length - maxPreviewRows} more rows`);
-      }
+      if (dataRows.length > maxPreviewRows) previewLines.push(`…plus ${dataRows.length - maxPreviewRows} more rows`);
 
       setCsvPreview(previewLines.join('\n'));
 
-      // account match stats (preview meta)
       if (accountColIndex >= 0) {
         let matchedCount = 0;
         let unknownCount = 0;
@@ -654,15 +640,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
         }
 
         const bits: string[] = [];
-        bits.push(
-          `Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`
-        );
+        bits.push(`Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`);
         bits.push(categoryColIndex >= 0 ? `Category col: ${categoryColIndex}.` : `No category column detected.`);
         bits.push(dateColIndex >= 0 ? `Date col: ${dateColIndex}.` : `No date col detected.`);
         bits.push(amountColIndex >= 0 ? `Amount col: ${amountColIndex}.` : `No amount col detected.`);
         bits.push(descColIndex >= 0 ? `Description col: ${descColIndex}.` : `No description col detected.`);
         bits.push(createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.');
-
         setCsvPreviewSourceName(bits.join(' '));
       } else {
         setCsvPreviewSourceName(
@@ -682,10 +665,6 @@ export default function DataExportImportScreen({ navigation }: Props) {
     }
   };
 
-console.log('TX has type count', txs.filter(t => !!(t as any).type).length, 'of', txs.length);
-console.log('TX sample keys', Object.keys(txs[0] || {}));
-
-
   const persistCsvStats = async (stats: CsvImportStats) => {
     try {
       setLastCsvStats(stats);
@@ -694,6 +673,192 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
       // ignore
     }
   };
+
+  /* ===========================
+     Recurring rebuild (aligned with RecurringItem)
+  =========================== */
+
+  const addDaysISO = (isoDate: string, days: number) => {
+    const d = new Date(isoDate + 'T00:00:00Z');
+    if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const median = (nums: number[]) => {
+    const a = [...nums].sort((x, y) => x - y);
+    const mid = Math.floor(a.length / 2);
+    return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+  };
+
+  const inferFrequencyFromDates = (sortedISODatesAsc: string[]): { freq: RecurringFrequency; nextDueDate: string } => {
+    // Need at least 2 occurrences
+    if (sortedISODatesAsc.length < 2) {
+      const fallback: RecurringFrequency = 'monthly' as any;
+      const last = sortedISODatesAsc[sortedISODatesAsc.length - 1] ?? new Date().toISOString().slice(0, 10);
+      return { freq: fallback, nextDueDate: addDaysISO(last, 30) };
+    }
+
+    const diffs: number[] = [];
+    for (let i = 1; i < sortedISODatesAsc.length; i++) {
+      const a = new Date(sortedISODatesAsc[i - 1] + 'T00:00:00Z').getTime();
+      const b = new Date(sortedISODatesAsc[i] + 'T00:00:00Z').getTime();
+      const days = Math.round((b - a) / (1000 * 60 * 60 * 24));
+      if (isFinite(days) && days > 0) diffs.push(days);
+    }
+
+    const last = sortedISODatesAsc[sortedISODatesAsc.length - 1] ?? new Date().toISOString().slice(0, 10);
+    if (!diffs.length) {
+      const fallback: RecurringFrequency = 'monthly' as any;
+      return { freq: fallback, nextDueDate: addDaysISO(last, 30) };
+    }
+
+    const md = median(diffs);
+
+    // Map median gap → frequency
+    // Adjust these if your RecurringFrequency values differ.
+    let freq: RecurringFrequency = 'monthly' as any;
+    let addDays = 30;
+
+    if (md >= 5 && md <= 9) {
+      freq = 'weekly' as any;
+      addDays = 7;
+    } else if (md >= 12 && md <= 18) {
+      freq = 'fortnightly' as any;
+      addDays = 14;
+    } else if (md >= 24 && md <= 40) {
+      freq = 'monthly' as any;
+      addDays = 30;
+    } else if (md >= 70 && md <= 120) {
+      freq = 'quarterly' as any;
+      addDays = 90;
+    } else if (md >= 320 && md <= 420) {
+      freq = 'yearly' as any;
+      addDays = 365;
+    }
+
+    return { freq, nextDueDate: addDaysISO(last, addDays) };
+  };
+
+  const buildRecurringFromTransactions = useCallback(
+    (allTxs: Transaction[]): RecurringItem[] => {
+      type Group = {
+        key: string;
+        accountId?: string;
+        title: string;
+        category?: string;
+        description?: string;
+        amount: number;
+        type: 'income' | 'expense';
+        datesAsc: string[];
+      };
+
+      const groups = new Map<string, Group>();
+
+      for (const t of allTxs || []) {
+        if (!t?.date) continue;
+
+        const type = (t.type === 'income' ? 'income' : t.type === 'expense' ? 'expense' : null) as
+          | 'income'
+          | 'expense'
+          | null;
+        if (!type) continue; // ignore transfers for recurring detection
+
+        const merchantRaw = (t as any).name || (t as any).description || '';
+        const title = String(merchantRaw).trim();
+        if (!title) continue;
+
+        const category = String((t as any).category ?? '').trim() || undefined;
+
+        const amountPennies = Math.round(Math.abs(Number(t.amount ?? 0)) * 100);
+        if (!isFinite(amountPennies) || amountPennies <= 0) continue;
+
+        const accountId = t.accountId || undefined;
+        const iso = String(t.date).slice(0, 10);
+
+        const key = [
+          accountId || '__no_account__',
+          norm(title),
+          amountPennies,
+          norm(category || '__no_category__'),
+          type,
+        ].join('|');
+
+        const g = groups.get(key);
+        if (!g) {
+          groups.set(key, {
+            key,
+            accountId,
+            title,
+            category,
+            description: String((t as any).description ?? '').trim() || undefined,
+            amount: amountPennies / 100,
+            type,
+            datesAsc: [iso],
+          });
+        } else {
+          g.datesAsc.push(iso);
+        }
+      }
+
+      const out: RecurringItem[] = [];
+
+      for (const g of groups.values()) {
+        // only keep true repeats
+        if (g.datesAsc.length < 2) continue;
+
+        const datesAsc = [...g.datesAsc].sort();
+        const { freq, nextDueDate } = inferFrequencyFromDates(datesAsc);
+
+        out.push({
+          id: `rec_${g.key}`,
+          title: g.title,
+          active: true,
+          nextDueDate,
+          frequency: freq,
+          amount: g.amount,
+          type: g.type,
+          category: g.category,
+          description: g.description,
+          accountId: g.accountId,
+          isTransfer: false,
+        });
+      }
+
+      // strongest first (most occurrences)
+      out.sort((a, b) => {
+        const ac = groups.get(
+          [
+            a.accountId || '__no_account__',
+            norm(a.title),
+            Math.round(Math.abs(Number(a.amount ?? 0)) * 100),
+            norm(a.category || '__no_category__'),
+            a.type,
+          ].join('|')
+        )?.datesAsc.length ?? 0;
+
+        const bc = groups.get(
+          [
+            b.accountId || '__no_account__',
+            norm(b.title),
+            Math.round(Math.abs(Number(b.amount ?? 0)) * 100),
+            norm(b.category || '__no_category__'),
+            b.type,
+          ].join('|')
+        )?.datesAsc.length ?? 0;
+
+        return bc - ac;
+      });
+
+      return out;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  /* ===========================
+     CSV IMPORT (append) + rebuild recurring
+  =========================== */
 
   const handleApplyCsvImportPress = () => {
     if (!importCsvText.trim()) {
@@ -743,7 +908,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
       type: string;
       amountAbs: number;
       descClean: string;
-      }) => {
+    }) => {
       const amt = Number(input.amountAbs || 0).toFixed(2);
       return `${input.accountId}__${input.dateISO}__${input.type}__${amt}__${norm(input.descClean)}`;
     };
@@ -813,7 +978,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
               let skippedCouldNotCreateAccount = 0;
               let skippedDuplicate = 0;
 
-              const createdAccountByName: Record<string, any> = {};
+              const createdAccountByName: Record<string, Account> = {};
 
               // Existing transaction keys (de-dupe)
               const existingKeys = new Set<string>();
@@ -826,6 +991,8 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                 if (!accountId || !dateISO || !type) continue;
                 existingKeys.add(makeTxnKey({ accountId, dateISO, type, amountAbs, descClean }));
               }
+
+              const newTxs: Transaction[] = [];
 
               for (const row of dataRows) {
                 if (!row.length) continue;
@@ -845,8 +1012,9 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                   continue;
                 }
 
-                let accountForRow: any =
-                  createdAccountByName[accountKey] ?? accounts.find((a) => a?.name && norm(a.name) === accountKey);
+                let accountForRow: Account | undefined =
+                  createdAccountByName[accountKey] ??
+                  accounts.find((a) => a?.name && norm(a.name) === accountKey);
 
                 if (!accountForRow) {
                   if (!createMissingAccounts) {
@@ -854,9 +1022,9 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                     continue;
                   }
 
-                  let newAccount: any;
+                  let created: Account | null = null;
                   try {
-                    newAccount = actions.addAccount({
+                    created = actions.addAccount({
                       name: accountName,
                       type: 'bank',
                       balance: 0,
@@ -865,14 +1033,14 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                     console.error('Error creating account from CSV row', err);
                   }
 
-                  if (!newAccount || !newAccount.id) {
+                  if (!created?.id) {
                     skippedCouldNotCreateAccount++;
                     continue;
                   }
 
                   createdAccountsCount++;
-                  createdAccountByName[accountKey] = newAccount;
-                  accountForRow = newAccount;
+                  createdAccountByName[accountKey] = created;
+                  accountForRow = created;
                 }
 
                 const amountNum = parseAmount(amountRaw);
@@ -888,9 +1056,8 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                 }
 
                 let finalType: TransactionType;
-
                 const typeFromCell = parseTypeCell(typeStrRaw);
-                if (typeFromCell) finalType = typeFromCell as any;
+                if (typeFromCell) finalType = typeFromCell;
                 else if (amountNum < 0) finalType = 'expense';
                 else if (amountNum > 0) finalType = 'income';
                 else finalType = 'expense';
@@ -913,7 +1080,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                 }
                 existingKeys.add(key);
 
-                actions.addTransaction({
+                const added = actions.addTransaction({
                   accountId: accountForRow.id,
                   amount: amountAbs,
                   type: finalType,
@@ -921,10 +1088,22 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
                   name: descClean || undefined,
                   description: descFinal || undefined,
                   category: category || undefined,
-                });
+                } as any);
 
+                if (added) newTxs.push(added);
                 importedCount++;
               }
+
+              // ✅ Persist transactions + recurring in one go
+              const allTxsAfter = [...txs, ...newTxs];
+              const nextRecurring = buildRecurringFromTransactions(allTxsAfter);
+
+              actions.replaceAllData({
+                accounts,
+                transactions: allTxsAfter,
+                recurring: nextRecurring,
+                budgets,
+              });
 
               const summaryLines: string[] = [];
               summaryLines.push(`Imported transactions: ${importedCount}`);
@@ -934,9 +1113,10 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
               summaryLines.push(`Skipped invalid amount/date: ${skippedBadAmount}`);
               summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
               summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
+              summaryLines.push(`Recurring items generated: ${nextRecurring.length}`);
 
               setLastImportSummary(summaryLines.join('\n'));
-              setLastStatus('CSV import completed. See summary below.');
+              setLastStatus('CSV import completed. Recurring rebuilt.');
 
               await persistCsvStats({
                 importedCount,
@@ -962,7 +1142,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
   };
 
   /* ===========================
-     CSV RESTORE (NEW)
+     CSV RESTORE (replace/merge) + rebuild recurring
   =========================== */
 
   const buildCsvTransactions = (csvText: string) => {
@@ -1057,7 +1237,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
             name: accountName,
             type: 'bank',
             balance: 0,
-          }) as Account;
+          });
 
           if (!created?.id) {
             skippedCouldNotCreateAccount++;
@@ -1079,7 +1259,6 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
       const finalType = normalizeType(rawType, amountNum);
       const amount = Math.abs(amountNum);
       const isoDate = normalizeDateToISODate(String(rawDate));
-      const name = description || category || 'Imported';
 
       builtTxs.push({
         id: makeId('tx'),
@@ -1087,10 +1266,10 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
         date: isoDate,
         type: finalType,
         amount,
-        name,
         category: category || undefined,
         description: description || undefined,
-      });
+        name: description ? norm(description) : undefined,
+      } as any);
 
       importedCount++;
     }
@@ -1132,10 +1311,12 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
 
             const finalTxs = csvRestoreMode === 'replace' ? built.builtTxs : [...txs, ...built.builtTxs];
 
+            const nextRecurring = buildRecurringFromTransactions(finalTxs);
+
             actions.replaceAllData({
               accounts: built.newAccounts,
               transactions: finalTxs,
-              recurring,
+              recurring: nextRecurring,
               budgets,
             });
 
@@ -1151,9 +1332,10 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
             summaryLines.push(`Skipped invalid amount: ${built.stats.skippedBadAmount}`);
             summaryLines.push(`Skipped missing account name: ${built.stats.skippedMissingAccountName}`);
             summaryLines.push(`Account creation failed: ${built.stats.skippedCouldNotCreateAccount}`);
+            summaryLines.push(`Recurring items generated: ${nextRecurring.length}`);
 
             setLastImportSummary(summaryLines.join('\n'));
-            setLastStatus('CSV restore/merge completed.');
+            setLastStatus('CSV restore/merge completed. Recurring rebuilt.');
 
             await persistCsvStats({
               ...built.stats,
@@ -1210,7 +1392,10 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
               <Text style={styles.optionLabel}>
                 {jsonRestoreMode === 'replace' ? 'Replace (full restore)' : 'Merge (add new only)'}
               </Text>
-              <Switch value={jsonRestoreMode === 'replace'} onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')} />
+              <Switch
+                value={jsonRestoreMode === 'replace'}
+                onValueChange={(v) => setJsonRestoreMode(v ? 'replace' : 'merge')}
+              />
             </View>
 
             <Text style={styles.hint}>
@@ -1332,7 +1517,7 @@ console.log('TX sample keys', Object.keys(txs[0] || {}));
 
         <Text style={{ height: 12 }} />
 
-        <Text style={styles.textBoxLabel}>Or paste CSV text below. (Scroll down if Apply button is missing)</Text>
+        <Text style={styles.textBoxLabel}>Or paste CSV text below.</Text>
         <TextInput
           style={[styles.input, styles.inputMultiline]}
           multiline

@@ -344,46 +344,6 @@ const detectCandidates = useMemo(() => {
     Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
-  //console.log('TX sample', txs.slice(0, 3));
-
-const normKey = (s: any) => String(s ?? '').trim().toLowerCase();
-
-function recurringDebugTopGroups(txs: any[]) {
-  const map = new Map<string, number>();
-
-  for (const t of txs || []) {
-    if (!t?.accountId || !t?.date) continue;
-
-    // focus on expenses first (most recurring are expenses)
-    if (t.type !== 'expense') continue;
-
-    const merchant = normKey(t.name || t.description);
-    const category = normKey(t.category);
-    const amount = Number(t.amount ?? 0);
-    if (!merchant || !isFinite(amount)) continue;
-
-    // key: account + merchant + amount + category
-    const key = [
-      t.accountId,
-      merchant,
-      Math.round(Math.abs(amount) * 100), // pennies
-      category || '__no_category__',
-    ].join('|');
-
-    map.set(key, (map.get(key) ?? 0) + 1);
-  }
-
-  const top = [...map.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-
-  console.log(
-    'Recurring debug: top groups (count>=2):',
-    top.filter(([, n]) => n >= 2)
-  );
-}
-
-recurringDebugTopGroups(txs);
 
 
   return (
