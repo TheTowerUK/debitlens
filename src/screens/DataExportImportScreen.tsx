@@ -1005,7 +1005,8 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 const rawAccountName = safeCell(row, accountCol);
 
                 const accountKey = norm(rawAccountName);
-                const accountName = String(rawAccountName).trim();
+                const accountName = String(rawAccountName).replace(/\u00A0/g, ' ').trim();
+                const accountNameSafe = accountName || 'Imported Account';
 
                 if (!accountName) {
                   skippedMissingAccountName++;
@@ -1025,7 +1026,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
                   let created: Account | null = null;
                   try {
                     created = actions.addAccount({
-                      name: accountName,
+                      name: accountNameSafe,
                       type: 'bank',
                       balance: 0,
                     });
@@ -1094,16 +1095,29 @@ export default function DataExportImportScreen({ navigation }: Props) {
                 importedCount++;
               }
 
+              // ✅ Build the final accounts list (include any created during this import)
+              const accountsAfter = [...accounts];
+              const existingIds = new Set(accountsAfter.map((a) => a.id));
+
+              for (const a of Object.values(createdAccountByName)) {
+                if (a?.id && !existingIds.has(a.id)) {
+                  accountsAfter.push(a);
+                  existingIds.add(a.id);
+                }
+              }
+
+
               // ✅ Persist transactions + recurring in one go
               const allTxsAfter = [...txs, ...newTxs];
               const nextRecurring = buildRecurringFromTransactions(allTxsAfter);
 
               actions.replaceAllData({
-                accounts,
+                accounts: accountsAfter,          // ✅ use accountsAfter
                 transactions: allTxsAfter,
                 recurring: nextRecurring,
                 budgets,
               });
+
 
               const summaryLines: string[] = [];
               summaryLines.push(`Imported transactions: ${importedCount}`);
