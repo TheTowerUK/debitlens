@@ -633,8 +633,33 @@ const handleImportCsvPress = async () => {
       if (n) accountNameToId.set(n, a.id);
     }
 
+    // Local helper: resolve account name to id (optionally auto-create)
+    let createdAccounts = 0;
+
+    const resolveAccountId = (rawName: unknown): string => {
+      const name = String(rawName ?? '').trim();
+      if (!name) return '';
+
+      const existing = accountNameToId.get(name);
+      if (existing) return existing;
+
+      if (!createMissingAccounts) return '';
+
+      // Create missing account (safe defaults)
+      // This assumes your AppContext addAccount supports at least { name } (as per your AddAccountScreen).
+      const newAcc = actions.addAccount({
+        name,
+        type: 'bank',   // default; adjust if you prefer 'cash' or 'other'
+        balance: 0,
+      } as any);
+
+      createdAccounts += 1;
+      accountNameToId.set(name, newAcc.id);
+      return newAcc.id;
+    };
+
     // 4) Map CSV rows -> ImportRow with resolved accountId
-    // If there is no header (or detection fails), fallback to assumed order:
+    // If detection fails, fallback to assumed order:
     // date | account | amount | description | category
     const fallback = {
       date: 0,
@@ -654,34 +679,37 @@ const handleImportCsvPress = async () => {
       const descCell = getCell(r, descColIndex >= 0 ? descColIndex : fallback.desc);
       const categoryCell = getCell(r, categoryColIndex >= 0 ? categoryColIndex : fallback.category);
 
-      const accountName = String(accountCell ?? '').trim();
-      const accountId = accountNameToId.get(accountName) ?? ''; // empty triggers validation error
+      const accountId = resolveAccountId(accountCell);
 
       return {
         date: dateCell,
-        accountId,            // IMPORTANT: now validation works
+        accountId, // now mapped or newly created
         amount: amountCell,
         description: descCell,
         category: categoryCell,
-        // type omitted → inferred from amount sign with warning
+        // type omitted -> inferred from amount sign (warning)
       };
     });
 
     // 5) Import with validation + transparency
+    const knownIds = new Set(accounts.map((a) => a.id));
+    for (const id of accountNameToId.values()) knownIds.add(id);
+
     const summary = importCsvRowsWithValidation({
       rows: parsedRows,
-      accounts: accounts, // uses ids for the knownAccountIds set
+      accounts: Array.from(knownIds).map((id) => ({ id })),
       actions,
     });
 
-    // 6) Persist feedback + stats
+
+    // 6) User feedback + persistence
+    const createdNote = createdAccounts > 0 ? ` Created ${createdAccounts} new account(s).` : '';
     setLastImportSummary(
-      `Imported ${summary.imported}, skipped ${summary.skipped}, warnings ${summary.warnings.length}, errors ${summary.errors.length}.`
+      `Imported ${summary.imported}, skipped ${summary.skipped}, warnings ${summary.warnings.length}, errors ${summary.errors.length}.${createdNote}`
     );
 
     alertImportSummary(summary);
 
-    // optional stats capture (if you’re using CsvImportStats)
     const stats: CsvImportStats = {
       imported: summary.imported,
       skipped: summary.skipped,
@@ -690,6 +718,7 @@ const handleImportCsvPress = async () => {
       source: importSource ?? 'manual',
       mode: 'import',
       at: new Date().toISOString(),
+      createdAccounts, // extra field (safe if your type allows; otherwise remove)
     } as any;
 
     setLastCsvStats(stats);
@@ -706,6 +735,7 @@ const handleImportCsvPress = async () => {
     setLastStatus(`CSV import error: ${String(err?.message ?? err)}`);
   }
 };
+
 
 
   const handleParseCsvPress = () => {
