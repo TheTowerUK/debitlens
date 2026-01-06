@@ -38,7 +38,7 @@ import type { ImportSummary } from '../utils/importSummary';
 import { importCsvRowsWithValidation, alertImportSummary } from '../utils/importCsv';
 
 const FS: any = FileSystem as any;
-const norm = (s: any) => String(s ?? '').trim().toLowerCase();
+const norm = (s: string) => s.trim().toLowerCase();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -541,11 +541,12 @@ export default function DataExportImportScreen({ navigation }: Props) {
     () =>
       new Set(
         accounts
-          .map((a) => (a && typeof a.name === 'string' ? a.name.trim() : ''))
-          .filter((n) => n.length > 0)
+          .map((a) => (a?.name ? a.name.trim().toLowerCase() : ''))
+          .filter(Boolean)
       ),
     [accounts]
   );
+
 
   const handlePickCsvFile = async () => {
     try {
@@ -637,26 +638,23 @@ const handleImportCsvPress = async () => {
     let createdAccounts = 0;
 
     const resolveAccountId = (rawName: unknown): string => {
-      const name = String(rawName ?? '').trim();
-      if (!name) return '';
+      const displayName = String(rawName ?? '').trim();
+      if (!displayName) return '';
 
-      const existing = accountNameToId.get(name);
+      const key = norm(displayName);
+
+      const existing = accountNameToId.get(key);
       if (existing) return existing;
 
       if (!createMissingAccounts) return '';
 
-      // Create missing account (safe defaults)
-      // This assumes your AppContext addAccount supports at least { name } (as per your AddAccountScreen).
-      const newAcc = actions.addAccount({
-        name,
-        type: 'bank',   // default; adjust if you prefer 'cash' or 'other'
-        balance: 0,
-      } as any);
-
+      const newAcc = actions.addAccount({ name: displayName } as any);
       createdAccounts += 1;
-      accountNameToId.set(name, newAcc.id);
+
+      accountNameToId.set(key, newAcc.id);
       return newAcc.id;
     };
+
 
     // 4) Map CSV rows -> ImportRow with resolved accountId
     // If detection fails, fallback to assumed order:
@@ -798,27 +796,56 @@ const handleImportCsvPress = async () => {
         let matchedCount = 0;
         let unknownCount = 0;
 
+        // Collect unique unknown accounts (preserve a “nice” display name)
+        const unknownKeyToDisplay = new Map<string, string>();
+
         for (const row of dataRows) {
           if (accountColIndex >= row.length) continue;
-          const accName = String(row[accountColIndex] ?? '').trim();
-          if (!accName) continue;
-          if (knownAccountNames.has(accName)) matchedCount++;
-          else unknownCount++;
+
+          const raw = String(row[accountColIndex] ?? '');
+          const displayName = raw.trim();
+          if (!displayName) continue;
+
+          const key = displayName.toLowerCase();
+
+          if (knownAccountNames.has(key)) {
+            matchedCount++;
+          } else {
+            unknownCount++;
+            // store first-seen casing for display
+            if (!unknownKeyToDisplay.has(key)) unknownKeyToDisplay.set(key, displayName);
+          }
         }
 
+        // Build preview text
         const bits: string[] = [];
-        bits.push(`Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`);
+        bits.push(
+          `Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`
+        );
         bits.push(categoryColIndex >= 0 ? `Category col: ${categoryColIndex}.` : `No category column detected.`);
         bits.push(dateColIndex >= 0 ? `Date col: ${dateColIndex}.` : `No date col detected.`);
         bits.push(amountColIndex >= 0 ? `Amount col: ${amountColIndex}.` : `No amount col detected.`);
         bits.push(descColIndex >= 0 ? `Description col: ${descColIndex}.` : `No description col detected.`);
         bits.push(createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.');
+
+        // Add unknown account list (first 10)
+        const unknownList = Array.from(unknownKeyToDisplay.values()).sort((a, b) => a.localeCompare(b));
+        if (unknownList.length > 0) {
+          const first10 = unknownList.slice(0, 10);
+          bits.push(`Unknown accounts (unique): ${unknownList.length}.`);
+          bits.push(`First ${first10.length}: ${first10.join(', ')}`);
+          if (unknownList.length > first10.length) {
+            bits.push(`…plus ${unknownList.length - first10.length} more`);
+          }
+        }
+
         setCsvPreviewSourceName(bits.join(' '));
       } else {
         setCsvPreviewSourceName(
           'No obvious account column detected in header. You can still import/restore, but rows must map correctly by column order.'
         );
       }
+
 
       setLastImportSummary('');
       setLastStatus('CSV parsed successfully. Review preview, then apply import or restore.');
