@@ -32,6 +32,11 @@ import { colors as theme } from '../theme/colors';
 
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
 
+import { normalizeImportRow, type ImportRow } from '../utils/validation';
+import type { ImportSummary } from '../utils/importSummary';
+
+import { importCsvRowsWithValidation, alertImportSummary } from '../utils/importCsv';
+
 const FS: any = FileSystem as any;
 const norm = (s: any) => String(s ?? '').trim().toLowerCase();
 
@@ -570,6 +575,138 @@ export default function DataExportImportScreen({ navigation }: Props) {
       setLastStatus(`File error: ${String(err?.message ?? err)}`);
     }
   };
+
+const handleImportCsvPress = async () => {
+  if (!importCsvText.trim()) {
+    setLastStatus('Paste CSV text or pick a file first.');
+    return;
+  }
+
+  try {
+    // 1) Parse rows again (import should not depend on preview state)
+    const rows = parseCsvLines(importCsvText);
+    if (!rows.length) {
+      setLastStatus('CSV parsed but contains no rows.');
+      return;
+    }
+
+    const [firstRow, ...restRows] = rows;
+    let dataRows = rows;
+    let headerRow: string[] | null = null;
+
+    if (csvHasHeaderRow) {
+      headerRow = firstRow;
+      dataRows = restRows;
+    }
+
+    // 2) Detect columns (same logic as preview)
+    let accountColIndex = -1;
+    let categoryColIndex = -1;
+    let amountColIndex = -1;
+    let dateColIndex = -1;
+    let descColIndex = -1;
+
+    if (headerRow) {
+      const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
+      const findOneOf = (candidates: string[]) =>
+        headerLower.findIndex((h) => candidates.includes(h));
+
+      dateColIndex = findOneOf(['date', 'txn_date', 'transaction_date', 'tx_date']);
+      accountColIndex = findOneOf(['account', 'account_name', 'account name']);
+      amountColIndex = findOneOf(['amount', 'value', 'amt']);
+      descColIndex = findOneOf([
+        'description',
+        'desc',
+        'name',
+        'merchant',
+        'payee',
+        'details',
+        'note',
+      ]);
+      categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
+    }
+
+    // 3) Build accountName -> accountId map from existing accounts
+    const accountNameToId = new Map<string, string>();
+    for (const a of accounts) {
+      const n = (a?.name ?? '').trim();
+      if (n) accountNameToId.set(n, a.id);
+    }
+
+    // 4) Map CSV rows -> ImportRow with resolved accountId
+    // If there is no header (or detection fails), fallback to assumed order:
+    // date | account | amount | description | category
+    const fallback = {
+      date: 0,
+      account: 1,
+      amount: 2,
+      desc: 3,
+      category: 4,
+    };
+
+    const getCell = (row: string[], idx: number) =>
+      idx >= 0 && idx < row.length ? row[idx] : '';
+
+    const parsedRows: ImportRow[] = dataRows.map((r) => {
+      const dateCell = getCell(r, dateColIndex >= 0 ? dateColIndex : fallback.date);
+      const accountCell = getCell(r, accountColIndex >= 0 ? accountColIndex : fallback.account);
+      const amountCell = getCell(r, amountColIndex >= 0 ? amountColIndex : fallback.amount);
+      const descCell = getCell(r, descColIndex >= 0 ? descColIndex : fallback.desc);
+      const categoryCell = getCell(r, categoryColIndex >= 0 ? categoryColIndex : fallback.category);
+
+      const accountName = String(accountCell ?? '').trim();
+      const accountId = accountNameToId.get(accountName) ?? ''; // empty triggers validation error
+
+      return {
+        date: dateCell,
+        accountId,            // IMPORTANT: now validation works
+        amount: amountCell,
+        description: descCell,
+        category: categoryCell,
+        // type omitted → inferred from amount sign with warning
+      };
+    });
+
+    // 5) Import with validation + transparency
+    const summary = importCsvRowsWithValidation({
+      rows: parsedRows,
+      accounts: accounts, // uses ids for the knownAccountIds set
+      actions,
+    });
+
+    // 6) Persist feedback + stats
+    setLastImportSummary(
+      `Imported ${summary.imported}, skipped ${summary.skipped}, warnings ${summary.warnings.length}, errors ${summary.errors.length}.`
+    );
+
+    alertImportSummary(summary);
+
+    // optional stats capture (if you’re using CsvImportStats)
+    const stats: CsvImportStats = {
+      imported: summary.imported,
+      skipped: summary.skipped,
+      warnings: summary.warnings.length,
+      errors: summary.errors.length,
+      source: importSource ?? 'manual',
+      mode: 'import',
+      at: new Date().toISOString(),
+    } as any;
+
+    setLastCsvStats(stats);
+    try {
+      await AsyncStorage.setItem(CSV_STATS_KEY, JSON.stringify(stats));
+    } catch {
+      // ignore
+    }
+
+    setLastStatus('CSV import complete. Review results above.');
+  } catch (err: any) {
+    console.error(err);
+    Alert.alert('CSV import error', 'Something went wrong while importing the CSV.');
+    setLastStatus(`CSV import error: ${String(err?.message ?? err)}`);
+  }
+};
+
 
   const handleParseCsvPress = () => {
     if (!importCsvText.trim()) {
