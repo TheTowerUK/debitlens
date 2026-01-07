@@ -38,13 +38,16 @@ export default function ReportDetailScreen({ route }: Props) {
     return `${categoryKey} • ${label}`;
   }, [categoryKey, label]);
 
+  const isMonthPeriod = effectivePeriod === 'month';
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{headerTitle}</Text>
 
-      {effectivePeriod === 'month' && (
+      {isMonthPeriod ? (
         <MonthSwitcher monthKey={effectiveMonthKey!} onChange={setMonthKey} />
-      )}
+      ) : null}
+
 
       <View style={styles.summary}>
         <Text style={styles.summaryText}>Transactions: {totals.count}</Text>
