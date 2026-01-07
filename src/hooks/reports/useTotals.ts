@@ -1,4 +1,4 @@
-// src/reports/hooks/useTotals.ts
+// src/hooks/useTotals.ts
 import { useMemo } from 'react';
 import type { Transaction } from '../../state/AppContext';
 
@@ -13,6 +13,11 @@ export function useTotals(filteredTxs: Transaction[]) {
       else if (t.type === 'expense') expense += amt;
     }
 
-    return { income, expense, net: income - expense };
+    return {
+      income,
+      expense,
+      net: income - expense,
+      count: filteredTxs.length,
+    };
   }, [filteredTxs]);
 }
