@@ -9,7 +9,10 @@ import { useReportRange, useFilteredTransactions, useTotals } from '../hooks/rep
 import MonthSwitcher from '../components/reports/MonthSwitcher';
 import { monthKeyFromDate, type ReportPeriod } from '../utils/reporting';
 
-import { colors as theme } from '../theme/colors'; // 👈 important (your blue theme)
+import { colors as theme } from '../theme/colors';
+import { useBudgetForCategory } from '../hooks/budgets/useBudgetForCategory';
+import { useBudgetSpend } from '../hooks/budgets/useBudgetSpend';
+
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;
 
@@ -39,6 +42,22 @@ export default function ReportDetailScreen({ route }: Props) {
 
   const headerTitle = useMemo(() => `${categoryKey} • ${label}`, [categoryKey, label]);
 
+  //Budgets
+  const budget = useBudgetForCategory(categoryKey);
+  const spent = useBudgetSpend(txs, range, categoryKey);
+
+  const budgetMeta = useMemo(() => {
+    if (!budget) return null;
+    const remaining = budget.limit - spent;
+    const pct = budget.limit > 0 ? spent / budget.limit : 0;
+
+    // simple thresholds (tweak later)
+    const status: 'ok' | 'warn' | 'exceeded' =
+      remaining < 0 ? 'exceeded' : pct >= 0.9 ? 'warn' : 'ok';
+
+    return { remaining, pct, status };
+  }, [budget, spent]);
+
   return (
   <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
     <View style={styles.container}>
@@ -54,6 +73,37 @@ export default function ReportDetailScreen({ route }: Props) {
           <Text style={styles.summaryText}>Expense: {formatMoney(totals.expense)}</Text>
           <Text style={styles.summaryText}>Net: {formatMoney(totals.net)}</Text>
         </View>
+
+        {budget && budgetMeta ? (
+          <View style={styles.budgetBox}>
+            <View style={styles.budgetRow}>
+              <Text style={styles.budgetTitle}>Budget</Text>
+              <Text
+                style={[
+                  styles.budgetStatus,
+                  budgetMeta.status === 'exceeded'
+                    ? styles.statusExceeded
+                    : budgetMeta.status === 'warn'
+                    ? styles.statusWarn
+                    : styles.statusOk,
+                ]}
+              >
+                {budgetMeta.status === 'exceeded'
+                  ? 'Exceeded'
+                  : budgetMeta.status === 'warn'
+                  ? 'Near limit'
+                  : 'On track'}
+              </Text>
+            </View>
+
+            <Text style={styles.budgetLine}>Limit: {formatMoney(budget.limit)}</Text>
+            <Text style={styles.budgetLine}>Spent: {formatMoney(spent)}</Text>
+            <Text style={styles.budgetLine}>
+              Remaining: {formatMoney(budgetMeta.remaining)}
+            </Text>
+          </View>
+        ) : null}
+
 
         <FlatList
           data={filtered}
@@ -123,6 +173,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.border,
   },
+  budgetBox: {
+  borderWidth: 1,
+  borderColor: theme.border,
+  borderRadius: 12,
+  padding: 12,
+  marginBottom: 12,
+  backgroundColor: theme.cardAlt,
+},
+budgetRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 8,
+},
+budgetTitle: { fontSize: 15, fontWeight: '800', color: theme.text },
+budgetStatus: { fontSize: 12, fontWeight: '800' },
+
+statusOk: { color: theme.positive },
+statusWarn: { color: theme.pillText },   // you can swap if you have a better amber
+statusExceeded: { color: theme.negative },
+
+budgetLine: { fontSize: 13, color: theme.textDim, marginBottom: 3 },
+
   rowTitle: { fontSize: 15, fontWeight: '600', color: theme.text },
   rowSub: { fontSize: 12, color: theme.textDim, marginTop: 2 },
   amount: { fontSize: 14, fontWeight: '700', marginLeft: 12, color: theme.text },
