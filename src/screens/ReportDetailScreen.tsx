@@ -4,11 +4,23 @@ import { View, Text, ScrollView, StyleSheet, Pressable } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useApp } from '../state/AppContext';
+import { useApp, type TransactionType } from '../state/AppContext';
 import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
 
+import { useReportRange } from '../hooks/reports/useReportRange';
+import { useFilteredTransactions } from '../hooks/reports/useFilteredTransactions';
+import { useReportTotals } from '../hooks/reports/useReportTotals';
+
+import { SummaryCard } from '../components/reports/SummaryCard';
+import { EmptyState } from '../components/reports/EmptyState';
+
 type Props = NativeStackScreenProps<RootStackParamList, 'ReportDetail'>;
+
+const TYPE_EXPENSE: TransactionType = 'expense';
+const TYPE_INCOME: TransactionType = 'income';
+const CAT_ALL = 'all';
+const CAT_UNCATEGORISED = 'Uncategorised';
 
 function pad2(n: number) {
   return String(n).padStart(2, '0');
@@ -19,7 +31,6 @@ function toMonthKey(d: Date) {
 }
 
 function monthKeyToStart(monthKey: string) {
-  // monthKey: 'YYYY-MM'
   const [yStr, mStr] = monthKey.split('-');
   const y = Number(yStr);
   const m = Number(mStr);
@@ -46,104 +57,50 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
 
   const { categoryKey, period, monthKey } = route.params;
 
-  const range = useMemo(() => {
-    const now = new Date();
-    const today0 = new Date(now);
-    today0.setHours(0, 0, 0, 0);
+  // Range is now centralized (Phase 3.2)
+  const range = useReportRange(period as any, monthKey);
 
-    if (period === 'allTime') return { start: null as Date | null, end: null as Date | null };
+  // Range-only filtering (keeps hook single-responsibility)
+  const inRangeTxs = useFilteredTransactions(txs, range.start, range.end);
 
-    if (period === 'thisMonth') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-      return { start, end };
-    }
-
-    if (period === 'lastMonth') {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const end = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start, end };
-    }
-
-    // period === 'month'
-    const mk = monthKey || toMonthKey(now);
-    const start = monthKeyToStart(mk) ?? new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-    return { start, end };
-  }, [period, monthKey]);
-
+  // Apply category filter in the screen (you already have categoryKey here)
   const filteredTxs = useMemo(() => {
-    const { start, end } = range;
+    if (!categoryKey || categoryKey === CAT_ALL) return inRangeTxs;
 
-    return txs
-      .filter((t) => {
-        if (!t?.date) return false;
-        const d = new Date(t.date);
-        if (isNaN(d.getTime())) return false;
+    const target = String(categoryKey).trim();
+    return inRangeTxs.filter((t) => {
+      const cat = String(t.category || CAT_UNCATEGORISED).trim() || CAT_UNCATEGORISED;
+      return cat === target;
+    });
+  }, [inRangeTxs, categoryKey]);
 
-        if (start && d < start) return false;
-        if (end && d >= end) return false;
+  // Totals via shared hook (Phase 3.2)
+  const totalsBase = useReportTotals(filteredTxs);
+  const totals = useMemo(
+    () => ({ ...totalsBase, count: filteredTxs.length }),
+    [totalsBase, filteredTxs.length]
+  );
 
-        // Category filter:
-        // - if categoryKey is "all" show all
-        // - else match trimmed text (case sensitive to keep it simple)
-        if (categoryKey && categoryKey !== 'all') {
-          const cat = String(t.category || 'Uncategorised').trim();
-          if (cat !== String(categoryKey).trim()) return false;
-        }
-
-        return true;
-      })
-      .sort((a, b) => {
-        const da = new Date(a.date).getTime();
-        const db = new Date(b.date).getTime();
-        return db - da; // newest first
-      });
-  }, [txs, range, categoryKey]);
-
-  const totals = useMemo(() => {
-    let income = 0;
-    let expense = 0;
-
-    for (const t of filteredTxs) {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') income += amt;
-      else if (t.type === 'expense') expense += Math.abs(amt);
-    }
-
-    return {
-      income,
-      expense,
-      net: income - expense,
-      count: filteredTxs.length,
-    };
-  }, [filteredTxs]);
-
+  // Month view helpers (keep your existing UX)
   const mkCurrent = useMemo(() => {
     if (period !== 'month') return null;
     return monthKey || toMonthKey(new Date());
   }, [period, monthKey]);
 
   const isMonthView = period === 'month' && !!mkCurrent;
-
-  const monthTitle = isMonthView
-    ? formatDisplayMonth(mkCurrent!)
-    : '';
+  const monthTitle = isMonthView ? formatDisplayMonth(mkCurrent!) : '';
 
   const formatMoney = (v: number) => `£${(Number(v) || 0).toFixed(2)}`;
 
   const title =
-    categoryKey === 'all'
-      ? 'All categories'
-      : String(categoryKey || 'Category');
+    categoryKey === CAT_ALL ? 'All categories' : String(categoryKey || 'Category');
 
+  // Prefer the shared range label for month naming consistency
   const periodLabel = useMemo(() => {
-    if (period === 'thisMonth') return 'This month';
-    if (period === 'lastMonth') return 'Last month';
     if (period === 'allTime') return 'All time';
-    if (period === 'month') return mkCurrent ? formatDisplayMonth(mkCurrent) : 'Month';
-    return period;
-  }, [period, mkCurrent]);
+    if (period === 'month') return mkCurrent ? formatDisplayMonth(mkCurrent) : range.label;
+    return range.label;
+  }, [period, mkCurrent, range.label]);
 
   const setPeriod = (p: RootStackParamList['ReportDetail']['period']) => {
     if (p === 'month') {
@@ -171,7 +128,9 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.h1}>{title}</Text>
-            <Text style={styles.subtle}>{periodLabel} • {totals.count} tx</Text>
+            <Text style={styles.subtle}>
+              {periodLabel} • {totals.count} tx
+            </Text>
           </View>
 
           <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
@@ -233,34 +192,17 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {/* Totals */}
+        {/* Totals (Phase 3.2 shared components) */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Summary</Text>
 
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Income</Text>
-              <Text style={styles.summaryValue}>{formatMoney(totals.income)}</Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Expense</Text>
-              <Text style={styles.summaryValue}>{formatMoney(totals.expense)}</Text>
-            </View>
-
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Net</Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  totals.net >= 0 ? styles.positiveText : styles.negativeText,
-                ]}
-              >
-                {totals.net >= 0 ? '+' : '-'}
-                {formatMoney(Math.abs(totals.net))}
-              </Text>
-            </View>
-          </View>
+          <SummaryCard title="Income" value={formatMoney(totals.income)} />
+          <SummaryCard title="Expense" value={formatMoney(totals.expense)} />
+          <SummaryCard
+            title="Net"
+            value={`${totals.net >= 0 ? '+' : '-'}${formatMoney(Math.abs(totals.net))}`}
+            subtitle={`${totals.count} transaction${totals.count === 1 ? '' : 's'} in this period`}
+          />
         </View>
 
         {/* Transaction list */}
@@ -268,13 +210,14 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
           <Text style={styles.cardTitle}>Transactions</Text>
 
           {filteredTxs.length === 0 ? (
-            <Text style={styles.subtle}>No transactions found for this selection.</Text>
+            <EmptyState title="No transactions found" body="Try a different period or category." />
           ) : (
             <View style={{ marginTop: 8 }}>
               {filteredTxs.map((t) => {
                 const amt = Number(t.amount) || 0;
-                const isExpense = t.type === 'expense';
-                const cat = String(t.category || 'Uncategorised').trim();
+                const isExpense = t.type === TYPE_EXPENSE;
+                const cat =
+                  String(t.category || CAT_UNCATEGORISED).trim() || CAT_UNCATEGORISED;
 
                 return (
                   <View key={t.id} style={styles.txRow}>
@@ -290,7 +233,12 @@ export default function ReportDetailScreen({ navigation, route }: Props) {
                       ) : null}
                     </View>
 
-                    <Text style={[styles.txAmount, isExpense ? styles.negativeText : styles.positiveText]}>
+                    <Text
+                      style={[
+                        styles.txAmount,
+                        isExpense ? styles.negativeText : styles.positiveText,
+                      ]}
+                    >
                       {isExpense ? '-' : '+'}
                       {formatMoney(Math.abs(amt))}
                     </Text>
@@ -384,11 +332,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardTitle: { color: '#ffffff', fontSize: 16, fontWeight: '800', marginBottom: 10 },
-
-  summaryRow: { flexDirection: 'row', columnGap: 10 },
-  summaryItem: { flex: 1 },
-  summaryLabel: { color: theme.textDim, fontSize: 12, marginBottom: 2 },
-  summaryValue: { color: theme.text, fontSize: 16, fontWeight: '900' },
 
   txRow: {
     flexDirection: 'row',

@@ -1,0 +1,21 @@
+
++---src
+�   +---components
+�   �   +---reports
+�   +---db
+�   �   +---migrations
+�   +---debug
+�   +---dev
+�   +---hooks
+�   �   +---reports
+�   +---layout
+�   +---navigations
+�   +---notifications
+�   +---recurring
+�   +---screens
+�   +---services
+�   +---state
+�   +---theme
+�   +---types
+�   +---utils
+

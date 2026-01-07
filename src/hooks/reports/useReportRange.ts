@@ -1,7 +1,10 @@
-// src/reports/hooks/useReportRange.ts
+// src/hooks/reports/useReportRange.ts
 import { useMemo } from 'react';
+import { getReportRange, type ReportPeriod } from '../../utils/reporting';
 
-export type ReportPeriod = 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
+export function useReportRange(period: ReportPeriod, monthKey?: string) {
+  return useMemo(() => getReportRange(period, monthKey), [period, monthKey]);
+}
 
 export function monthKeyFromDate(d = new Date()) {
   const y = d.getFullYear();
@@ -38,25 +41,4 @@ export function formatMonthLabel(monthKey: string) {
   }
 }
 
-export function useReportRange(period: ReportPeriod, monthKey?: string) {
-  const effectiveMonthKey =
-    period === 'month' ? (monthKey || monthKeyFromDate(new Date())) : undefined;
 
-  const range = useMemo(() => {
-    if (period === 'allTime') {
-      return { start: new Date(0), end: new Date(8640000000000000) };
-    }
-    if (period === 'thisMonth') return rangeForMonthKey(monthKeyFromDate(new Date()));
-    if (period === 'lastMonth') return rangeForMonthKey(addMonths(monthKeyFromDate(new Date()), -1));
-    return rangeForMonthKey(effectiveMonthKey!);
-  }, [period, effectiveMonthKey]);
-
-  const label = useMemo(() => {
-    if (period === 'allTime') return 'All time';
-    if (period === 'thisMonth') return formatMonthLabel(monthKeyFromDate(new Date()));
-    if (period === 'lastMonth') return formatMonthLabel(addMonths(monthKeyFromDate(new Date()), -1));
-    return effectiveMonthKey ? formatMonthLabel(effectiveMonthKey) : 'Month';
-  }, [period, effectiveMonthKey]);
-
-  return { range, effectiveMonthKey, label };
-}
