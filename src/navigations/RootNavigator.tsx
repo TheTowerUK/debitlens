@@ -21,6 +21,7 @@ import ImportCsvScreen from '../screens/ImportCsvScreen';
 import SplashAuthScreen from '../screens/SplashAuthScreen';
 import BudgetEditorScreen from '../screens/BudgetEditorScreen';
 import ReportDetailScreen from '../screens/ReportDetailScreen';
+import { brandHeaderOptions } from './headerOptions';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -89,19 +90,27 @@ export default function RootNavigator() {
       <Stack.Screen name="Budgets" component={BudgetsScreen} />
       <Stack.Screen name="BudgetEditor" component={BudgetEditorScreen} />
 
-      <Stack.Screen name="Notifications" component={NotificationsScreen}   options={{
-    headerShown: true,
+<Stack.Screen
+  name="Notifications"
+  component={NotificationsScreen}
+  options={{
+    ...brandHeaderOptions,
     title: 'Notifications',
-  }}/>
+  }}
+/>
       <Stack.Screen name="RecurringEditor" component={RecurringEditorScreen} />
 
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Reports" component={ReportsScreen} />
 
-      <Stack.Screen name="DataExportImport" component={DataExportImportScreen}   options={{
-    headerShown: true,
+<Stack.Screen
+  name="DataExportImport"
+  component={DataExportImportScreen}
+  options={{
+    ...brandHeaderOptions,
     title: 'Data',
-  }}/>
+  }}
+/>
       <Stack.Screen name="ImportCSV" component={ImportCsvScreen} /> 
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
 
