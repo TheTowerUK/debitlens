@@ -5,7 +5,8 @@
     "ios": {
       "bundleIdentifier": "com.debitlens.app",
       "infoPlist": {
-        "NSUserNotificationUsageDescription": "We use notifications to remind you about budgets and reports."
+        "NSUserNotificationUsageDescription": "We use notifications to remind you about budgets and reports.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -15,8 +16,17 @@
       "expo-notifications",
       "expo-secure-store",
       "expo-sqlite"
- ],
-    "platforms": ["ios", "android", "web"],
-    "scheme": "debitlens"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "scheme": "debitlens",
+    "extra": {
+      "eas": {
+        "projectId": "6597b357-70b4-42d8-aa9a-56fdd28b7003"
+      }
+    }
   }
 }
