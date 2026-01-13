@@ -89,13 +89,19 @@ export default function RootNavigator() {
       <Stack.Screen name="Budgets" component={BudgetsScreen} />
       <Stack.Screen name="BudgetEditor" component={BudgetEditorScreen} />
 
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }}/>
+      <Stack.Screen name="Notifications" component={NotificationsScreen}   options={{
+    headerShown: true,
+    title: 'Notifications',
+  }}/>
       <Stack.Screen name="RecurringEditor" component={RecurringEditorScreen} />
 
       <Stack.Screen name="Settings" component={SettingsScreen} />
       <Stack.Screen name="Reports" component={ReportsScreen} />
 
-      <Stack.Screen name="DataExportImport" component={DataExportImportScreen} options={{ title: 'Data' }}/>
+      <Stack.Screen name="DataExportImport" component={DataExportImportScreen}   options={{
+    headerShown: true,
+    title: 'Data',
+  }}/>
       <Stack.Screen name="ImportCSV" component={ImportCsvScreen} /> 
       <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
 
