@@ -71,7 +71,7 @@ export default function RootNavigator() {
       id={undefined as any}
       initialRouteName="Login"
       screenOptions={{
-        headerShown: false,
+        headerShown: true,
       }}
     >
       <Stack.Screen name="Login" component={SplashAuthScreen} />
