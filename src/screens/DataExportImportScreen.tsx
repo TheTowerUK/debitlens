@@ -31,11 +31,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as theme } from '../theme/colors';
 
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
-
-import { normalizeImportRow, type ImportRow } from '../utils/validation';
-import type { ImportSummary } from '../utils/importSummary';
+import type { ImportRow } from '../utils/validation';
 
 import { importCsvRowsWithValidation, alertImportSummary } from '../utils/importCsv';
+import BackPill from '../components/BackPill';
 
 const FS: any = FileSystem as any;
 const norm = (s: string) => s.trim().toLowerCase();
@@ -269,7 +268,8 @@ type CsvImportStats = {
 
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
-export default function DataExportImportScreen({ navigation }: Props) {
+export default function DataExportImportScreen(_props: Props) {
+
   const { state, actions } = useApp();
 
   const accounts: Account[] = Array.isArray(state?.accounts) ? state.accounts : [];
@@ -1564,9 +1564,7 @@ const handleImportCsvPress = async () => {
 
   return (
   <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-    <Pressable onPress={() => navigation.goBack()} style={styles.pill}>
-      <Text style={styles.pillText}>← Back</Text>
-    </Pressable>
+    <BackPill />
 
     <Text style={styles.h1}>Data export &amp; import</Text>
     <Text style={styles.subtle}>

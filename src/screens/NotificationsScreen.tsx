@@ -1,46 +1,30 @@
-// src/screens/NotificationScreen.tsx
+// src/screens/NotificationsScreen.tsx
 import React, { useState } from 'react';
-import {  View,  Text,  StyleSheet,  Switch,  Platform, Pressable} from 'react-native';
-// If you want to use the app context later, you can:
-// import { useApp } from '../state/AppContext';
+import { View, Text, StyleSheet, Switch, Platform } from 'react-native';
+
 import { colors as theme } from '../theme/colors';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../navigations/types';
+import BackPill from '../components/BackPill';
 
-
-type Props = NativeStackScreenProps<RootStackParamList, 'Notifications'>;
-export default function NotificationsScreen({ navigation }: Props) {
+export default function NotificationsScreen() {
   // Local UI state for now – avoids relying on missing AppState/AppActions fields
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [remindersEnabled, setRemindersEnabled] = useState(true);
 
-  // Later, if we add prefs to AppState/AppActions, we can sync these
-  // to the global context in a useEffect or on toggle.
-
   return (
     <View style={styles.wrap}>
-      <Pressable onPress={() => navigation.goBack()} style={styles.pill}>
-        <Text style={styles.pillText}>← Back</Text>
-      </Pressable>
+      <BackPill />
 
       <Text style={styles.h1}>Notifications</Text>
-      <Text style={styles.subtle}>
-        Control how DebitLens keeps you in the loop.
-      </Text>
+      <Text style={styles.subtle}>Control how DebitLens keeps you in the loop.</Text>
 
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Push notifications</Text>
-            <Text style={styles.caption}>
-              Transaction alerts and balance changes.
-            </Text>
+            <Text style={styles.caption}>Transaction alerts and balance changes.</Text>
           </View>
-          <Switch
-            value={pushEnabled}
-            onValueChange={setPushEnabled}
-          />
+          <Switch value={pushEnabled} onValueChange={setPushEnabled} />
         </View>
 
         <View style={styles.divider} />
@@ -48,14 +32,9 @@ export default function NotificationsScreen({ navigation }: Props) {
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Email summaries</Text>
-            <Text style={styles.caption}>
-              Optional weekly snapshot to your inbox.
-            </Text>
+            <Text style={styles.caption}>Optional weekly snapshot to your inbox.</Text>
           </View>
-          <Switch
-            value={emailEnabled}
-            onValueChange={setEmailEnabled}
-          />
+          <Switch value={emailEnabled} onValueChange={setEmailEnabled} />
         </View>
 
         <View style={styles.divider} />
@@ -63,21 +42,15 @@ export default function NotificationsScreen({ navigation }: Props) {
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Reminders</Text>
-            <Text style={styles.caption}>
-              Gentle nudges for upcoming bills and goals.
-            </Text>
+            <Text style={styles.caption}>Gentle nudges for upcoming bills and goals.</Text>
           </View>
-          <Switch
-            value={remindersEnabled}
-            onValueChange={setRemindersEnabled}
-          />
+          <Switch value={remindersEnabled} onValueChange={setRemindersEnabled} />
         </View>
       </View>
 
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
-          Notification behaviour can vary slightly on{' '}
-          {Platform.OS === 'android' ? 'Android' : 'iOS'} devices.
+          Notification behaviour can vary slightly on {Platform.OS === 'android' ? 'Android' : 'iOS'} devices.
         </Text>
       </View>
     </View>
@@ -90,21 +63,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#020617',
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 56 : 24,
-  },
-  pill: {
-  alignSelf: 'flex-start',
-  paddingHorizontal: 12,
-  paddingVertical: 8,
-  borderRadius: 999,
-  backgroundColor: 'rgba(147, 197, 253, 0.12)', // uses your "link" family vibe
-  borderWidth: 1,
-  borderColor: 'rgba(147, 197, 253, 0.25)',
-  marginBottom: 12,
-  },
-  pillText: {
-    color: '#F9FAFB', // or colors.text
-    fontSize: 14,
-    fontWeight: '600',
   },
 
   h1: {
