@@ -268,6 +268,16 @@ type CsvImportStats = {
 
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
+  function limitLines(text: string, maxLines: number) {
+  const lines = String(text || '').split(/\r?\n/);
+  if (lines.length <= maxLines) return { text, truncated: false, total: lines.length };
+  return {
+    text: lines.slice(0, maxLines).join('\n'),
+    truncated: true,
+    total: lines.length,
+    };
+  }
+
 export default function DataExportImportScreen(_props: Props) {
 
   const { state, actions } = useApp();
@@ -525,6 +535,9 @@ export default function DataExportImportScreen(_props: Props) {
 
   const [csvRestoreMode, setCsvRestoreMode] = useState<RestoreMode>('merge');
   const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
+
+  const [showCsvPreview, setShowCsvPreview] = useState(false);
+  const [previewMaxLines, setPreviewMaxLines] = useState(100);
 
   useEffect(() => {
     (async () => {
@@ -1725,6 +1738,12 @@ const handleImportCsvPress = async () => {
           </Pressable>
         </View>
 
+        <View style={styles.optionRow}>
+          <Text style={styles.optionLabel}>Show previews (capped)</Text>
+          <Switch value={showCsvPreview} onValueChange={setShowCsvPreview} />
+        </View>
+
+
         <Text style={{ height: 12 }} />
 
         <Text style={styles.textBoxLabel}>Or paste CSV text below.</Text>
@@ -1753,17 +1772,28 @@ const handleImportCsvPress = async () => {
           </Pressable>
         </View>
 
-        {csvPreview ? (
-          <View style={styles.previewBox}>
-            <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
-            {csvPreviewSourceName ? <Text style={styles.previewMeta}>{csvPreviewSourceName}</Text> : null}
-            <View style={styles.previewScroll}>
-              <Text selectable style={styles.previewText}>
-                {csvPreview}
-              </Text>
+        {showCsvPreview && csvPreview ? (() => {
+          const limited = limitLines(csvPreview, previewMaxLines);
+          return (
+            <View style={styles.previewBox}>
+              <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
+              {csvPreviewSourceName ? <Text style={styles.previewMeta}>{csvPreviewSourceName}</Text> : null}
+
+              <View style={styles.previewScroll}>
+                <Text selectable style={styles.previewText}>
+                  {limited.text}
+                </Text>
+              </View>
+
+              {limited.truncated ? (
+                <Text style={styles.hint}>
+                  Preview truncated: {limited.total} total lines. Export/view the file to see everything.
+                </Text>
+              ) : null}
             </View>
-          </View>
-        ) : null}
+          );
+        })() : null}
+
 
         {lastCsvStats ? (
           <View style={styles.statusBox}>
@@ -1795,6 +1825,10 @@ const handleImportCsvPress = async () => {
             <Text style={styles.statusText}>{lastImportSummary}</Text>
           </View>
         ) : null}
+        <View style={{ marginTop: 12, alignItems: 'center' }}>
+          <BackPill label="← Back" />
+        </View>
+
       </View>
     </ScrollView>
   );
