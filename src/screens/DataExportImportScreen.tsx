@@ -792,7 +792,7 @@ const handleImportCsvPress = async () => {
         categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
       }
 
-      const maxPreviewRows = 10;
+      const maxPreviewRows = 5;
       const previewRows = dataRows.slice(0, maxPreviewRows);
 
       const previewLines: string[] = [];
@@ -1671,16 +1671,23 @@ const handleImportCsvPress = async () => {
           <Text style={styles.btnPrimaryText}>Export Template CSV (Files)</Text>
         </Pressable>
 
-        {csvExportPreview ? (
-          <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>{csvExportPreviewSourceName || 'CSV preview'} (for reference)</Text>
-            <ScrollView style={styles.textBoxScroll}>
-              <Text selectable style={styles.monoText}>
-                {csvExportPreview}
+        {showCsvPreview && csvExportPreview ? (() => {
+          const limited = limitLines(csvExportPreview, previewMaxLines);
+          return (
+            <View style={styles.textBox}>
+              <Text style={styles.textBoxLabel}>
+                {csvExportPreviewSourceName || 'CSV preview'} (showing up to {previewMaxLines} lines)
               </Text>
-            </ScrollView>
-          </View>
-        ) : null}
+              <ScrollView style={styles.textBoxScroll}>
+                <Text selectable style={styles.monoText}>{limited.text}</Text>
+              </ScrollView>
+              {limited.truncated ? (
+                <Text style={styles.hint}>Preview truncated: {limited.total} total lines.</Text>
+              ) : null}
+            </View>
+          );
+        })() : null}
+
 
         <Pressable style={styles.btnSecondary} onPress={handleGenerateCsv}>
           <Text style={styles.btnSecondaryText}>Generate Transactions CSV (text)</Text>
@@ -1690,16 +1697,23 @@ const handleImportCsvPress = async () => {
           <Text style={styles.btnPrimaryText}>Export Transactions CSV (Files)</Text>
         </Pressable>
 
-        {exportCsvText ? (
-          <View style={styles.textBox}>
-            <Text style={styles.textBoxLabel}>Generated transactions CSV (for reference)</Text>
-            <ScrollView style={styles.textBoxScroll}>
-              <Text selectable style={styles.monoText}>
-                {exportCsvText}
+        {showCsvPreview && exportCsvText ? (() => {
+          const limited = limitLines(exportCsvText, previewMaxLines);
+          return (
+            <View style={styles.textBox}>
+              <Text style={styles.textBoxLabel}>
+                Generated transactions CSV (showing up to {previewMaxLines} lines)
               </Text>
-            </ScrollView>
-          </View>
-        ) : null}
+              <ScrollView style={styles.textBoxScroll}>
+                <Text selectable style={styles.monoText}>{limited.text}</Text>
+              </ScrollView>
+              {limited.truncated ? (
+                <Text style={styles.hint}>Preview truncated: {limited.total} total lines.</Text>
+              ) : null}
+            </View>
+          );
+        })() : null}
+
       </View>
 
       {/* CSV IMPORT + RESTORE */}
@@ -1793,6 +1807,7 @@ const handleImportCsvPress = async () => {
             </View>
           );
         })() : null}
+
 
 
         {lastCsvStats ? (
