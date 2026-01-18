@@ -1,11 +1,15 @@
 // src/screens/NotificationScreen.tsx
 import React, { useState } from 'react';
-import {  View,  Text,  StyleSheet,  Switch,  Platform,} from 'react-native';
+import {  View,  Text,  StyleSheet,  Switch,  Platform, Pressable} from 'react-native';
 // If you want to use the app context later, you can:
 // import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigations/types';
 
-export default function NotificationsScreen() {
+
+type Props = NativeStackScreenProps<RootStackParamList, 'Notifications'>;
+export default function NotificationsScreen({ navigation }: Props) {
   // Local UI state for now – avoids relying on missing AppState/AppActions fields
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
@@ -16,6 +20,10 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.wrap}>
+      <Pressable onPress={() => navigation.goBack()} style={styles.pill}>
+        <Text style={styles.pillText}>← Back</Text>
+      </Pressable>
+
       <Text style={styles.h1}>Notifications</Text>
       <Text style={styles.subtle}>
         Control how DebitLens keeps you in the loop.
@@ -83,6 +91,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 56 : 24,
   },
+  pill: {
+  alignSelf: 'flex-start',
+  paddingHorizontal: 12,
+  paddingVertical: 8,
+  borderRadius: 999,
+  backgroundColor: 'rgba(147, 197, 253, 0.12)', // uses your "link" family vibe
+  borderWidth: 1,
+  borderColor: 'rgba(147, 197, 253, 0.25)',
+  marginBottom: 12,
+  },
+  pillText: {
+    color: '#F9FAFB', // or colors.text
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   h1: {
     color: '#fff',
     fontSize: 24,

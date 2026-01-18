@@ -1563,11 +1563,15 @@ const handleImportCsvPress = async () => {
   };
 
   return (
-    <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>Data export &amp; import</Text>
-      <Text style={styles.subtle}>
-        Export JSON/CSV to Files, restore from a JSON backup, or import/restore transactions from CSV.
-      </Text>
+  <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
+    <Pressable onPress={() => navigation.goBack()} style={styles.pill}>
+      <Text style={styles.pillText}>← Back</Text>
+    </Pressable>
+
+    <Text style={styles.h1}>Data export &amp; import</Text>
+    <Text style={styles.subtle}>
+      Export JSON/CSV to Files, restore from a JSON backup, or import/restore transactions from CSV.
+    </Text>
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>Current data snapshot</Text>
@@ -1818,6 +1822,22 @@ const styles = StyleSheet.create({
   sectionText: { color: '#D1D5DB', marginBottom: 10 },
 
   statLine: { color: '#E5E7EB', marginTop: 2 },
+
+  pill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(147, 197, 253, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(147, 197, 253, 0.25)',
+    marginBottom: 12,
+  },
+  pillText: {
+    color: '#F9FAFB',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 
   btnPrimary: {
     marginTop: 8,
