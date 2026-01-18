@@ -269,14 +269,43 @@ type CsvImportStats = {
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
   function limitLines(text: string, maxLines: number) {
-  const lines = String(text || '').split(/\r?\n/);
-  if (lines.length <= maxLines) return { text, truncated: false, total: lines.length };
-  return {
-    text: lines.slice(0, maxLines).join('\n'),
-    truncated: true,
-    total: lines.length,
+    const lines = String(text || '').split(/\r?\n/);
+    if (lines.length <= maxLines) return { text: String(text || ''), truncated: false, total: lines.length };
+    return {
+      text: lines.slice(0, maxLines).join('\n'),
+      truncated: true,
+      total: lines.length,
     };
   }
+
+  function PreviewText({
+    enabled,
+    text,
+    maxLines,
+    style,
+    hintStyle,
+  }: {
+    enabled: boolean;
+    text: string;
+    maxLines: number;
+    style: any;
+    hintStyle: any;
+  }) {
+    if (!enabled || !text) return null;
+    const limited = limitLines(text, maxLines);
+    return (
+      <>
+        <Text selectable style={style}>
+          {limited.text}
+        </Text>
+        {limited.truncated ? (
+          <Text style={hintStyle}>Preview truncated: {limited.total} total lines.</Text>
+        ) : null}
+      </>
+    );
+  }
+
+
 
 export default function DataExportImportScreen(_props: Props) {
 
@@ -1713,6 +1742,7 @@ const handleImportCsvPress = async () => {
             </View>
           );
         })() : null}
+
 
       </View>
 
