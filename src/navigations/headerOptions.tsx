@@ -1,4 +1,4 @@
-// src/navigations/headerOptions.ts
+// src/navigations/headerOptions.tsx
 import React from 'react';
 import { colors } from '../theme/colors';
 import HeaderBackButton from '../components/HeaderBackButton';
