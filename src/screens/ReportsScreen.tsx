@@ -135,16 +135,9 @@ export default function ReportsScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>Reports</Text>
-            <Text style={styles.subtle}>{periodLabel}</Text>
-          </View>
-
-          <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
-            <Text style={styles.headerPillText}>Back</Text>
-          </Pressable>
+        {/* Period label */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtle}>{periodLabel}</Text>
         </View>
 
         {/* Period selector */}
@@ -269,13 +262,9 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
 
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    columnGap: 10,
+  subtitleRow: {
     marginBottom: 12,
   },
-  h1: { color: theme.text, fontSize: 22, fontWeight: '800' },
   subtle: { color: theme.textDim, marginTop: 4 },
 
   headerPill: {

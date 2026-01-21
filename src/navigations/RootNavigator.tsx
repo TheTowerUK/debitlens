@@ -71,50 +71,116 @@ export default function RootNavigator() {
       id={undefined as any}
       initialRouteName="Login"
       screenOptions={{
-        headerShown: false,
+        ...brandHeaderOptions,
+        headerShown: true,
       }}
     >
-      <Stack.Screen name="Login" component={SplashAuthScreen} />
-      <Stack.Screen name="Dashboard" component={DashboardScreen} />
+      {/* Login screen - no header */}
+      <Stack.Screen 
+        name="Login" 
+        component={SplashAuthScreen}
+        options={{ headerShown: false }}
+      />
+      
+      {/* Dashboard - no back button needed (root screen after login) */}
+      <Stack.Screen 
+        name="Dashboard" 
+        component={DashboardScreen}
+        options={{
+          ...brandHeaderOptions,
+          title: 'Dashboard',
+          headerRight: undefined, // No back button on Dashboard
+        }}
+      />
 
-      <Stack.Screen name="Account" component={AccountScreen} />
-      <Stack.Screen name="AddAccount" component={AddAccountScreen} />
-      <Stack.Screen name="Transfer" component={TransferScreen} />
-      <Stack.Screen name="RecentActivity" component={RecentActivityScreen} />
+      {/* All other screens get consistent headers with Back button on right */}
+      <Stack.Screen 
+        name="Account" 
+        component={AccountScreen}
+        options={{ title: 'Account' }}
+      />
+      <Stack.Screen 
+        name="AddAccount" 
+        component={AddAccountScreen}
+        options={{ title: 'Add Account' }}
+      />
+      <Stack.Screen 
+        name="Transfer" 
+        component={TransferScreen}
+        options={{ title: 'Transfer' }}
+      />
+      <Stack.Screen 
+        name="RecentActivity" 
+        component={RecentActivityScreen}
+        options={{ title: 'Recent Activity' }}
+      />
 
-      <Stack.Screen name="TxnEditor" component={TxnEditorScreen} />
+      {/* TxnEditor can override headerRight for Delete button */}
+      <Stack.Screen 
+        name="TxnEditor" 
+        component={TxnEditorScreen}
+        options={{ title: 'Transaction' }}
+      />
 
-      <Stack.Screen name="Payments" component={PaymentsScreen} />
-      <Stack.Screen name="Recurring" component={RecurringScreen} />
+      <Stack.Screen 
+        name="Payments" 
+        component={PaymentsScreen}
+        options={{ title: 'Payments' }}
+      />
+      <Stack.Screen 
+        name="Recurring" 
+        component={RecurringScreen}
+        options={{ title: 'Recurring' }}
+      />
 
-      <Stack.Screen name="Budgets" component={BudgetsScreen} />
-      <Stack.Screen name="BudgetEditor" component={BudgetEditorScreen} />
+      <Stack.Screen 
+        name="Budgets" 
+        component={BudgetsScreen}
+        options={{ title: 'Budgets' }}
+      />
+      <Stack.Screen 
+        name="BudgetEditor" 
+        component={BudgetEditorScreen}
+        options={{ title: 'Budget' }}
+      />
 
-<Stack.Screen
-  name="Notifications"
-  component={NotificationsScreen}
-  options={{
-    ...brandHeaderOptions,
-    title: 'Notifications',
-  }}
-/>
-      <Stack.Screen name="RecurringEditor" component={RecurringEditorScreen} />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ title: 'Notifications' }}
+      />
+      <Stack.Screen 
+        name="RecurringEditor" 
+        component={RecurringEditorScreen}
+        options={{ title: 'Recurring Item' }}
+      />
 
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="Reports" component={ReportsScreen} />
+      <Stack.Screen 
+        name="Settings" 
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
+      />
+      <Stack.Screen 
+        name="Reports" 
+        component={ReportsScreen}
+        options={{ title: 'Reports' }}
+      />
 
-<Stack.Screen
-  name="DataExportImport"
-  component={DataExportImportScreen}
-  options={{
-    ...brandHeaderOptions,
-    title: 'Data',
-  }}
-/>
-      <Stack.Screen name="ImportCSV" component={ImportCsvScreen} /> 
-      <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
-
-
+      <Stack.Screen
+        name="DataExportImport"
+        component={DataExportImportScreen}
+        options={{ title: 'Data' }}
+      />
+      <Stack.Screen 
+        name="ImportCSV" 
+        component={ImportCsvScreen}
+        options={{ title: 'Import CSV' }}
+      /> 
+      <Stack.Screen 
+        name="ReportDetail" 
+        component={ReportDetailScreen}
+        options={{ title: 'Report Details' }}
+      />
     </Stack.Navigator>
   );
 }

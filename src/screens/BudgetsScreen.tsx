@@ -150,22 +150,9 @@ export default function BudgetsScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.wrap}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>Budgets</Text>
-            <Text style={styles.subtle}>{monthLabel(activeMonth)}</Text>
-          </View>
-
-          <View style={styles.headerPillsRow}>
-            <Pressable style={styles.headerPill} onPress={onAddBudget} hitSlop={8}>
-              <Text style={styles.headerPillText}>+ Add</Text>
-            </Pressable>
-
-            <Pressable style={styles.headerPill} onPress={() => navigation?.goBack?.()} hitSlop={8}>
-              <Text style={styles.headerPillText}>Back</Text>
-            </Pressable>
-          </View>
+        {/* Month label */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtle}>{monthLabel(activeMonth)}</Text>
         </View>
 
         {/* Month navigation */}
@@ -227,6 +214,13 @@ export default function BudgetsScreen({ navigation }: any) {
               </Text>
             </Text>
           )}
+        </View>
+
+        {/* Add button */}
+        <View style={styles.actionRow}>
+          <Pressable style={styles.headerPill} onPress={onAddBudget} hitSlop={8}>
+            <Text style={styles.headerPillText}>+ Add Budget</Text>
+          </Pressable>
         </View>
 
         {/* List card */}
@@ -316,17 +310,16 @@ export default function BudgetsScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
-  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
+  wrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
 
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    columnGap: 12,
+  subtitleRow: {
     marginBottom: 10,
   },
-  h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
   subtle: { color: theme.textDim, marginTop: 4 },
+  
+  actionRow: {
+    marginBottom: 12,
+  },
 
   headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
   headerPill: {

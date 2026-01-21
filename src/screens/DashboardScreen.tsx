@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -172,35 +172,38 @@ export default function DashboardScreen({ navigation }: Props) {
     });
   };
 
+  // Set header with Settings and Logout buttons
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ flexDirection: 'row', columnGap: 8 }}>
+          <Pressable
+            onPress={() => navigation.navigate('Settings')}
+            hitSlop={8}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>Settings</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleLogout}
+            hitSlop={8}
+            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+          >
+            <Text style={{ color: theme.negative, fontSize: 16, fontWeight: '700' }}>Logout</Text>
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation, handleLogout]);
+
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-        {/* ---------- Header with SETTINGS + LOGOUT ---------- */}
-        <View style={styles.headerRow}>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={styles.h1}>Dashboard</Text>
-            <Text style={styles.subtle}>
-              Quick view of balances, activity & upcoming payments
-            </Text>
-          </View>
-
-          <View style={styles.headerPillsRow}>
-            <Pressable
-              style={styles.headerPill}
-              onPress={() => navigation.navigate('Settings')}
-              hitSlop={8}
-            >
-              <Text style={styles.headerPillText}>Settings</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.headerPill, styles.logoutPill]}
-              onPress={handleLogout}
-              hitSlop={8}
-            >
-              <Text style={styles.headerPillText}>Logout</Text>
-            </Pressable>
-          </View>
+        {/* ---------- Subtitle ---------- */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtle}>
+            Quick view of balances, activity & upcoming payments
+          </Text>
         </View>
 
         {/* ---------- Summary Card ---------- */}
@@ -425,21 +428,13 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 35,
+    paddingTop: 16,
     paddingBottom: 32,
   },
 
-  // HEADER
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  // SUBTITLE
+  subtitleRow: {
     marginBottom: 16,
-  },
-  h1: {
-    color: '#ffffff',
-    fontSize: 26,
-    fontWeight: '800',
   },
   subtle: {
     color: theme.textDim,

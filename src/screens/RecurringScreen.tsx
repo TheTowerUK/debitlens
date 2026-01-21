@@ -349,32 +349,26 @@ const detectCandidates = useMemo(() => {
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>Recurring</Text>
-            <Text style={styles.subtle}>Direct debits & standing orders</Text>
-          </View>
+        {/* Subtitle */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtle}>Direct debits & standing orders</Text>
+        </View>
 
-          <View style={styles.pillsRow}>
-            <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
-              <Text style={styles.headerPillText}>Back</Text>
-            </Pressable>
+        {/* Action buttons */}
+        <View style={styles.actionRow}>
+          <Pressable style={[styles.headerPill, styles.addPill]} onPress={goAdd} hitSlop={8}>
+            <Text style={styles.headerPillText}>Add</Text>
+          </Pressable>
 
-            <Pressable style={[styles.headerPill, styles.addPill]} onPress={goAdd} hitSlop={8}>
-              <Text style={styles.headerPillText}>Add</Text>
-            </Pressable>
-
-            <Pressable
-              style={[styles.headerPill, styles.detectPill]}
-              onPress={() => setShowDetect((v) => !v)}
-              hitSlop={8}
-            >
-              <Text style={[styles.headerPillText, styles.detectPillText]}>
-                {showDetect ? 'Hide detect' : 'Detect'}
-              </Text>
-            </Pressable>
-          </View>
+          <Pressable
+            style={[styles.headerPill, styles.detectPill]}
+            onPress={() => setShowDetect((v) => !v)}
+            hitSlop={8}
+          >
+            <Text style={[styles.headerPillText, styles.detectPillText]}>
+              {showDetect ? 'Hide detect' : 'Detect'}
+            </Text>
+          </Pressable>
         </View>
 
         {/* Summary */}
@@ -534,15 +528,16 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
 
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    columnGap: 8,
+  subtitleRow: {
+    marginBottom: 12,
   },
-  h1: { color: theme.text, fontSize: 26, fontWeight: '800' },
   subtle: { color: theme.textDim, marginTop: 4, flexShrink: 1 },
+  
+  actionRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginBottom: 16,
+  },
 
   pillsRow: {
     flexDirection: 'row',

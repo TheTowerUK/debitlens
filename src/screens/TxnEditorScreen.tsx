@@ -135,17 +135,15 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
     navigation.setOptions({
       title,
-      headerShown: true,
-      headerStyle: { backgroundColor: '#020617' },
-      headerTintColor: '#E5E7EB',
-      headerTitleStyle: { fontWeight: '800' },
-      headerBackVisible: true,
-
-      // Optional: header delete button for edit mode
-      headerRight: isEditing
+      // Back button is already in headerRight from brandHeaderOptions
+      // For edit mode, add Delete button on the left
+      headerLeft: isEditing
         ? () => (
-            <Pressable onPress={handleDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-              <Text style={{ color: theme.negative, fontWeight: '900' }}>Delete</Text>
+            <Pressable 
+              onPress={handleDelete} 
+              style={{ paddingHorizontal: 12, paddingVertical: 6, marginLeft: 8 }}
+            >
+              <Text style={{ color: theme.negative, fontWeight: '900', fontSize: 16 }}>Delete</Text>
             </Pressable>
           )
         : undefined,

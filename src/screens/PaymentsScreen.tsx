@@ -136,25 +136,23 @@ export default function PaymentsScreen({ navigation }: Props) {
     ]);
   };
 
+  // Set header with Add button on left (Back button stays on right from brandHeaderOptions)
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <Pressable onPress={onAdd} hitSlop={8} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+          <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>+ Add</Text>
+        </Pressable>
+      ),
+    });
+  }, [navigation, onAdd]);
+
   return (
     <SafeAreaView style={styles.screen}>
       <ScrollView contentContainerStyle={styles.wrap}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.h1}>Payments</Text>
-            <Text style={styles.subtle}>Browse, search and edit transactions</Text>
-          </View>
-
-          <View style={styles.headerPillsRow}>
-            <Pressable style={styles.headerPill} onPress={onAdd} hitSlop={8}>
-              <Text style={styles.headerPillText}>+ Add</Text>
-            </Pressable>
-
-            <Pressable style={styles.headerPill} onPress={() => navigation.goBack()} hitSlop={8}>
-              <Text style={styles.headerPillText}>Back</Text>
-            </Pressable>
-          </View>
+        {/* Subtitle */}
+        <View style={styles.subtitleRow}>
+          <Text style={styles.subtle}>Browse, search and edit transactions</Text>
         </View>
 
         {/* Search */}
@@ -266,16 +264,11 @@ export default function PaymentsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#020617' },
-  wrap: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 24 },
+  wrap: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24 },
 
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    columnGap: 12,
+  subtitleRow: {
     marginBottom: 10,
   },
-  h1: { color: '#ffffff', fontSize: 26, fontWeight: '800' },
   subtle: { color: theme.textDim, marginTop: 4 },
 
   headerPillsRow: { flexDirection: 'row', columnGap: 8, marginBottom: 14 },
