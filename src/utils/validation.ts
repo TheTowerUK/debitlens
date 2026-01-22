@@ -7,6 +7,7 @@ export type ImportRow = {
   accountId?: unknown;
   amount?: unknown;
   description?: unknown;
+  merchant?: unknown;
   category?: unknown;
   type?: unknown; // optional: 'income' | 'expense'
 };
@@ -28,6 +29,7 @@ export type NormalizedTxnDraft = {
   amount: number; // normalized sign
   type: 'income' | 'expense';
   description?: string;
+  merchant?: string;
   category?: string;
 };
 
@@ -125,6 +127,7 @@ export function normalizeImportRow(
   const amount = normalizeAmountForType(type!, parsedAmt!);
 
   const description = String(row.description ?? '').trim() || undefined;
+  const merchant = String(row.merchant ?? '').trim() || undefined;
   const category = String(row.category ?? '').trim() || undefined;
 
   return {
@@ -135,6 +138,7 @@ export function normalizeImportRow(
       type: type!,
       amount,
       description,
+      merchant,
       category,
     },
     warnings,

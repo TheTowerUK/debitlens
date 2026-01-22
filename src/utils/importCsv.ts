@@ -38,6 +38,7 @@ export function importCsvRowsWithValidation(params: {
       amount: res.value.amount,
       category: res.value.category,
       description: res.value.description,
+      merchant: res.value.merchant,
       name: res.value.description ?? '',
     });
 

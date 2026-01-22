@@ -1,5 +1,5 @@
 // src/screens/SplashAuthScreen.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+
+const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
 
 // Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
@@ -24,49 +28,76 @@ export default function SplashAuthScreen({ navigation }: Props) {
   const [mode, setMode] = useState<string>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [pinError, setPinError] = useState(''); // 👈 inline error text
+  const [pinError, setPinError] = useState('');
+  const biometricAttempted = useRef(false);
 
-  // Decide whether to show "Sign in" or "Create PIN"
+  // Authoritative: compute once at render
+  const storedPin = (getPin() ?? '').trim();
+  const pinExists = storedPin.length > 0;
+
+  // Mode must follow PIN existence (no userChoseCreateMode when PIN exists)
   useEffect(() => {
-    let mounted = true;
+    if (pinExists) setMode('sign');
+    else setMode('pin');
+  }, [pinExists]);
 
+  // Attempt biometric authentication when mode becomes 'sign' and biometrics enabled
+  useEffect(() => {
+    if (mode !== 'sign' || !pinExists) {
+      biometricAttempted.current = false; // Reset when not in sign mode
+      return;
+    }
+
+    if (biometricAttempted.current) return; // Already attempted this session
+
+    let mounted = true;
     (async () => {
       try {
-        const stored = await getPin();
+        const biometricsEnabledRaw = await AsyncStorage.getItem(STORAGE_KEY_BIOMETRICS);
+        const biometricsEnabled = biometricsEnabledRaw === 'true';
+
+        if (!biometricsEnabled || !mounted) return;
+
+        const [hasHardware, isEnrolled] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+        ]);
+
         if (!mounted) return;
-        setMode(stored ? 'sign' : 'pin');
-      } catch {
-        if (!mounted) return;
-        setMode('sign');
+
+        if (hasHardware && isEnrolled) {
+          biometricAttempted.current = true;
+          const result = await LocalAuthentication.authenticateAsync({
+            promptMessage: 'Unlock DebitLens',
+            fallbackLabel: 'Use PIN',
+          });
+
+          if (mounted && result.success) {
+            navigation.replace('Dashboard');
+          }
+          // If fail/cancel, stay on PIN entry screen (no crash)
+        }
+      } catch (e) {
+        console.warn('[SplashAuth] biometric auth error', e);
+        // On error, stay on PIN entry screen
       }
     })();
 
-    return () => {
-      mounted = false;
-    };
-  }, [getPin]);
+    return () => { mounted = false; };
+  }, [mode, pinExists, navigation]);
 
-  const onSignIn = async () => {
-    try {
-      const stored = await getPin();
-      const entered = pin.trim();
-
-      if (stored && stored.trim() === entered) {
-        setPinError(''); // clear error on success
-        navigation.replace('Dashboard');
-      } else {
-        // Optional: keep the Alert if you like, or remove it
-        // Alert.alert('Incorrect PIN', 'Please try again.');
-
-        setPinError('Incorrect PIN. Please try again.'); // 👈 show pill
-        setPinInput('');
-      }
-    } catch {
-      Alert.alert('Error', 'Unable to verify PIN right now.');
+  const onSignIn = () => {
+    const entered = pin.trim();
+    if (storedPin && entered === storedPin) {
+      setPinError('');
+      navigation.replace('Dashboard');
+    } else {
+      setPinError('Incorrect PIN. Please try again.');
+      setPinInput('');
     }
   };
 
-  const onSavePin = async () => {
+  const onSavePin = () => {
     const p1 = pin.trim();
     const p2 = confirm.trim();
 
@@ -77,13 +108,9 @@ export default function SplashAuthScreen({ navigation }: Props) {
       return Alert.alert('Mismatch', 'PINs do not match.');
     }
 
-    try {
-      await setPin(p1);
-      setPinError('');
-      navigation.replace('Dashboard');
-    } catch {
-      Alert.alert('Error', 'Unable to save PIN right now.');
-    }
+    setPin(p1);
+    setPinError('');
+    navigation.replace('Dashboard');
   };
 
   if (mode === 'loading') {
@@ -135,29 +162,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
           >
             <Text style={styles.primaryText}>Sign In</Text>
           </Pressable>
-
-          <Pressable
-            style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => {
-              setPinInput('');
-              setConfirm('');
-              setPinError('');
-              setMode('pin');
-            }}
-          >
-            <Text style={styles.ghostText}>Set / Change PIN</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => {
-              setPinInput('');
-              setPinError('');
-              navigation.replace('Dashboard');
-            }}
-          >
-            <Text style={styles.ghostText}>Continue without PIN</Text>
-          </Pressable>
+          {/* No "Set / Change PIN" when pinExists: mode must stay 'sign', no create mode */}
         </>
       ) : (
         <>
@@ -189,30 +194,6 @@ export default function SplashAuthScreen({ navigation }: Props) {
             disabled={!isValidPin || confirm.trim().length === 0}
           >
             <Text style={styles.primaryText}>Save PIN</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => {
-              setPinInput('');
-              setConfirm('');
-              setPinError('');
-              setMode('sign');
-            }}
-          >
-            <Text style={styles.ghostText}>Back to Sign In</Text>
-          </Pressable>
-
-          <Pressable
-            style={[styles.ghost, { marginTop: 8 }]}
-            onPress={() => {
-              setPinInput('');
-              setConfirm('');
-              setPinError('');
-              navigation.replace('Dashboard');
-            }}
-          >
-            <Text style={styles.ghostText}>Continue without PIN</Text>
           </Pressable>
         </>
       )}

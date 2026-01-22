@@ -2,10 +2,13 @@
 import React, {
   createContext,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /* =====================
    Types
@@ -30,6 +33,7 @@ export type Transaction = {
   category?: string;
   description?: string;
   name?: string;
+  merchant?: string;
 };
 
 
@@ -142,6 +146,10 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
+const STORAGE_KEY_APP_STATE = '@debitlens/appState:v1';
+const STORAGE_KEY_PIN = '@debitlens/pin:v1';
+const PERSIST_DEBOUNCE_MS = 400;
+
 /* =====================
    Helpers
 ===================== */
@@ -168,6 +176,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [recurring, setRecurring] = useState<RecurringItem[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [pin, setPinState] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+
+  const saveStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savePinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const actions = useMemo<AppActions>(
     () => ({
@@ -335,6 +347,78 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({ accounts, transactions, recurring, budgets }),
     [accounts, transactions, recurring, budgets]
   );
+
+  useEffect(() => {
+    async function loadFromStorage() {
+      try {
+        const [rawState, rawPin] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEY_APP_STATE),
+          AsyncStorage.getItem(STORAGE_KEY_PIN),
+        ]);
+
+        if (rawState != null && rawState !== '') {
+          try {
+            const parsed = JSON.parse(rawState) as Partial<AppState>;
+            setAccounts(isArray(parsed?.accounts) ? parsed.accounts : []);
+            setTransactions(isArray(parsed?.transactions) ? parsed.transactions : []);
+            setRecurring(isArray(parsed?.recurring) ? parsed.recurring : []);
+            setBudgets(isArray(parsed?.budgets) ? parsed.budgets : []);
+          } catch {
+            /* corrupted JSON: ignore, keep defaults */
+          }
+        }
+
+        if (rawPin != null && rawPin !== '') {
+          setPinState(rawPin);
+        }
+      } catch {
+        /* load error: ignore, continue with defaults */
+      } finally {
+        setHydrated(true);
+      }
+    }
+    void loadFromStorage();
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (saveStateTimeoutRef.current) {
+      clearTimeout(saveStateTimeoutRef.current);
+      saveStateTimeoutRef.current = null;
+    }
+    saveStateTimeoutRef.current = setTimeout(() => {
+      saveStateTimeoutRef.current = null;
+      void AsyncStorage.setItem(STORAGE_KEY_APP_STATE, JSON.stringify(state));
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (saveStateTimeoutRef.current) {
+        clearTimeout(saveStateTimeoutRef.current);
+        saveStateTimeoutRef.current = null;
+      }
+    };
+  }, [state, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (savePinTimeoutRef.current) {
+      clearTimeout(savePinTimeoutRef.current);
+      savePinTimeoutRef.current = null;
+    }
+    savePinTimeoutRef.current = setTimeout(() => {
+      savePinTimeoutRef.current = null;
+      if (pin == null || pin === '') {
+        void AsyncStorage.removeItem(STORAGE_KEY_PIN);
+      } else {
+        void AsyncStorage.setItem(STORAGE_KEY_PIN, pin);
+      }
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (savePinTimeoutRef.current) {
+        clearTimeout(savePinTimeoutRef.current);
+        savePinTimeoutRef.current = null;
+      }
+    };
+  }, [pin, hydrated]);
 
   const getPin = () => pin;
   const setPin = (nextPin: string | null) => setPinState(nextPin);

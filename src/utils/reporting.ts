@@ -1,6 +1,23 @@
 // src/utils/reporting.ts
+import type { Transaction } from '../state/AppContext';
 
 export type ReportPeriod = 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
+
+export function computeTotals(txs: Transaction[]) {
+  let income = 0;
+  let expense = 0;
+  for (const t of txs) {
+    const amt = Number(t.amount) || 0;
+    if (t.type === 'income') income += amt;
+    else if (t.type === 'expense') expense += amt;
+  }
+  return {
+    income,
+    expense,
+    net: income - expense,
+    count: txs.length,
+  };
+}
 
 export function monthKeyFromDate(d: Date) {
   const y = d.getFullYear();

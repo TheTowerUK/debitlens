@@ -51,11 +51,12 @@ function isArray(v: any): v is any[] {
 }
 
 function buildCsvTemplate(): string {
-  const header = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
+  const header = ['Date', 'Account', 'Amount', 'Description', 'Merchant', 'Category', 'Type'];
   const instructionRow = [
     'YYYY-MM-DD',
     'Account name',
     '-12.34',
+    'Transaction description',
     'Merchant or Payee',
     'Category',
     'Expense|Income|Transfer',
@@ -451,6 +452,17 @@ export default function DataExportImportScreen(_props: Props) {
   const [csvExportPreview, setCsvExportPreview] = useState<string>('');
   const [csvExportPreviewSourceName, setCsvExportPreviewSourceName] = useState<string>('');
 
+  // Track generation states for visual feedback
+  const isTemplateGenerated = useMemo(() => {
+    return !!csvExportPreview && 
+           ((csvExportPreviewSourceName || '').toLowerCase().includes('template') ||
+            csvExportPreview.startsWith('Date,Account,Amount,Description,Merchant,Category,Type'));
+  }, [csvExportPreview, csvExportPreviewSourceName]);
+
+  const isTransactionsCsvGenerated = useMemo(() => {
+    return !!exportCsvText.trim();
+  }, [exportCsvText]);
+
   const handleGenerateCsvTemplate = useCallback(() => {
     const csv = buildCsvTemplate();
     setCsvExportPreview(csv);
@@ -490,7 +502,7 @@ export default function DataExportImportScreen(_props: Props) {
       return;
     }
 
-    const headers = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
+    const headers = ['Date', 'Account', 'Amount', 'Description', 'Merchant', 'Category', 'Type'];
     const lines: string[] = [];
     lines.push(headers.map(csvEscape).join(','));
 
@@ -514,6 +526,7 @@ export default function DataExportImportScreen(_props: Props) {
         accountCell,
         amountSigned,
         csvIncludeDescription ? ((t as any).description ?? (t as any).name ?? '') : '',
+        (t as any).merchant ?? '',
         (t as any).category ?? '',
         typeCell,
       ];
@@ -647,6 +660,7 @@ const handleImportCsvPress = async () => {
     let amountColIndex = -1;
     let dateColIndex = -1;
     let descColIndex = -1;
+    let merchantColIndex = -1;
 
     if (headerRow) {
       const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
@@ -659,12 +673,10 @@ const handleImportCsvPress = async () => {
       descColIndex = findOneOf([
         'description',
         'desc',
-        'name',
-        'merchant',
-        'payee',
         'details',
         'note',
       ]);
+      merchantColIndex = findOneOf(['merchant', 'payee', 'name']);
       categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
     }
 
@@ -699,13 +711,14 @@ const handleImportCsvPress = async () => {
 
     // 4) Map CSV rows -> ImportRow with resolved accountId
     // If detection fails, fallback to assumed order:
-    // date | account | amount | description | category
+    // date | account | amount | description | merchant | category
     const fallback = {
       date: 0,
       account: 1,
       amount: 2,
       desc: 3,
-      category: 4,
+      merchant: 4,
+      category: 5,
     };
 
     const getCell = (row: string[], idx: number) =>
@@ -716,6 +729,7 @@ const handleImportCsvPress = async () => {
       const accountCell = getCell(r, accountColIndex >= 0 ? accountColIndex : fallback.account);
       const amountCell = getCell(r, amountColIndex >= 0 ? amountColIndex : fallback.amount);
       const descCell = getCell(r, descColIndex >= 0 ? descColIndex : fallback.desc);
+      const merchantCell = getCell(r, merchantColIndex >= 0 ? merchantColIndex : fallback.merchant);
       const categoryCell = getCell(r, categoryColIndex >= 0 ? categoryColIndex : fallback.category);
 
       const accountId = resolveAccountId(accountCell);
@@ -725,6 +739,7 @@ const handleImportCsvPress = async () => {
         accountId, // now mapped or newly created
         amount: amountCell,
         description: descCell,
+        merchant: merchantCell || undefined,
         category: categoryCell,
         // type omitted -> inferred from amount sign (warning)
       };
@@ -808,6 +823,7 @@ const handleImportCsvPress = async () => {
       let amountColIndex = -1;
       let dateColIndex = -1;
       let descColIndex = -1;
+      let merchantColIndex = -1;
 
       if (headerRow) {
         const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
@@ -816,7 +832,8 @@ const handleImportCsvPress = async () => {
         dateColIndex = findOneOf(['date', 'txn_date', 'transaction_date', 'tx_date']);
         accountColIndex = findOneOf(['account', 'account_name', 'account name']);
         amountColIndex = findOneOf(['amount', 'value', 'amt']);
-        descColIndex = findOneOf(['description', 'desc', 'name', 'merchant', 'payee', 'details', 'note']);
+        descColIndex = findOneOf(['description', 'desc', 'details', 'note']);
+        merchantColIndex = findOneOf(['merchant', 'payee', 'name']);
         categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
       }
 
@@ -1175,13 +1192,14 @@ const handleImportCsvPress = async () => {
                 dataRows = restRows;
               }
 
-              // template order: Date, Account, Amount, Description, Category, Type
+              // template order: Date, Account, Amount, Description, Merchant, Category, Type
               let dateCol = 0;
               let accountCol = 1;
               let amountCol = 2;
               let descriptionCol = 3;
-              let categoryCol = 4;
-              let typeCol = 5;
+              let merchantCol = 4;
+              let categoryCol = 5;
+              let typeCol = 6;
 
               if (headerRow) {
                 const headerLower = headerRow.map(normalizeHeader);
@@ -1190,7 +1208,8 @@ const handleImportCsvPress = async () => {
                 const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
                 const accIdx = findIndex(['account', 'account_name', 'account name']);
                 const amountIdx = findIndex(['amount', 'value', 'amt']);
-                const descIdx = findIndex(['description', 'desc', 'details', 'note', 'name', 'merchant', 'payee']);
+                const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+                const merchantIdx = findIndex(['merchant', 'payee', 'name']);
                 const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
                 const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
 
@@ -1198,6 +1217,7 @@ const handleImportCsvPress = async () => {
                 if (accIdx >= 0) accountCol = accIdx;
                 if (amountIdx >= 0) amountCol = amountIdx;
                 if (descIdx >= 0) descriptionCol = descIdx;
+                if (merchantIdx >= 0) merchantCol = merchantIdx;
                 if (catIdx >= 0) categoryCol = catIdx;
                 if (typeIdx >= 0) typeCol = typeIdx;
               }
@@ -1236,6 +1256,7 @@ const handleImportCsvPress = async () => {
                 const typeStrRaw = safeCell(row, typeCol);
                 const amountRaw = safeCell(row, amountCol);
                 const rawDesc = safeCell(row, descriptionCol);
+                const rawMerchant = safeCell(row, merchantCol);
                 const category = safeCell(row, categoryCol);
                 const rawAccountName = safeCell(row, accountCol);
 
@@ -1323,6 +1344,7 @@ const handleImportCsvPress = async () => {
                   date: dateISO,
                   name: descClean || undefined,
                   description: descFinal || undefined,
+                  merchant: rawMerchant || undefined,
                   category: category || undefined,
                 } as any);
 
@@ -1407,13 +1429,14 @@ const handleImportCsvPress = async () => {
       dataRows = restRows;
     }
 
-    // template order: Date, Account, Amount, Description, Category, Type
+    // template order: Date, Account, Amount, Description, Merchant, Category, Type
     let dateCol = 0;
     let accountCol = 1;
     let amountCol = 2;
     let descriptionCol = 3;
-    let categoryCol = 4;
-    let typeCol = 5;
+    let merchantCol = 4;
+    let categoryCol = 5;
+    let typeCol = 6;
 
     if (headerRow) {
       const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
@@ -1423,7 +1446,8 @@ const handleImportCsvPress = async () => {
       const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
       const amountIdx = findIndex(['amount', 'value', 'amt']);
       const accIdx = findIndex(['account', 'account_name', 'account name']);
-      const descIdx = findIndex(['description', 'desc', 'details', 'note', 'name', 'merchant', 'payee']);
+      const descIdx = findIndex(['description', 'desc', 'details', 'note']);
+      const merchantIdx = findIndex(['merchant', 'payee', 'name']);
       const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
 
       if (dateIdx >= 0) dateCol = dateIdx;
@@ -1431,6 +1455,7 @@ const handleImportCsvPress = async () => {
       if (amountIdx >= 0) amountCol = amountIdx;
       if (typeIdx >= 0) typeCol = typeIdx;
       if (descIdx >= 0) descriptionCol = descIdx;
+      if (merchantIdx >= 0) merchantCol = merchantIdx;
       if (catIdx >= 0) categoryCol = catIdx;
     }
 
@@ -1460,6 +1485,7 @@ const handleImportCsvPress = async () => {
       const rawAmountStr = safeCell(row, amountCol);
       const accountName = safeCell(row, accountCol);
       const description = safeCell(row, descriptionCol);
+      const merchant = safeCell(row, merchantCol);
       const category = safeCell(row, categoryCol);
 
       if (!accountName) {
@@ -1517,6 +1543,7 @@ const handleImportCsvPress = async () => {
         amount,
         category: category || undefined,
         description: description || undefined,
+        merchant: merchant || undefined,
         name: description ? norm(description) : undefined,
       } as any);
 
@@ -1675,12 +1702,27 @@ const handleImportCsvPress = async () => {
           Generate the official CSV template and export it to Files.
         </Text>
 
-        <Pressable style={styles.btnSecondary} onPress={handleGenerateCsvTemplate}>
-          <Text style={styles.btnSecondaryText}>Generate CSV Template (text)</Text>
+        <Pressable 
+          style={[styles.btnSecondary, isTemplateGenerated && styles.btnSecondaryActive]} 
+          onPress={handleGenerateCsvTemplate}
+        >
+          <Text style={[styles.btnSecondaryText, isTemplateGenerated && styles.btnSecondaryTextActive]}>
+            {isTemplateGenerated ? '✓ Template Generated' : 'Generate CSV Template (text)'}
+          </Text>
         </Pressable>
 
-        <Pressable style={styles.btnPrimary} onPress={handleExportCsvPreview}>
-          <Text style={styles.btnPrimaryText}>Export Template CSV (Files)</Text>
+        {isTemplateGenerated && (
+          <Text style={styles.statusHint}>Template generated. Ready to export.</Text>
+        )}
+
+        <Pressable 
+          style={[styles.btnPrimary, !isTemplateGenerated && styles.btnPrimaryDisabled]} 
+          onPress={handleExportCsvPreview}
+          disabled={!isTemplateGenerated}
+        >
+          <Text style={[styles.btnPrimaryText, !isTemplateGenerated && styles.btnPrimaryTextDisabled]}>
+            Export Template CSV (Files)
+          </Text>
         </Pressable>
 
         {showCsvPreview && csvExportPreview ? (() => {
@@ -1722,12 +1764,27 @@ const handleImportCsvPress = async () => {
           </View>
         </View>
 
-        <Pressable style={styles.btnSecondary} onPress={handleGenerateCsv}>
-          <Text style={styles.btnSecondaryText}>Generate Transactions CSV (text)</Text>
+        <Pressable 
+          style={[styles.btnSecondary, isTransactionsCsvGenerated && styles.btnSecondaryActive]} 
+          onPress={handleGenerateCsv}
+        >
+          <Text style={[styles.btnSecondaryText, isTransactionsCsvGenerated && styles.btnSecondaryTextActive]}>
+            {isTransactionsCsvGenerated ? '✓ Transactions CSV Generated' : 'Generate Transactions CSV (text)'}
+          </Text>
         </Pressable>
 
-        <Pressable style={styles.btnPrimary} onPress={handleExportCsvFile}>
-          <Text style={styles.btnPrimaryText}>Export Transactions CSV (Files)</Text>
+        {isTransactionsCsvGenerated && (
+          <Text style={styles.statusHint}>Transactions CSV generated. Ready to export.</Text>
+        )}
+
+        <Pressable 
+          style={[styles.btnPrimary, !isTransactionsCsvGenerated && styles.btnPrimaryDisabled]} 
+          onPress={handleExportCsvFile}
+          disabled={!isTransactionsCsvGenerated}
+        >
+          <Text style={[styles.btnPrimaryText, !isTransactionsCsvGenerated && styles.btnPrimaryTextDisabled]}>
+            Export Transactions CSV (Files)
+          </Text>
         </Pressable>
 
         {showCsvPreview && exportCsvText ? (() => {
@@ -1924,6 +1981,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB',
   },
   btnPrimaryText: { color: 'white', fontWeight: '600', textAlign: 'center' },
+  btnPrimaryDisabled: {
+    backgroundColor: '#374151',
+    opacity: 0.5,
+  },
+  btnPrimaryTextDisabled: { color: '#9CA3AF' },
 
   btnSecondary: {
     flex: 1,
@@ -1937,6 +1999,11 @@ const styles = StyleSheet.create({
     borderColor: '#4B5563',
   },
   btnSecondaryText: { color: '#E5E7EB', fontWeight: '600', textAlign: 'center' },
+  btnSecondaryActive: {
+    borderColor: '#2563EB',
+    backgroundColor: 'rgba(37, 99, 235, 0.1)',
+  },
+  btnSecondaryTextActive: { color: '#93C5FD', fontWeight: '700' },
 
   btnDestructive: {
     flex: 1,
@@ -2025,4 +2092,11 @@ const styles = StyleSheet.create({
   },
 
   hint: { color: theme.textDim, opacity: 0.7, marginTop: 6 },
+  statusHint: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 4,
+    fontStyle: 'italic',
+  },
 });

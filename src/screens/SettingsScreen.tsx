@@ -1,5 +1,5 @@
 // src/screens/SettingsScreen.tsx
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,57 +8,106 @@ import {
   Alert,
   Platform,
   ScrollView,
+  Switch,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import { resetDatabase } from '../dev/resetDb';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const CSV_TEMPLATE = `date,amount,type,account,category,note
-2025-10-01,12.50,expense,Main,Groceries,Milk & bread
-2025-10-03,2500,income,Main,Salary,October
-`;
+const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
-// Cast to any so we can use cacheDirectory / EncodingType without fighting TS
-const FS = FileSystem as any;
-
 export default function SettingsScreen({ navigation }: Props) {
-  const exportTemplate = async () => {
-    try {
-      const base = FS.cacheDirectory ?? '';
-      const path = `${base}debitlens_template.csv`;
-      const encoding = FS.EncodingType?.UTF8 ?? 'utf8';
+  const { getPin, setPin } = useApp();
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  const [biometricsAvailable, setBiometricsAvailable] = useState<boolean | null>(null);
 
-      if (typeof FS.writeAsStringAsync === 'function') {
-        await FS.writeAsStringAsync(path, CSV_TEMPLATE, { encoding });
-      } else {
-        await FS.writeAsStringAsync(path, CSV_TEMPLATE);
+  const pinTrimmed = (getPin() ?? '').trim();
+  const hasPin = pinTrimmed.length > 0;
+
+  const loadBiometricsPref = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_BIOMETRICS);
+      setBiometricsEnabled(raw === 'true');
+    } catch {
+      setBiometricsEnabled(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBiometricsPref();
+  }, [loadBiometricsPref]);
+
+  useEffect(() => {
+    if (!hasPin) {
+      setBiometricsAvailable(null);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const [hw, enrolled] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+        ]);
+        if (mounted) setBiometricsAvailable(!!hw && !!enrolled);
+      } catch {
+        if (mounted) setBiometricsAvailable(false);
       }
+    })();
+    return () => { mounted = false; };
+  }, [hasPin]);
 
-      await Sharing.shareAsync(path, {
-        mimeType: 'text/csv',
-        dialogTitle: 'CSV template',
-      });
-    } catch (e) {
-      console.warn('[settings] template export failed', e);
-      Alert.alert('Error', 'Could not export the template.');
-    }
-  };
-
-  const onResetDb = async () => {
+  const onBiometricsToggle = async (value: boolean) => {
+    setBiometricsEnabled(value);
     try {
-      await resetDatabase();
-      Alert.alert('Database reset', 'The local database file was deleted.');
+      if (value) {
+        await AsyncStorage.setItem(STORAGE_KEY_BIOMETRICS, 'true');
+      } else {
+        await AsyncStorage.removeItem(STORAGE_KEY_BIOMETRICS);
+      }
     } catch (e) {
-      console.warn('[settings] reset DB failed', e);
-      Alert.alert('Error', 'Could not reset the database.');
+      console.warn('[settings] biometrics pref save failed', e);
+      setBiometricsEnabled(!value);
     }
   };
+
+  const onRemovePin = async () => {
+    Alert.alert(
+      'Remove PIN',
+      'Are you sure you want to remove your PIN? You will no longer be required to sign in.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove PIN',
+          style: 'destructive',
+          onPress: async () => {
+            setPin(null);
+            // Also disable biometrics when PIN is removed
+            try {
+              await AsyncStorage.removeItem(STORAGE_KEY_BIOMETRICS);
+              setBiometricsEnabled(false);
+            } catch (e) {
+              console.warn('[settings] failed to clear biometrics on PIN removal', e);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const biometricsDisabled = !hasPin;
+  const biometricsHelper =
+    !hasPin
+      ? 'Enable PIN to use Face ID / Biometrics'
+      : biometricsAvailable === false
+        ? 'Biometrics not available'
+        : null;
 
   return (
     <SafeAreaView style={styles.safeWrap}>
@@ -68,31 +117,52 @@ export default function SettingsScreen({ navigation }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         <Text style={styles.h1}>Settings</Text>
-        <Text style={styles.subtle}>Minimal screen for isolation testing</Text>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Data</Text>
+          <Text style={styles.sectionTitle}>Security & Access</Text>
 
-          <Pressable
-            style={[styles.btn, styles.btnGhost]}
-            onPress={exportTemplate}
-          >
-            <Text style={styles.btnText}>Export CSV template</Text>
-          </Pressable>
+          {/* PIN status */}
+          <View style={styles.row}>
+            <Text style={styles.label}>PIN</Text>
+            <Text style={styles.value}>{hasPin ? 'On' : 'Off'}</Text>
+          </View>
 
-          <Pressable
-            style={[styles.btn, styles.btnDanger, { marginTop: 8 }]}
-            onPress={onResetDb}
-          >
-            <Text style={styles.btnText}>Reset local database</Text>
-          </Pressable>
+          {!hasPin ? (
+            <Pressable
+              style={[styles.btn, styles.btnPrimary]}
+              onPress={() => navigation.navigate('Login')}
+            >
+              <Text style={styles.btnText}>Set PIN</Text>
+            </Pressable>
+          ) : (
+            <>
+              <Pressable
+                style={[styles.btn, styles.btnGhost]}
+                onPress={() => navigation.navigate('Login')}
+              >
+                <Text style={styles.btnText}>Change PIN</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.btn, styles.btnDanger, { marginTop: 8 }]}
+                onPress={onRemovePin}
+              >
+                <Text style={styles.btnText}>Remove PIN</Text>
+              </Pressable>
+            </>
+          )}
 
-          <Pressable
-            style={[styles.btn, styles.btnGhost, { marginTop: 8 }]}
-            onPress={() => navigation.navigate('ImportCSV')}
-          >
-            <Text style={styles.btnText}>Import from CSV</Text>
-          </Pressable>
+          {/* Biometrics toggle */}
+          <View style={[styles.optionRow, { marginTop: 16 }]}>
+            <Text style={styles.optionLabel}>Use Face ID / Biometrics</Text>
+            <Switch
+              value={biometricsEnabled}
+              onValueChange={onBiometricsToggle}
+              disabled={biometricsDisabled || biometricsAvailable === false}
+            />
+          </View>
+          {biometricsHelper ? (
+            <Text style={styles.helper}>{biometricsHelper}</Text>
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -104,16 +174,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0B0D13',
   },
-  wrap: {
-    flex: 1,
-  },
+  wrap: { flex: 1 },
   content: {
     padding: 16,
     paddingTop: Platform.OS === 'ios' ? 8 : 16,
     paddingBottom: 24,
   },
-  h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 4 },
-  subtle: { color: theme.textDim, marginBottom: 12 },
+  h1: { color: '#fff', fontSize: 22, fontWeight: '800', marginBottom: 12 },
 
   card: {
     backgroundColor: theme.cardAlt,
@@ -121,8 +188,16 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 4,
   },
+  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 12 },
 
-  sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 8 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  label: { color: theme.textDim, fontSize: 15 },
+  value: { color: '#fff', fontWeight: '600' },
 
   btn: {
     paddingVertical: 12,
@@ -131,7 +206,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  btnPrimary: { backgroundColor: '#2563EB' },
   btnGhost: { backgroundColor: theme.border },
   btnDanger: { backgroundColor: '#7F1D1D' },
   btnText: { color: '#fff', fontWeight: '700' },
+
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionLabel: { color: '#E5E7EB', flex: 1, marginRight: 12 },
+  helper: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginTop: 6,
+  },
 });
