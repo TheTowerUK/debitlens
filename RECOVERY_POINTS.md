@@ -13,6 +13,9 @@
   - Immutable reference point
   - Created: 2026-01-21
   - Commit: `8072d30` - "Fix: Rename headerOptions.ts to .tsx to support JSX syntax"
+- **`recovery/working-state-2026-01-22`** – Verified stable checkpoint
+  - Same commit as 2026-01-21, verified working on 2026-01-22
+  - Immutable reference point
 
 ## How to Restore
 
