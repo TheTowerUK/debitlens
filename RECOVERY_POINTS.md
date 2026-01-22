@@ -7,6 +7,7 @@
   - Current working state
   - Can be updated as needed
   - Pushed to remote
+  - **⚠️ Do not develop on recovery/working-state; only fast-forward it from dev when stable.**
 
 ### Tags:
 - **`recovery/working-state-2026-01-21`** – Last known good Visual Studio working state (pre-Cursor)
@@ -103,6 +104,8 @@ git push origin recovery/working-state-YYYY-MM-DD
 
 ## Daily Development Workflow
 
+**⚠️ IMPORTANT: Do not develop on recovery/working-state; only fast-forward it from dev when stable.**
+
 ### Working on Daily Changes:
 
 Use the `dev` branch for all daily development work:
@@ -138,12 +141,14 @@ git push origin "recovery/working-state-$dt"
 ```
 
 **Important:**
+- **⚠️ Do not develop on recovery/working-state; only fast-forward it from dev when stable.**
 - Always test thoroughly before merging to `recovery/working-state`
 - Use `--ff-only` to prevent merge commits and keep history clean
 - If merge fails (not fast-forward), your dev branch has diverged - rebase or review changes first
 - Tags are immutable - create them only for verified stable states
 
 ## Notes
+- **⚠️ Do not develop on recovery/working-state; only fast-forward it from dev when stable.**
 - Always test thoroughly before creating a recovery point
 - Tags are immutable - use for historical snapshots
 - Branches are mutable - use for current working state
