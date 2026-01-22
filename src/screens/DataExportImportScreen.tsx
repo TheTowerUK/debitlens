@@ -34,7 +34,6 @@ import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../ut
 import type { ImportRow } from '../utils/validation';
 
 import { importCsvRowsWithValidation, alertImportSummary } from '../utils/importCsv';
-import BackPill from '../components/BackPill';
 
 const FS: any = FileSystem as any;
 const norm = (s: string) => s.trim().toLowerCase();
@@ -1606,8 +1605,6 @@ const handleImportCsvPress = async () => {
 
   return (
   <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-    <BackPill />
-
     <Text style={styles.h1}>Data export &amp; import</Text>
     <Text style={styles.subtle}>
       Export JSON/CSV to Files, restore from a JSON backup, or import/restore transactions from CSV.
@@ -1671,26 +1668,12 @@ const handleImportCsvPress = async () => {
         ) : null}
       </View>
 
-      {/* CSV EXPORT */}
+      {/* CSV TEMPLATE */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>CSV export</Text>
+        <Text style={styles.sectionTitle}>CSV Template</Text>
         <Text style={styles.sectionText}>
-          Generate the official template (always works), or generate a transactions CSV, then export to Files.
+          Generate the official CSV template and export it to Files.
         </Text>
-
-        <View style={styles.optionsBox}>
-          <Text style={styles.optionsTitle}>Transactions CSV export options</Text>
-
-          <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Include description</Text>
-            <Switch value={csvIncludeDescription} onValueChange={setCsvIncludeDescription} />
-          </View>
-
-          <View style={styles.optionRow}>
-            <Text style={styles.optionLabel}>Use account name (vs accountId)</Text>
-            <Switch value={csvIncludeAccountName} onValueChange={setCsvIncludeAccountName} />
-          </View>
-        </View>
 
         <Pressable style={styles.btnSecondary} onPress={handleGenerateCsvTemplate}>
           <Text style={styles.btnSecondaryText}>Generate CSV Template (text)</Text>
@@ -1716,7 +1699,28 @@ const handleImportCsvPress = async () => {
             </View>
           );
         })() : null}
+      </View>
 
+      {/* EXPORT TRANSACTIONS */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Export Transactions</Text>
+        <Text style={styles.sectionText}>
+          Generate and export your transactions as CSV to Files.
+        </Text>
+
+        <View style={styles.optionsBox}>
+          <Text style={styles.optionsTitle}>Transactions CSV export options</Text>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Include description</Text>
+            <Switch value={csvIncludeDescription} onValueChange={setCsvIncludeDescription} />
+          </View>
+
+          <View style={styles.optionRow}>
+            <Text style={styles.optionLabel}>Use account name (vs accountId)</Text>
+            <Switch value={csvIncludeAccountName} onValueChange={setCsvIncludeAccountName} />
+          </View>
+        </View>
 
         <Pressable style={styles.btnSecondary} onPress={handleGenerateCsv}>
           <Text style={styles.btnSecondaryText}>Generate Transactions CSV (text)</Text>
@@ -1742,8 +1746,6 @@ const handleImportCsvPress = async () => {
             </View>
           );
         })() : null}
-
-
       </View>
 
       {/* CSV IMPORT + RESTORE */}
@@ -1870,9 +1872,6 @@ const handleImportCsvPress = async () => {
             <Text style={styles.statusText}>{lastImportSummary}</Text>
           </View>
         ) : null}
-        <View style={{ marginTop: 12, alignItems: 'center' }}>
-          <BackPill label="← Back" />
-        </View>
 
       </View>
     </ScrollView>

@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch, Platform } from 'react-native';
 
 import { colors as theme } from '../theme/colors';
-import BackPill from '../components/BackPill';
 
 export default function NotificationsScreen() {
   // Local UI state for now – avoids relying on missing AppState/AppActions fields
@@ -13,8 +12,6 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.wrap}>
-      <BackPill />
-
       <Text style={styles.h1}>Notifications</Text>
       <Text style={styles.subtle}>Control how DebitLens keeps you in the loop.</Text>
 
