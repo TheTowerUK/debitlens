@@ -29,6 +29,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
   const [pinError, setPinError] = useState('');
+  const [biometricsUnavailableHint, setBiometricsUnavailableHint] = useState<string | null>(null);
   const biometricAttempted = useRef(false);
 
   // Authoritative: compute once at render
@@ -43,10 +44,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
   // Attempt biometric authentication when mode becomes 'sign' and biometrics enabled
   useEffect(() => {
-    if (mode !== 'sign' || !pinExists) {
-      biometricAttempted.current = false; // Reset when not in sign mode
-      return;
-    }
+    if (mode !== 'sign' || !pinExists) return;
 
     if (biometricAttempted.current) return; // Already attempted this session
 
@@ -65,21 +63,26 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
         if (!mounted) return;
 
-        if (hasHardware && isEnrolled) {
-          biometricAttempted.current = true;
-          const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Unlock DebitLens',
-            fallbackLabel: 'Use PIN',
-          });
+        const available = !!hasHardware && !!isEnrolled;
+        biometricAttempted.current = true; // Don't keep trying (prompt or skip)
 
-          if (mounted && result.success) {
-            navigation.replace('Dashboard');
-          }
-          // If fail/cancel, stay on PIN entry screen (no crash)
+        if (!available) {
+          if (mounted) setBiometricsUnavailableHint('Face ID / Biometrics is enabled but not available on this device.');
+          return;
         }
+
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Unlock DebitLens',
+          fallbackLabel: 'Use PIN',
+        });
+
+        if (mounted && result.success) {
+          navigation.replace('Dashboard');
+        }
+        // If fail/cancel, stay on PIN entry screen (no crash)
       } catch (e) {
         console.warn('[SplashAuth] biometric auth error', e);
-        // On error, stay on PIN entry screen
+        biometricAttempted.current = true; // Don't retry on error
       }
     })();
 
@@ -108,6 +111,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
       return Alert.alert('Mismatch', 'PINs do not match.');
     }
 
+    biometricAttempted.current = false; // Clear when PIN changes (e.g. before navigate)
     setPin(p1);
     setPinError('');
     navigation.replace('Dashboard');
@@ -153,6 +157,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
             <View style={styles.errorPill}>
               <Text style={styles.errorText}>{pinError}</Text>
             </View>
+          ) : null}
+
+          {biometricsUnavailableHint ? (
+            <Text style={styles.hint}>{biometricsUnavailableHint}</Text>
           ) : null}
 
           <Pressable
@@ -243,17 +251,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
   },
-  ghost: {
-    backgroundColor: theme.border,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
+  hint: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginBottom: 8,
+    fontStyle: 'italic',
   },
-  ghostText: {
-    color: '#E5E7EB',
-    fontWeight: '700',
-  },
-  // 👇 New styles for error pill
   errorPill: {
     backgroundColor: '#7F1D1D',
     borderRadius: 999,
