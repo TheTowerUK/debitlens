@@ -101,8 +101,51 @@ git push origin recovery/working-state-YYYY-MM-DD
 - Working state before Cursor review
 - Base for current working state
 
+## Daily Development Workflow
+
+### Working on Daily Changes:
+
+Use the `dev` branch for all daily development work:
+
+```powershell
+# Start daily work
+git switch dev
+
+# Make your changes, then commit
+git add -A
+git commit -m "Description of changes"
+git push
+```
+
+### Promoting Stable Changes to Recovery:
+
+When your changes are stable and tested, merge them into the recovery branch:
+
+```powershell
+# Switch to recovery branch
+git switch recovery/working-state
+
+# Merge dev (fast-forward only - ensures clean history)
+git merge --ff-only dev
+
+# Push the updated recovery branch
+git push
+
+# Create a dated tag for this stable checkpoint
+$dt = Get-Date -Format "yyyy-MM-dd"
+git tag -a "recovery/working-state-$dt" -m "Stable checkpoint $dt"
+git push origin "recovery/working-state-$dt"
+```
+
+**Important:**
+- Always test thoroughly before merging to `recovery/working-state`
+- Use `--ff-only` to prevent merge commits and keep history clean
+- If merge fails (not fast-forward), your dev branch has diverged - rebase or review changes first
+- Tags are immutable - create them only for verified stable states
+
 ## Notes
 - Always test thoroughly before creating a recovery point
 - Tags are immutable - use for historical snapshots
 - Branches are mutable - use for current working state
 - Always push recovery points to remote for safety
+- Use `dev` branch for daily work, `recovery/working-state` for stable checkpoints
