@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo, useLayoutEffect } from 'react';
+import React, { useMemo, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getUpcomingOccurrences } from '../utils/recurring';
+import { getOccurrenceDisplay, type AccountLite } from '../utils/occurrenceDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -23,6 +24,13 @@ export default function DashboardScreen({ navigation }: Props) {
   const recurring: RecurringItem[] = state.recurring || [];
   const budgets = state.budgets || [];
 
+  // Build account lookup map (lightweight for display)
+  const accountById = useMemo(() => {
+    const m: Record<string, AccountLite> = {};
+    for (const a of accounts) m[a.id] = { id: a.id, name: a.name };
+    return m;
+  }, [accounts]);
+
   // ---- Month range (used by monthSummary + budgets) ----
   const monthRange = useMemo(() => {
     const now = new Date();
@@ -32,6 +40,9 @@ export default function DashboardScreen({ navigation }: Props) {
   }, []);
 
   const formatMoney = (v: number) => `£${(Number(v) || 0).toFixed(2)}`;
+
+  // UK date formatter for consistent date display
+  const formatDate = useCallback((d: Date) => d.toLocaleDateString('en-GB'), []);
 
   // ---- Account balances (include opening balance + tx deltas) ----
   const { totalBalance, accountCount, balanceById } = useMemo(() => {
@@ -163,29 +174,68 @@ export default function DashboardScreen({ navigation }: Props) {
 
     // Apply upcoming occurrences to forecast balances
     for (const occ of upcoming) {
-      let targetAccountId = occ.accountId;
+      const amt = Number(occ.amount) || 0;
 
-      // If no accountId and exactly one non-archived account, assign to it
-      if (!targetAccountId && singleAccount) {
-        targetAccountId = singleAccount.id;
-      }
-
-      if (!targetAccountId) {
-        unassignedCount++;
-        continue;
-      }
-
-      // Initialize account balance if not present
-      if (forecastBalances[targetAccountId] === undefined) {
-        const acc = accounts.find((a) => a.id === targetAccountId);
-        forecastBalances[targetAccountId] = acc ? Number(acc.balance) || 0 : 0;
-      }
-
-      // Apply amount based on type
       if (occ.type === 'expense') {
-        forecastBalances[targetAccountId] -= occ.amount;
+        let targetAccountId = occ.accountId;
+
+        // If no accountId and exactly one non-archived account, assign to it
+        if (!targetAccountId && singleAccount) {
+          targetAccountId = singleAccount.id;
+        }
+
+        if (!targetAccountId) {
+          unassignedCount++;
+          continue;
+        }
+
+        // Initialize account balance if not present
+        if (forecastBalances[targetAccountId] === undefined) {
+          const acc = accounts.find((a) => a.id === targetAccountId);
+          forecastBalances[targetAccountId] = acc ? Number(acc.balance) || 0 : 0;
+        }
+
+        forecastBalances[targetAccountId] -= amt;
       } else if (occ.type === 'income') {
-        forecastBalances[targetAccountId] += occ.amount;
+        let targetAccountId = occ.accountId;
+
+        // If no accountId and exactly one non-archived account, assign to it
+        if (!targetAccountId && singleAccount) {
+          targetAccountId = singleAccount.id;
+        }
+
+        if (!targetAccountId) {
+          unassignedCount++;
+          continue;
+        }
+
+        // Initialize account balance if not present
+        if (forecastBalances[targetAccountId] === undefined) {
+          const acc = accounts.find((a) => a.id === targetAccountId);
+          forecastBalances[targetAccountId] = acc ? Number(acc.balance) || 0 : 0;
+        }
+
+        forecastBalances[targetAccountId] += amt;
+      } else if (occ.type === 'transfer') {
+        const fromId = occ.fromAccountId;
+        const toId = occ.toAccountId;
+
+        if (!fromId || !toId) {
+          unassignedCount++;
+          continue;
+        }
+
+        if (forecastBalances[fromId] === undefined) {
+          const fromAcc = accounts.find((a) => a.id === fromId);
+          forecastBalances[fromId] = fromAcc ? Number(fromAcc.balance) || 0 : 0;
+        }
+        if (forecastBalances[toId] === undefined) {
+          const toAcc = accounts.find((a) => a.id === toId);
+          forecastBalances[toId] = toAcc ? Number(toAcc.balance) || 0 : 0;
+        }
+
+        forecastBalances[fromId] -= amt;
+        forecastBalances[toId] += amt;
       }
     }
 
@@ -213,14 +263,6 @@ export default function DashboardScreen({ navigation }: Props) {
     return getUpcomingOccurrences(recurring, today, 30);
   }, [recurring]);
 
-  const upcomingRecurringAll = useMemo(() => {
-    // Convert to the format expected by the UI (item + date)
-    return upcomingOccurrences.map((occ) => {
-      const item = recurring.find((r) => r.id === occ.itemId);
-      if (!item) return null;
-      return { item, date: occ.dueDate };
-    }).filter((x): x is { item: RecurringItem; date: Date } => !!x);
-  }, [upcomingOccurrences, recurring]);
 
   // ---- Upcoming totals (30 days + weekly average) ----
   const upcomingTotals = useMemo(() => {
@@ -232,10 +274,14 @@ export default function DashboardScreen({ navigation }: Props) {
     let totalIncoming30 = 0;
 
     for (const occ of upcomingOccurrences) {
-      if (occ.type === 'expense') {
-        totalOutgoing30 += occ.amount;
-      } else if (occ.type === 'income') {
-        totalIncoming30 += occ.amount;
+      const amt = Number(occ.amount) || 0;
+
+      if (occ.type === 'expense') totalOutgoing30 += amt;
+      else if (occ.type === 'income') totalIncoming30 += amt;
+      else if (occ.type === 'transfer') {
+        // Transfers move money: count as outgoing + incoming (net zero)
+        totalOutgoing30 += amt;
+        totalIncoming30 += amt;
       }
     }
 
@@ -256,19 +302,16 @@ export default function DashboardScreen({ navigation }: Props) {
     };
   }, [upcomingOccurrences]);
 
-  const upcomingTop = useMemo(
-    () => upcomingRecurringAll.slice(0, 5),
-    [upcomingRecurringAll]
-  );
-  const hasMoreUpcoming = upcomingRecurringAll.length > 5;
+  const upcomingTop = useMemo(() => upcomingOccurrences.slice(0, 5), [upcomingOccurrences]);
+  const hasMoreUpcoming = upcomingOccurrences.length > 5;
 
   // ---- Logout handler: back to Login (PIN) ----
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     navigation.reset({
       index: 0,
       routes: [{ name: 'Login' }],
     });
-  };
+  }, [navigation]);
 
   // Set header with Settings and Logout buttons
   useLayoutEffect(() => {
@@ -430,23 +473,30 @@ export default function DashboardScreen({ navigation }: Props) {
                 </View>
               )}
 
-              {upcomingTop.map(({ item, date }) => (
-                <View key={`${item.id}-${date.getTime()}`} style={styles.upcomingRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.upcomingTitle}>
-                      {item.title ||
-                        (item.isTransfer ? 'Recurring transfer' : 'Recurring item')}
-                    </Text>
-                    <Text style={styles.upcomingSub}>
-                      {item.frequency.charAt(0).toUpperCase() + item.frequency.slice(1)} ·{' '}
-                      {date.toLocaleDateString()}
-                    </Text>
+              {upcomingTop.map((occ, idx) => {
+                const d = getOccurrenceDisplay(occ, accountById, formatMoney, formatDate);
+
+                const amountStyle =
+                  d.tone === 'income'
+                    ? [styles.upcomingAmount, styles.positiveText]
+                    : d.tone === 'expense'
+                    ? [styles.upcomingAmount, styles.negativeText]
+                    : [styles.upcomingAmount, { color: theme.text }];
+
+                return (
+                  <View
+                    key={`${occ.itemId}-${occ.dueDate.getTime()}`}
+                    style={[styles.upcomingRow, idx === 0 && { borderTopWidth: 0, marginTop: 0 }]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.upcomingTitle}>{d.title}</Text>
+                      <Text style={styles.upcomingSub}>{d.subtitle}</Text>
+                    </View>
+
+                    <Text style={amountStyle}>{d.amountText}</Text>
                   </View>
-                  <Text style={styles.upcomingAmount}>
-                    {formatMoney(Number(item.amount || 0))}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
 
               {hasMoreUpcoming ? (
                 <Pressable onPress={() => navigation.navigate('Recurring')} hitSlop={8}>

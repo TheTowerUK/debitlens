@@ -23,7 +23,7 @@ const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
-  const { getPin, setPin } = useApp();
+  const { getPin, setPin, actions } = useApp();
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState<boolean | null>(null);
 
@@ -109,6 +109,24 @@ export default function SettingsScreen({ navigation }: Props) {
         ? 'Biometrics not available'
         : null;
 
+  const onResetApp = () => {
+    Alert.alert(
+      'Reset DebitLens?',
+      'This will permanently delete all accounts, transactions, recurring items, budgets, and your PIN from this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            await actions.resetApp();
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView
@@ -163,6 +181,14 @@ export default function SettingsScreen({ navigation }: Props) {
           {biometricsHelper ? (
             <Text style={styles.helper}>{biometricsHelper}</Text>
           ) : null}
+        </View>
+
+        {/* Danger Zone */}
+        <View style={styles.dangerZone}>
+          <Text style={styles.dangerZoneTitle}>Danger zone</Text>
+          <Pressable style={styles.dangerButton} onPress={onResetApp}>
+            <Text style={styles.dangerButtonText}>Reset app (delete all data)</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -221,5 +247,25 @@ const styles = StyleSheet.create({
     color: theme.textDim,
     fontSize: 12,
     marginTop: 6,
+  },
+
+  dangerZone: {
+    marginTop: 32,
+  },
+  dangerZoneTitle: {
+    color: '#fff',
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  dangerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  dangerButtonText: {
+    color: '#ef4444',
+    fontWeight: '800',
   },
 });

@@ -6,9 +6,20 @@ export type UpcomingOccurrence = {
   title: string;
   dueDate: Date;
   amount: number;
-  type: 'income' | 'expense';
+
+  // occurrence can be a transfer even though RecurringItem.type is only income/expense
+  type: 'income' | 'expense' | 'transfer';
+
   frequency: RecurringFrequency;
+
+  // non-transfer
   accountId?: string;
+
+  // transfer-specific
+  isTransfer?: boolean;
+  fromAccountId?: string;
+  toAccountId?: string;
+
   category?: string;
   description?: string;
 };
@@ -97,14 +108,25 @@ export function getUpcomingOccurrences(
 
     // Generate occurrences within the date range
     while (currentDate <= end) {
+      const isTransfer = !!item.isTransfer;
+      const occType: UpcomingOccurrence['type'] = isTransfer ? 'transfer' : item.type;
+
       occurrences.push({
         itemId: item.id,
-        title: item.title || (item.isTransfer ? 'Recurring transfer' : 'Recurring item'),
+        title: item.title || (isTransfer ? 'Recurring transfer' : 'Recurring item'),
         dueDate: new Date(currentDate),
         amount: Number(item.amount) || 0,
-        type: item.type,
-        frequency: frequency,
-        accountId: item.accountId,
+        type: occType,
+        frequency,
+
+        // normal items
+        accountId: isTransfer ? undefined : item.accountId,
+
+        // transfer fields
+        isTransfer,
+        fromAccountId: isTransfer ? item.fromAccountId : undefined,
+        toAccountId: isTransfer ? item.toAccountId : undefined,
+
         category: item.category,
         description: item.description,
       });
@@ -113,19 +135,15 @@ export function getUpcomingOccurrences(
     }
   }
 
-  // Sort: ascending by date, then expenses before income for same date
+  // Sort: ascending by date, then expenses before income before transfer, then stable sort by title
   occurrences.sort((a, b) => {
     const dateDiff = a.dueDate.getTime() - b.dueDate.getTime();
-    if (dateDiff !== 0) {
-      return dateDiff;
-    }
-    // Same date: expenses before income, then stable sort by title
-    if (a.type === 'expense' && b.type === 'income') {
-      return -1;
-    }
-    if (a.type === 'income' && b.type === 'expense') {
-      return 1;
-    }
+    if (dateDiff !== 0) return dateDiff;
+
+    const rank = (t: UpcomingOccurrence['type']) => (t === 'expense' ? 0 : t === 'income' ? 1 : 2);
+    const rdiff = rank(a.type) - rank(b.type);
+    if (rdiff !== 0) return rdiff;
+
     // Same type: stable sort by title
     return a.title.localeCompare(b.title);
   });

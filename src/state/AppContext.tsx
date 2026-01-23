@@ -133,6 +133,9 @@ export type AppActions = {
     recurring?: RecurringItem[];
     budgets?: Budget[];
   }) => MergeBackupResult;
+
+  /* Dangerous */
+  resetApp: () => Promise<void>;
 };
 
 type AppContextValue = {
@@ -486,6 +489,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
           recurringAdded,
           recurringUpdated,
         };
+      },
+
+      /* Dangerous */
+      resetApp: async () => {
+        // Clear in-memory state
+        setAccounts([]);
+        setTransactions([]);
+        setRecurring([]);
+        setBudgets([]);
+        setPinState(null);
+
+        // Clear persisted storage
+        try {
+          await Promise.all([
+            AsyncStorage.removeItem(STORAGE_KEY_APP_STATE),
+            AsyncStorage.removeItem(STORAGE_KEY_PIN),
+          ]);
+        } catch {
+          // ignore storage errors
+        }
       },
     }),
     []

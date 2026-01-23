@@ -1,6 +1,6 @@
 // src/screens/AccountScreen.tsx
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, Switch, Alert } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
@@ -9,7 +9,7 @@ import { colors as theme } from '../theme/colors';
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
 export default function AccountScreen({ navigation, route }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
 
   const accountId = route.params?.accountId;
   const accounts = state.accounts || [];
@@ -103,6 +103,26 @@ export default function AccountScreen({ navigation, route }: Props) {
 
   const handleEditTxn = (id: string) => {
     navigation.navigate('TxnEditor', { id });
+  };
+
+  const onDeleteAccount = () => {
+    if (!account) return;
+
+    Alert.alert(
+      `Delete "${account.name}"?`,
+      'This will delete the account and all linked transactions and recurring items (including transfers). This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            actions.deleteAccount(accountId);
+            navigation.goBack();
+          },
+        },
+      ]
+    );
   };
 
   if (!account) {
@@ -237,6 +257,14 @@ export default function AccountScreen({ navigation, route }: Props) {
           }}
         />
       )}
+
+      {/* Delete Account */}
+      <Pressable
+        onPress={onDeleteAccount}
+        style={styles.deleteButton}
+      >
+        <Text style={styles.deleteButtonText}>Delete account</Text>
+      </Pressable>
     </View>
   );
 }
@@ -387,6 +415,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     opacity: 0.9,
+  },
+
+  deleteButton: {
+    marginTop: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  deleteButtonText: {
+    color: '#ef4444',
+    fontWeight: '800',
   },
 
 });
