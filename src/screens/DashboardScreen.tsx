@@ -12,6 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getUpcomingOccurrences } from '../utils/recurring';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
@@ -137,26 +138,123 @@ export default function DashboardScreen({ navigation }: Props) {
     return { exceeded, warning, totalRemaining };
   }, [budgets, spentByCategory]);
 
-  // ---- Upcoming recurring (next 30 days) ----
-  const upcomingRecurringAll = useMemo(() => {
+  // ---- Forecast (next 30 days) ----
+  const forecast = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const horizon = new Date(today);
-    horizon.setDate(horizon.getDate() + 30);
+    // Get current net worth and debt
+    const currentNetWorth = totalBalance;
+    const currentDebt = Math.abs(
+      Object.values(balanceById).reduce((sum, bal) => sum + (bal < 0 ? bal : 0), 0)
+    );
 
-    return recurring
-      .filter((r) => r.active !== false && r.nextDueDate)
-      .map((r) => {
-        const d = r.nextDueDate ? new Date(r.nextDueDate) : null;
-        if (!d || isNaN(d.getTime())) return null;
-        d.setHours(0, 0, 0, 0);
-        return { item: r, date: d };
-      })
-      .filter((x): x is { item: RecurringItem; date: Date } => !!x)
-      .filter(({ date }) => date >= today && date <= horizon)
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    // Get upcoming occurrences
+    const upcoming = getUpcomingOccurrences(recurring, today, 30);
+
+    // Clone balance map for forecast
+    const forecastBalances = { ...balanceById };
+
+    // Find non-archived accounts
+    const nonArchivedAccounts = accounts.filter((a) => !a.archived);
+    const singleAccount = nonArchivedAccounts.length === 1 ? nonArchivedAccounts[0] : null;
+
+    let unassignedCount = 0;
+
+    // Apply upcoming occurrences to forecast balances
+    for (const occ of upcoming) {
+      let targetAccountId = occ.accountId;
+
+      // If no accountId and exactly one non-archived account, assign to it
+      if (!targetAccountId && singleAccount) {
+        targetAccountId = singleAccount.id;
+      }
+
+      if (!targetAccountId) {
+        unassignedCount++;
+        continue;
+      }
+
+      // Initialize account balance if not present
+      if (forecastBalances[targetAccountId] === undefined) {
+        const acc = accounts.find((a) => a.id === targetAccountId);
+        forecastBalances[targetAccountId] = acc ? Number(acc.balance) || 0 : 0;
+      }
+
+      // Apply amount based on type
+      if (occ.type === 'expense') {
+        forecastBalances[targetAccountId] -= occ.amount;
+      } else if (occ.type === 'income') {
+        forecastBalances[targetAccountId] += occ.amount;
+      }
+    }
+
+    // Calculate forecast net worth
+    const forecastNetWorth = Object.values(forecastBalances).reduce(
+      (sum, bal) => sum + (Number(bal) || 0),
+      0
+    );
+
+    const delta = forecastNetWorth - currentNetWorth;
+
+    return {
+      currentNetWorth,
+      currentDebt,
+      forecastNetWorth,
+      delta,
+      unassignedCount,
+    };
+  }, [totalBalance, balanceById, recurring, accounts]);
+
+  // ---- Upcoming recurring (next 30 days) ----
+  const upcomingOccurrences = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return getUpcomingOccurrences(recurring, today, 30);
   }, [recurring]);
+
+  const upcomingRecurringAll = useMemo(() => {
+    // Convert to the format expected by the UI (item + date)
+    return upcomingOccurrences.map((occ) => {
+      const item = recurring.find((r) => r.id === occ.itemId);
+      if (!item) return null;
+      return { item, date: occ.dueDate };
+    }).filter((x): x is { item: RecurringItem; date: Date } => !!x);
+  }, [upcomingOccurrences, recurring]);
+
+  // ---- Upcoming totals (30 days + weekly average) ----
+  const upcomingTotals = useMemo(() => {
+    if (upcomingOccurrences.length === 0) {
+      return null;
+    }
+
+    let totalOutgoing30 = 0;
+    let totalIncoming30 = 0;
+
+    for (const occ of upcomingOccurrences) {
+      if (occ.type === 'expense') {
+        totalOutgoing30 += occ.amount;
+      } else if (occ.type === 'income') {
+        totalIncoming30 += occ.amount;
+      }
+    }
+
+    const net30 = totalIncoming30 - totalOutgoing30;
+
+    // Weekly average (30 days / 7 ≈ 4.2857 weeks)
+    const weeklyOutgoing = totalOutgoing30 / (30 / 7);
+    const weeklyIncoming = totalIncoming30 / (30 / 7);
+    const weeklyNet = weeklyIncoming - weeklyOutgoing;
+
+    return {
+      totalOutgoing30: Math.round(totalOutgoing30 * 100) / 100,
+      totalIncoming30: Math.round(totalIncoming30 * 100) / 100,
+      net30: Math.round(net30 * 100) / 100,
+      weeklyOutgoing: Math.round(weeklyOutgoing * 100) / 100,
+      weeklyIncoming: Math.round(weeklyIncoming * 100) / 100,
+      weeklyNet: Math.round(weeklyNet * 100) / 100,
+    };
+  }, [upcomingOccurrences]);
 
   const upcomingTop = useMemo(
     () => upcomingRecurringAll.slice(0, 5),
@@ -232,6 +330,48 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
         </View>
 
+        {/* ---------- Forecast Card ---------- */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Forecast (next 30 days)</Text>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Current Net Worth</Text>
+              <Text style={styles.summaryValue}>{formatMoney(forecast.currentNetWorth)}</Text>
+              {forecast.currentDebt > 0 && (
+                <Text style={styles.summarySub}>Debt: {formatMoney(forecast.currentDebt)}</Text>
+              )}
+            </View>
+
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryLabel}>Forecast Net Worth</Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  forecast.delta >= 0 ? styles.positiveText : styles.negativeText,
+                ]}
+              >
+                {formatMoney(forecast.forecastNetWorth)}
+              </Text>
+              <Text
+                style={[
+                  styles.summarySub,
+                  forecast.delta >= 0 ? styles.positiveText : styles.negativeText,
+                ]}
+              >
+                {forecast.delta >= 0 ? '+' : ''}
+                {formatMoney(forecast.delta)}
+              </Text>
+            </View>
+          </View>
+
+          {forecast.unassignedCount > 0 && (
+            <Text style={[styles.subtle, { marginTop: 8 }]}>
+              Unassigned upcoming: {forecast.unassignedCount}
+            </Text>
+          )}
+        </View>
+
         {/* ---------- Upcoming Recurring ---------- */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
@@ -247,8 +387,51 @@ export default function DashboardScreen({ navigation }: Props) {
             </Text>
           ) : (
             <>
+              {upcomingTotals && (
+                <View style={styles.upcomingTotals}>
+                  <Text style={styles.upcomingTotalsLine}>
+                    <Text style={styles.upcomingTotalsLabel}>Next 30 days: </Text>
+                    <Text style={styles.upcomingTotalsValue}>
+                      Out {formatMoney(upcomingTotals.totalOutgoing30)}
+                    </Text>
+                    <Text style={styles.upcomingTotalsSeparator}> · </Text>
+                    <Text style={styles.upcomingTotalsValue}>
+                      In {formatMoney(upcomingTotals.totalIncoming30)}
+                    </Text>
+                    <Text style={styles.upcomingTotalsSeparator}> · </Text>
+                    <Text
+                      style={[
+                        styles.upcomingTotalsValue,
+                        upcomingTotals.net30 >= 0 ? styles.positiveText : styles.negativeText,
+                      ]}
+                    >
+                      Net {formatMoney(upcomingTotals.net30)}
+                    </Text>
+                  </Text>
+                  <Text style={[styles.upcomingTotalsLine, { marginTop: 4 }]}>
+                    <Text style={styles.upcomingTotalsLabel}>Avg per week: </Text>
+                    <Text style={styles.upcomingTotalsValue}>
+                      Out {formatMoney(upcomingTotals.weeklyOutgoing)}
+                    </Text>
+                    <Text style={styles.upcomingTotalsSeparator}> · </Text>
+                    <Text style={styles.upcomingTotalsValue}>
+                      In {formatMoney(upcomingTotals.weeklyIncoming)}
+                    </Text>
+                    <Text style={styles.upcomingTotalsSeparator}> · </Text>
+                    <Text
+                      style={[
+                        styles.upcomingTotalsValue,
+                        upcomingTotals.weeklyNet >= 0 ? styles.positiveText : styles.negativeText,
+                      ]}
+                    >
+                      Net {formatMoney(upcomingTotals.weeklyNet)}
+                    </Text>
+                  </Text>
+                </View>
+              )}
+
               {upcomingTop.map(({ item, date }) => (
-                <View key={item.id} style={styles.upcomingRow}>
+                <View key={`${item.id}-${date.getTime()}`} style={styles.upcomingRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.upcomingTitle}>
                       {item.title ||
@@ -531,6 +714,27 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // UPCOMING TOTALS
+  upcomingTotals: {
+    marginTop: 8,
+    marginBottom: 8,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
+  },
+  upcomingTotalsLine: {
+    fontSize: 12,
+  },
+  upcomingTotalsLabel: {
+    color: theme.textDim,
+  },
+  upcomingTotalsValue: {
+    color: theme.text,
+    fontWeight: '600',
+  },
+  upcomingTotalsSeparator: {
+    color: theme.textDim,
+  },
   // UPCOMING ROWS
   upcomingRow: {
     flexDirection: 'row',

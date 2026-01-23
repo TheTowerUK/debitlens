@@ -166,6 +166,55 @@ function isArray<T = any>(v: any): v is T[] {
   return Array.isArray(v);
 }
 
+/**
+ * Safely parses a YYYY-MM-DD date string as a local date (avoids timezone shifts).
+ */
+function parseYMDLocal(ymd: string): Date | null {
+  const m = String(ymd || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const dt = new Date(y, mo, d);
+  dt.setHours(0, 0, 0, 0);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
+/**
+ * Formats a Date to YYYY-MM-DD string.
+ */
+function formatYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Advances a date by the given frequency.
+ */
+function advanceDateByFrequency(date: Date, frequency: RecurringFrequency): Date {
+  const d = new Date(date);
+  switch (frequency) {
+    case 'daily':
+      d.setDate(d.getDate() + 1);
+      break;
+    case 'weekly':
+      d.setDate(d.getDate() + 7);
+      break;
+    case 'fortnightly':
+      d.setDate(d.getDate() + 14);
+      break;
+    case 'monthly':
+      d.setMonth(d.getMonth() + 1);
+      break;
+    case 'yearly':
+      d.setFullYear(d.getFullYear() + 1);
+      break;
+  }
+  return d;
+}
+
 /* =====================
    Provider
 ===================== */
@@ -209,6 +258,105 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addTransaction: (input) => {
         const txn: Transaction = { ...input, id: uuid() };
         setTransactions((prev) => [...prev, txn]);
+
+        // Auto-advance recurring items when transaction matches
+        setRecurring((prevRecurring) => {
+          // Only consider income/expense transactions (ignore transfer)
+          if (txn.type === 'transfer') {
+            return prevRecurring;
+          }
+
+          const txnDate = parseYMDLocal(txn.date);
+          if (!txnDate) {
+            return prevRecurring;
+          }
+
+          const txnAmount = Math.abs(Number(txn.amount) || 0);
+          if (txnAmount === 0) {
+            return prevRecurring;
+          }
+
+          // Find matching recurring items
+          const candidates: Array<{
+            item: RecurringItem;
+            amountDiff: number;
+            dateDiff: number;
+          }> = [];
+
+          for (const item of prevRecurring) {
+            // Only consider active items
+            if (item.active === false) continue;
+
+            // Only consider income/expense (ignore transfer)
+            if (item.type !== 'income' && item.type !== 'expense') continue;
+
+            // Type must match
+            if (item.type !== txn.type) continue;
+
+            // AccountId must match if present on recurring item
+            if (item.accountId && item.accountId !== txn.accountId) continue;
+
+            // Amount must match within tolerance
+            const itemAmount = Math.abs(Number(item.amount) || 0);
+            if (itemAmount === 0) continue;
+
+            const amountDiff = Math.abs(txnAmount - itemAmount);
+            const tolerance = Math.max(0.75, itemAmount * 0.03);
+            if (amountDiff > tolerance) continue;
+
+            // Date must be within ±3 days window
+            const itemDueDate = parseYMDLocal(item.nextDueDate);
+            if (!itemDueDate) continue;
+
+            const dateDiffMs = Math.abs(txnDate.getTime() - itemDueDate.getTime());
+            const dateDiffDays = dateDiffMs / (1000 * 60 * 60 * 24);
+            if (dateDiffDays > 3) continue;
+
+            candidates.push({
+              item,
+              amountDiff,
+              dateDiff: dateDiffDays,
+            });
+          }
+
+          // If no matches, return unchanged
+          if (candidates.length === 0) {
+            return prevRecurring;
+          }
+
+          // Choose best match: smallest amount difference, then smallest date difference
+          candidates.sort((a, b) => {
+            if (a.amountDiff !== b.amountDiff) {
+              return a.amountDiff - b.amountDiff;
+            }
+            return a.dateDiff - b.dateDiff;
+          });
+
+          const bestMatch = candidates[0].item;
+          const frequency = bestMatch.frequency || 'monthly';
+
+          // Advance nextDueDate forward by frequency until it's after the transaction date
+          let nextDue = parseYMDLocal(bestMatch.nextDueDate);
+          if (!nextDue) {
+            return prevRecurring;
+          }
+
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // Advance until it's after the transaction date (or at least >= today)
+          while (nextDue <= txnDate || nextDue < today) {
+            nextDue = advanceDateByFrequency(nextDue, frequency);
+          }
+
+          const newNextDueDate = formatYMD(nextDue);
+
+          // Update the recurring item
+          return prevRecurring.map((r) =>
+            r.id === bestMatch.id ? { ...r, nextDueDate: newNextDueDate } : r
+          );
+        });
+
         return txn;
       },
       updateTransaction: (id, patch) => {
