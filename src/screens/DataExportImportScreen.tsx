@@ -2,7 +2,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,9 +30,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as theme } from '../theme/colors';
 
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
-import type { ImportRow } from '../utils/validation';
-
-import { importCsvRowsWithValidation, alertImportSummary } from '../utils/importCsv';
 
 const FS: any = FileSystem as any;
 const norm = (s: string) => s.trim().toLowerCase();
@@ -268,45 +264,6 @@ type CsvImportStats = {
 
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
 
-  function limitLines(text: string, maxLines: number) {
-    const lines = String(text || '').split(/\r?\n/);
-    if (lines.length <= maxLines) return { text: String(text || ''), truncated: false, total: lines.length };
-    return {
-      text: lines.slice(0, maxLines).join('\n'),
-      truncated: true,
-      total: lines.length,
-    };
-  }
-
-  function PreviewText({
-    enabled,
-    text,
-    maxLines,
-    style,
-    hintStyle,
-  }: {
-    enabled: boolean;
-    text: string;
-    maxLines: number;
-    style: any;
-    hintStyle: any;
-  }) {
-    if (!enabled || !text) return null;
-    const limited = limitLines(text, maxLines);
-    return (
-      <>
-        <Text selectable style={style}>
-          {limited.text}
-        </Text>
-        {limited.truncated ? (
-          <Text style={hintStyle}>Preview truncated: {limited.total} total lines.</Text>
-        ) : null}
-      </>
-    );
-  }
-
-
-
 export default function DataExportImportScreen(_props: Props) {
 
   const { state, actions } = useApp();
@@ -449,15 +406,9 @@ export default function DataExportImportScreen(_props: Props) {
   }, [accounts]);
 
   const [exportCsvText, setExportCsvText] = useState<string>('');
-  const [csvExportPreview, setCsvExportPreview] = useState<string>('');
-  const [csvExportPreviewSourceName, setCsvExportPreviewSourceName] = useState<string>('');
+  const [templateCsvText, setTemplateCsvText] = useState<string>('');
 
-  // Track generation states for visual feedback
-  const isTemplateGenerated = useMemo(() => {
-    return !!csvExportPreview && 
-           ((csvExportPreviewSourceName || '').toLowerCase().includes('template') ||
-            csvExportPreview.startsWith('Date,Account,Amount,Description,Merchant,Category,Type'));
-  }, [csvExportPreview, csvExportPreviewSourceName]);
+  const isTemplateGenerated = useMemo(() => !!templateCsvText.trim(), [templateCsvText]);
 
   const isTransactionsCsvGenerated = useMemo(() => {
     return !!exportCsvText.trim();
@@ -465,29 +416,20 @@ export default function DataExportImportScreen(_props: Props) {
 
   const handleGenerateCsvTemplate = useCallback(() => {
     const csv = buildCsvTemplate();
-    setCsvExportPreview(csv);
-    setCsvExportPreviewSourceName('DebitLens CSV Template');
+    setTemplateCsvText(csv);
     setLastStatus('Template generated. You can now export/share it.');
   }, []);
 
   const handleExportCsvPreview = async () => {
     try {
-      if (!csvExportPreview.trim()) {
+      if (!templateCsvText.trim()) {
         Alert.alert('CSV not ready', 'Generate the template first.');
         setLastStatus('CSV not ready. Generate template first.');
         return;
       }
-
-      const isTemplate =
-        (csvExportPreviewSourceName || '').toLowerCase().includes('template') ||
-        csvExportPreview.startsWith('Date,Account,Amount,Description,Category,Type');
-
-      const filename = isTemplate
-        ? 'DebitLens-CSV-Template.csv'
-        : `DebitLens_CSV_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
-
-      await writeAndShareFile(filename, csvExportPreview, 'text/csv');
-      setLastStatus(isTemplate ? 'CSV template exported to Files (via Share).' : 'CSV exported to Files (via Share).');
+      const filename = 'DebitLens-CSV-Template.csv';
+      await writeAndShareFile(filename, templateCsvText, 'text/csv');
+      setLastStatus('CSV template exported to Files (via Share).');
     } catch (err: any) {
       console.error(err);
       setLastStatus(`CSV export failed: ${String(err?.message ?? err)}`);
@@ -567,18 +509,12 @@ export default function DataExportImportScreen(_props: Props) {
   const [importCsvText, setImportCsvText] = useState<string>('');
   const [csvHasHeaderRow, setCsvHasHeaderRow] = useState<boolean>(true);
 
-  const [csvPreview, setCsvPreview] = useState<string>('');
-  const [csvPreviewSourceName, setCsvPreviewSourceName] = useState<string>('');
-
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
   const [importSource, setImportSource] = useState<'manual' | 'file' | null>(null);
 
   const [csvRestoreMode, setCsvRestoreMode] = useState<RestoreMode>('merge');
   const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
-
-  const [showCsvPreview, setShowCsvPreview] = useState(false);
-  const [previewMaxLines, setPreviewMaxLines] = useState(100);
 
   useEffect(() => {
     (async () => {
@@ -590,17 +526,6 @@ export default function DataExportImportScreen(_props: Props) {
       }
     })();
   }, []);
-
-  const knownAccountNames = useMemo(
-    () =>
-      new Set(
-        accounts
-          .map((a) => (a?.name ? a.name.trim().toLowerCase() : ''))
-          .filter(Boolean)
-      ),
-    [accounts]
-  );
-
 
   const handlePickCsvFile = async () => {
     try {
@@ -618,12 +543,9 @@ export default function DataExportImportScreen(_props: Props) {
 
       setImportCsvText(picked.text);
       setImportSource('file');
-
-      setCsvPreview('');
-      setCsvPreviewSourceName('');
       setLastImportSummary('');
 
-      setLastStatus(`Loaded CSV from file: ${picked.filename}. Preview, import, or restore it.`);
+      setLastStatus(`Loaded CSV from file: ${picked.filename}. Import or restore it.`);
     } catch (err: any) {
       console.error('Error picking CSV file', err);
       Alert.alert('File error', 'Something went wrong while reading the CSV file.');
@@ -631,291 +553,6 @@ export default function DataExportImportScreen(_props: Props) {
     }
   };
 
-const handleImportCsvPress = async () => {
-  if (!importCsvText.trim()) {
-    setLastStatus('Paste CSV text or pick a file first.');
-    return;
-  }
-
-  try {
-    // 1) Parse rows again (import should not depend on preview state)
-    const rows = parseCsvLines(importCsvText);
-    if (!rows.length) {
-      setLastStatus('CSV parsed but contains no rows.');
-      return;
-    }
-
-    const [firstRow, ...restRows] = rows;
-    let dataRows = rows;
-    let headerRow: string[] | null = null;
-
-    if (csvHasHeaderRow) {
-      headerRow = firstRow;
-      dataRows = restRows;
-    }
-
-    // 2) Detect columns (same logic as preview)
-    let accountColIndex = -1;
-    let categoryColIndex = -1;
-    let amountColIndex = -1;
-    let dateColIndex = -1;
-    let descColIndex = -1;
-    let merchantColIndex = -1;
-
-    if (headerRow) {
-      const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
-      const findOneOf = (candidates: string[]) =>
-        headerLower.findIndex((h) => candidates.includes(h));
-
-      dateColIndex = findOneOf(['date', 'txn_date', 'transaction_date', 'tx_date']);
-      accountColIndex = findOneOf(['account', 'account_name', 'account name']);
-      amountColIndex = findOneOf(['amount', 'value', 'amt']);
-      descColIndex = findOneOf([
-        'description',
-        'desc',
-        'details',
-        'note',
-      ]);
-      merchantColIndex = findOneOf(['merchant', 'payee', 'name']);
-      categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
-    }
-
-    // 3) Build accountName -> accountId map from existing accounts
-    const accountNameToId = new Map<string, string>();
-    for (const a of accounts) {
-      const n = (a?.name ?? '').trim();
-      if (n) accountNameToId.set(n, a.id);
-    }
-
-    // Local helper: resolve account name to id (optionally auto-create)
-    let createdAccounts = 0;
-
-    const resolveAccountId = (rawName: unknown): string => {
-      const displayName = String(rawName ?? '').trim();
-      if (!displayName) return '';
-
-      const key = norm(displayName);
-
-      const existing = accountNameToId.get(key);
-      if (existing) return existing;
-
-      if (!createMissingAccounts) return '';
-
-      const newAcc = actions.addAccount({ name: displayName } as any);
-      createdAccounts += 1;
-
-      accountNameToId.set(key, newAcc.id);
-      return newAcc.id;
-    };
-
-
-    // 4) Map CSV rows -> ImportRow with resolved accountId
-    // If detection fails, fallback to assumed order:
-    // date | account | amount | description | merchant | category
-    const fallback = {
-      date: 0,
-      account: 1,
-      amount: 2,
-      desc: 3,
-      merchant: 4,
-      category: 5,
-    };
-
-    const getCell = (row: string[], idx: number) =>
-      idx >= 0 && idx < row.length ? row[idx] : '';
-
-    const parsedRows: ImportRow[] = dataRows.map((r) => {
-      const dateCell = getCell(r, dateColIndex >= 0 ? dateColIndex : fallback.date);
-      const accountCell = getCell(r, accountColIndex >= 0 ? accountColIndex : fallback.account);
-      const amountCell = getCell(r, amountColIndex >= 0 ? amountColIndex : fallback.amount);
-      const descCell = getCell(r, descColIndex >= 0 ? descColIndex : fallback.desc);
-      const merchantCell = getCell(r, merchantColIndex >= 0 ? merchantColIndex : fallback.merchant);
-      const categoryCell = getCell(r, categoryColIndex >= 0 ? categoryColIndex : fallback.category);
-
-      const accountId = resolveAccountId(accountCell);
-
-      return {
-        date: dateCell,
-        accountId, // now mapped or newly created
-        amount: amountCell,
-        description: descCell,
-        merchant: merchantCell || undefined,
-        category: categoryCell,
-        // type omitted -> inferred from amount sign (warning)
-      };
-    });
-
-    // 5) Import with validation + transparency
-    const knownIds = new Set(accounts.map((a) => a.id));
-    for (const id of accountNameToId.values()) knownIds.add(id);
-
-    const summary = importCsvRowsWithValidation({
-      rows: parsedRows,
-      accounts: Array.from(knownIds).map((id) => ({ id })),
-      actions,
-    });
-
-
-    // 6) User feedback + persistence
-    const createdNote = createdAccounts > 0 ? ` Created ${createdAccounts} new account(s).` : '';
-    setLastImportSummary(
-      `Imported ${summary.imported}, skipped ${summary.skipped}, warnings ${summary.warnings.length}, errors ${summary.errors.length}.${createdNote}`
-    );
-
-    alertImportSummary(summary);
-
-    const stats: CsvImportStats = {
-      imported: summary.imported,
-      skipped: summary.skipped,
-      warnings: summary.warnings.length,
-      errors: summary.errors.length,
-      source: importSource ?? 'manual',
-      mode: 'import',
-      at: new Date().toISOString(),
-      createdAccounts, // extra field (safe if your type allows; otherwise remove)
-    } as any;
-
-    setLastCsvStats(stats);
-    try {
-      await AsyncStorage.setItem(CSV_STATS_KEY, JSON.stringify(stats));
-    } catch {
-      // ignore
-    }
-
-    setLastStatus('CSV import complete. Review results above.');
-  } catch (err: any) {
-    console.error(err);
-    Alert.alert('CSV import error', 'Something went wrong while importing the CSV.');
-    setLastStatus(`CSV import error: ${String(err?.message ?? err)}`);
-  }
-};
-
-
-
-  const handleParseCsvPress = () => {
-    if (!importCsvText.trim()) {
-      setLastStatus('Paste CSV text or pick a file first.');
-      return;
-    }
-
-    try {
-      const rows = parseCsvLines(importCsvText);
-
-      if (!rows.length) {
-        setLastStatus('CSV parsed but contains no rows.');
-        setCsvPreview('');
-        setCsvPreviewSourceName('');
-        setLastImportSummary('');
-        return;
-      }
-
-      const [firstRow, ...restRows] = rows;
-      let dataRows = rows;
-      let headerRow: string[] | null = null;
-
-      if (csvHasHeaderRow) {
-        headerRow = firstRow;
-        dataRows = restRows;
-      }
-
-      let accountColIndex = -1;
-      let categoryColIndex = -1;
-      let amountColIndex = -1;
-      let dateColIndex = -1;
-      let descColIndex = -1;
-      let merchantColIndex = -1;
-
-      if (headerRow) {
-        const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
-        const findOneOf = (candidates: string[]) => headerLower.findIndex((h) => candidates.includes(h));
-
-        dateColIndex = findOneOf(['date', 'txn_date', 'transaction_date', 'tx_date']);
-        accountColIndex = findOneOf(['account', 'account_name', 'account name']);
-        amountColIndex = findOneOf(['amount', 'value', 'amt']);
-        descColIndex = findOneOf(['description', 'desc', 'details', 'note']);
-        merchantColIndex = findOneOf(['merchant', 'payee', 'name']);
-        categoryColIndex = findOneOf(['category', 'cat', 'category_name', 'category name']);
-      }
-
-      const maxPreviewRows = 5;
-      const previewRows = dataRows.slice(0, maxPreviewRows);
-
-      const previewLines: string[] = [];
-      if (headerRow) previewLines.push('HEADER: ' + headerRow.join(' | '));
-      else previewLines.push('No header row (First row is header = OFF)');
-
-      previewLines.push('--- Sample rows ---');
-      for (const row of previewRows) previewLines.push(row.join(' | '));
-      if (dataRows.length > maxPreviewRows) previewLines.push(`…plus ${dataRows.length - maxPreviewRows} more rows`);
-
-      setCsvPreview(previewLines.join('\n'));
-
-      if (accountColIndex >= 0) {
-        let matchedCount = 0;
-        let unknownCount = 0;
-
-        // Collect unique unknown accounts (preserve a “nice” display name)
-        const unknownKeyToDisplay = new Map<string, string>();
-
-        for (const row of dataRows) {
-          if (accountColIndex >= row.length) continue;
-
-          const raw = String(row[accountColIndex] ?? '');
-          const displayName = raw.trim();
-          if (!displayName) continue;
-
-          const key = displayName.toLowerCase();
-
-          if (knownAccountNames.has(key)) {
-            matchedCount++;
-          } else {
-            unknownCount++;
-            // store first-seen casing for display
-            if (!unknownKeyToDisplay.has(key)) unknownKeyToDisplay.set(key, displayName);
-          }
-        }
-
-        // Build preview text
-        const bits: string[] = [];
-        bits.push(
-          `Detected account column at index ${accountColIndex}. Known: ${matchedCount}. Unknown: ${unknownCount}.`
-        );
-        bits.push(categoryColIndex >= 0 ? `Category col: ${categoryColIndex}.` : `No category column detected.`);
-        bits.push(dateColIndex >= 0 ? `Date col: ${dateColIndex}.` : `No date col detected.`);
-        bits.push(amountColIndex >= 0 ? `Amount col: ${amountColIndex}.` : `No amount col detected.`);
-        bits.push(descColIndex >= 0 ? `Description col: ${descColIndex}.` : `No description col detected.`);
-        bits.push(createMissingAccounts ? 'Unknown accounts will be created.' : 'Unknown accounts will be skipped.');
-
-        // Add unknown account list (first 10)
-        const unknownList = Array.from(unknownKeyToDisplay.values()).sort((a, b) => a.localeCompare(b));
-        if (unknownList.length > 0) {
-          const first10 = unknownList.slice(0, 10);
-          bits.push(`Unknown accounts (unique): ${unknownList.length}.`);
-          bits.push(`First ${first10.length}: ${first10.join(', ')}`);
-          if (unknownList.length > first10.length) {
-            bits.push(`…plus ${unknownList.length - first10.length} more`);
-          }
-        }
-
-        setCsvPreviewSourceName(bits.join(' '));
-      } else {
-        setCsvPreviewSourceName(
-          'No obvious account column detected in header. You can still import/restore, but rows must map correctly by column order.'
-        );
-      }
-
-
-      setLastImportSummary('');
-      setLastStatus('CSV parsed successfully. Review preview, then apply import or restore.');
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('CSV parse error', 'Something went wrong while parsing the CSV text.');
-      setLastStatus(`CSV parse error: ${String(err?.message ?? err)}`);
-      setCsvPreview('');
-      setCsvPreviewSourceName('');
-      setLastImportSummary('');
-    }
-  };
 
   const persistCsvStats = async (stats: CsvImportStats) => {
     try {
@@ -1725,22 +1362,6 @@ const handleImportCsvPress = async () => {
           </Text>
         </Pressable>
 
-        {showCsvPreview && csvExportPreview ? (() => {
-          const limited = limitLines(csvExportPreview, previewMaxLines);
-          return (
-            <View style={styles.textBox}>
-              <Text style={styles.textBoxLabel}>
-                {csvExportPreviewSourceName || 'CSV preview'} (showing up to {previewMaxLines} lines)
-              </Text>
-              <ScrollView style={styles.textBoxScroll}>
-                <Text selectable style={styles.monoText}>{limited.text}</Text>
-              </ScrollView>
-              {limited.truncated ? (
-                <Text style={styles.hint}>Preview truncated: {limited.total} total lines.</Text>
-              ) : null}
-            </View>
-          );
-        })() : null}
       </View>
 
       {/* EXPORT TRANSACTIONS */}
@@ -1787,29 +1408,13 @@ const handleImportCsvPress = async () => {
           </Text>
         </Pressable>
 
-        {showCsvPreview && exportCsvText ? (() => {
-          const limited = limitLines(exportCsvText, previewMaxLines);
-          return (
-            <View style={styles.textBox}>
-              <Text style={styles.textBoxLabel}>
-                Generated transactions CSV (showing up to {previewMaxLines} lines)
-              </Text>
-              <ScrollView style={styles.textBoxScroll}>
-                <Text selectable style={styles.monoText}>{limited.text}</Text>
-              </ScrollView>
-              {limited.truncated ? (
-                <Text style={styles.hint}>Preview truncated: {limited.total} total lines.</Text>
-              ) : null}
-            </View>
-          );
-        })() : null}
       </View>
 
       {/* CSV IMPORT + RESTORE */}
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV import / restore</Text>
         <Text style={styles.sectionText}>
-          Pick a CSV file or paste CSV text below. Preview it, then import (append) or restore (replace/merge).
+          Pick a CSV file or paste CSV text below. Import (append) or restore (replace/merge).
         </Text>
 
         <View style={styles.optionRow}>
@@ -1841,12 +1446,6 @@ const handleImportCsvPress = async () => {
           </Pressable>
         </View>
 
-        <View style={styles.optionRow}>
-          <Text style={styles.optionLabel}>Show previews (capped)</Text>
-          <Switch value={showCsvPreview} onValueChange={setShowCsvPreview} />
-        </View>
-
-
         <Text style={{ height: 12 }} />
 
         <Text style={styles.textBoxLabel}>Or paste CSV text below.</Text>
@@ -1866,38 +1465,10 @@ const handleImportCsvPress = async () => {
         />
 
         <View style={styles.rowButtons}>
-          <Pressable style={styles.btnSecondary} onPress={handleParseCsvPress}>
-            <Text style={styles.btnSecondaryText}>Preview CSV</Text>
-          </Pressable>
-
           <Pressable style={styles.btnDestructive} onPress={handleApplyCsvImportPress}>
             <Text style={styles.btnDestructiveText}>Apply CSV import</Text>
           </Pressable>
         </View>
-
-        {showCsvPreview && csvPreview ? (() => {
-          const limited = limitLines(csvPreview, previewMaxLines);
-          return (
-            <View style={styles.previewBox}>
-              <Text style={styles.sectionTitle}>CSV preview (read-only)</Text>
-              {csvPreviewSourceName ? <Text style={styles.previewMeta}>{csvPreviewSourceName}</Text> : null}
-
-              <View style={styles.previewScroll}>
-                <Text selectable style={styles.previewText}>
-                  {limited.text}
-                </Text>
-              </View>
-
-              {limited.truncated ? (
-                <Text style={styles.hint}>
-                  Preview truncated: {limited.total} total lines. Export/view the file to see everything.
-                </Text>
-              ) : null}
-            </View>
-          );
-        })() : null}
-
-
 
         {lastCsvStats ? (
           <View style={styles.statusBox}>
@@ -2037,20 +1608,7 @@ const styles = StyleSheet.create({
   },
   optionLabel: { color: '#D1D5DB', flex: 1, marginRight: 8 },
 
-  textBox: { marginTop: 10, maxHeight: 260 },
   textBoxLabel: { color: theme.textDim, marginBottom: 4 },
-  textBoxScroll: {
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 8,
-    padding: 8,
-    backgroundColor: '#020617',
-  },
-  monoText: {
-    color: '#E5E7EB',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }) as string,
-    fontSize: 12,
-  },
 
   input: {
     borderWidth: 1,
@@ -2084,12 +1642,6 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   previewMeta: { color: theme.textDim, fontSize: 12, marginBottom: 8 },
-  previewScroll: { maxHeight: 200 },
-  previewText: {
-    color: '#E5E7EB',
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' }),
-    fontSize: 12,
-  },
 
   hint: { color: theme.textDim, opacity: 0.7, marginTop: 6 },
   statusHint: {
