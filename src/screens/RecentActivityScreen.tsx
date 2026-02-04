@@ -11,14 +11,28 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import type { Account } from '../state/AppContext';
 import { formatDateDDMMYYYY } from '../utils/formatDate';
 import { colors as theme } from '../theme/colors';
+import {
+  getSignedAmountForAccount,
+  isTransfer,
+  getTransferLabelAndNoteGlobal,
+} from '../utils/txDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RecentActivity'>;
 
 const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
   const { state } = useApp();
   const txs = state.transactions ?? [];
+
+  const accountsById = useMemo(() => {
+    const map: Record<string, Account> = {};
+    (state.accounts ?? []).forEach((a) => {
+      map[a.id] = a;
+    });
+    return map;
+  }, [state.accounts]);
 
   const sortedTxs = useMemo(() => {
     const copy = [...txs];
@@ -50,10 +64,18 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => {
-            const isIncome = item.type === 'income';
-            const sign = isIncome ? '+' : '-';
-            const label = item.category || 'Uncategorised';
-            const note = item.description || '';
+            const isTransferTx = isTransfer(item);
+            const signed = getSignedAmountForAccount(item, undefined);
+            const { label, note } = isTransferTx
+              ? getTransferLabelAndNoteGlobal(item, accountsById)
+              : {
+                  label: item.category || 'Uncategorised',
+                  note: item.description || '',
+                };
+
+            const amountText = `£${Math.abs(Number(item.amount) || 0).toFixed(2)}`;
+            const signChar = !isTransferTx ? (signed > 0 ? '+' : signed < 0 ? '-' : '') : '';
+
             return (
               <Pressable
                 style={styles.txRow}
@@ -73,10 +95,14 @@ const RecentActivityScreen: React.FC<Props> = ({ navigation }) => {
                 <Text
                   style={[
                     styles.txAmount,
-                    isIncome ? styles.incomeText : styles.expenseText,
+                    isTransferTx
+                      ? undefined
+                      : signed > 0
+                        ? styles.incomeText
+                        : styles.expenseText,
                   ]}
                 >
-                  {sign}£{Number(item.amount).toFixed(2)}
+                  {isTransferTx ? amountText : `${signChar}${amountText}`}
                 </Text>
               </Pressable>
             );

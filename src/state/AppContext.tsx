@@ -34,6 +34,9 @@ export type Transaction = {
   description?: string;
   name?: string;
   merchant?: string;
+  // Transfer-only (when type === 'transfer'):
+  fromAccountId?: string;   // source account
+  toAccountId?: string;    // destination account
 };
 
 
@@ -67,8 +70,7 @@ export type RecurringItem = {
   // Non-transfer recurring uses accountId
   accountId?: string;
 
-  // Some screens expect transfer flags/fields
-  isTransfer?: boolean;
+  // Transfer (when applicable):
   fromAccountId?: string;
   toAccountId?: string;
 };

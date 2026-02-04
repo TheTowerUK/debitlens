@@ -120,6 +120,9 @@ export default function SettingsScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             await actions.resetApp();
+            try {
+              await AsyncStorage.removeItem('@debitlens/whereToStartSeen:v1');
+            } catch {}
             navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
           },
         },
@@ -183,6 +186,48 @@ export default function SettingsScreen({ navigation }: Props) {
           ) : null}
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Help & Guide</Text>
+          <Text style={styles.sectionText}>
+            Not sure where to start? This guide explains the Dashboard, accounts, transactions, and recurring payments.
+          </Text>
+          <Pressable
+            style={[styles.btn, styles.btnGhost]}
+            onPress={() => navigation.navigate('Help')}
+          >
+            <Text style={styles.btnText}>Open guide</Text>
+          </Pressable>
+          <Text style={[styles.helper, { marginTop: 8 }]}>
+            Takes about 1–2 minutes to read.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>About DebitLens</Text>
+          <Text style={styles.sectionText}>
+            Philosophy, focus, and how we handle your data.
+          </Text>
+          <Pressable
+            style={[styles.btn, styles.btnGhost]}
+            onPress={() => navigation.navigate('About')}
+          >
+            <Text style={styles.btnText}>About</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Privacy Policy</Text>
+          <Text style={styles.sectionText}>
+            How DebitLens stores and handles data.
+          </Text>
+          <Pressable
+            style={[styles.btn, styles.btnGhost]}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+          >
+            <Text style={styles.btnText}>Privacy Policy</Text>
+          </Pressable>
+        </View>
+
         {/* Danger Zone */}
         <View style={styles.dangerZone}>
           <Text style={styles.dangerZoneTitle}>Danger zone</Text>
@@ -198,7 +243,7 @@ export default function SettingsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   safeWrap: {
     flex: 1,
-    backgroundColor: '#0B0D13',
+    backgroundColor: theme.bg,
   },
   wrap: { flex: 1 },
   content: {
@@ -215,6 +260,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   sectionTitle: { color: '#fff', fontWeight: '800', marginBottom: 12 },
+  sectionText: { color: theme.textDim, fontSize: 13, marginBottom: 10 },
 
   row: {
     flexDirection: 'row',

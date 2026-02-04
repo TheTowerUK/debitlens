@@ -4,7 +4,13 @@ import { View, Text, StyleSheet, Pressable, FlatList, Switch, Alert } from 'reac
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import type { Account } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+import {
+  getSignedAmountForAccount,
+  isTransfer,
+  getTransferLabelAndNoteForAccount,
+} from '../utils/txDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
@@ -18,12 +24,28 @@ export default function AccountScreen({ navigation, route }: Props) {
   const account =
     accounts.find((a: any) => a.id === accountId) || accounts[0];
 
-  const accountTxs = useMemo(
-    () => (account ? txs.filter((t) => t.accountId === account.id) : []),
-    [txs, account]
-  );
+  const accountsById = useMemo(() => {
+    const map: Record<string, Account> = {};
+    (state.accounts ?? []).forEach((a) => {
+      map[a.id] = a;
+    });
+    return map;
+  }, [state.accounts]);
 
-  // Summary totals
+  const accountTxs = useMemo(() => {
+    if (!account?.id) return [];
+    const id = account.id;
+    return (txs ?? []).filter((t) => {
+      if (t.type === 'transfer') {
+        const fromId = t.fromAccountId ?? t.accountId;
+        const toId = t.toAccountId;
+        return fromId === id || toId === id;
+      }
+      return t.accountId === id;
+    });
+  }, [txs, account?.id]);
+
+  // Summary totals (transfers: subtract if from, add if to)
   const { income, expense, netFromTxs } = useMemo(() => {
     let income = 0;
     let expense = 0;
@@ -31,9 +53,13 @@ export default function AccountScreen({ navigation, route }: Props) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') income += amt;
       else if (t.type === 'expense') expense += amt;
+      else if (t.type === 'transfer' && account) {
+        if (t.fromAccountId === account.id) expense += amt;
+        else if (t.toAccountId === account.id) income += amt;
+      }
     }
     return { income, expense, netFromTxs: income - expense };
-  }, [accountTxs]);
+  }, [accountTxs, account]);
 
   const [showRunningBalance, setShowRunningBalance] = useState(false);
 
@@ -70,6 +96,10 @@ export default function AccountScreen({ navigation, route }: Props) {
       const amt = Number(t.amount) || 0;
       if (t.type === 'income') running += amt;
       else if (t.type === 'expense') running -= amt;
+      else if (t.type === 'transfer' && account) {
+        if (t.fromAccountId === account.id) running -= amt;
+        else if (t.toAccountId === account.id) running += amt;
+      }
 
       map[t.id] = running; // Balance AFTER this txn
     }
@@ -218,10 +248,16 @@ export default function AccountScreen({ navigation, route }: Props) {
           keyExtractor={(t) => t.id}
           contentContainerStyle={{ paddingBottom: 32 }}
           renderItem={({ item }) => {
-            const isIncome = item.type === 'income';
-            const sign = isIncome ? '+' : '-';
-            const label = item.category || 'Uncategorised';
-            const note = item.description || '';
+            const signed = getSignedAmountForAccount(item, account?.id);
+            const sign = signed > 0 ? '+' : signed < 0 ? '-' : '';
+            const isTransferTx = isTransfer(item);
+            const { label, note } =
+              isTransferTx && account?.id
+                ? getTransferLabelAndNoteForAccount(item, account.id, accountsById)
+                : {
+                    label: item.category || 'Uncategorised',
+                    note: item.description || '',
+                  };
             const balAfter = balanceAfterMap[item.id];
 
             return (
@@ -239,10 +275,14 @@ export default function AccountScreen({ navigation, route }: Props) {
                   <Text
                     style={[
                       styles.txAmount,
-                      isIncome ? styles.incomeText : styles.expenseText,
+                      signed > 0
+                        ? styles.incomeText
+                        : signed < 0
+                          ? styles.expenseText
+                          : undefined,
                     ]}
                   >
-                    {sign}£{Number(item.amount).toFixed(2)}
+                    {sign}£{Math.abs(signed).toFixed(2)}
                   </Text>
 
                   {showRunningBalance ? (

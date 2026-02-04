@@ -14,4 +14,7 @@ declare global {
 
   // optional: runtime handler for unhandled promise rejections
   var onunhandledrejection: ((event: any) => void) | undefined;
+
+  // React Native development mode flag
+  var __DEV__: boolean | undefined;
 }

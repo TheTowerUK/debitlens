@@ -1,18 +1,21 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo, useLayoutEffect, useCallback } from 'react';
+import React, { useMemo, useLayoutEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
-  Pressable,  
+  Pressable,
+  Animated,
+  AccessibilityInfo,
 } from 'react-native';
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getUpcomingOccurrences } from '../utils/recurring';
+import { getUpcomingOccurrencesWithStats } from '../utils/recurring';
 import { getOccurrenceDisplay, type AccountLite } from '../utils/occurrenceDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
@@ -23,6 +26,17 @@ export default function DashboardScreen({ navigation }: Props) {
   const txs = state.transactions || [];
   const recurring: RecurringItem[] = state.recurring || [];
   const budgets = state.budgets || [];
+  const noAccounts = accounts.length === 0;
+
+  const STORAGE_KEY_WHERE_TO_START = '@debitlens/whereToStartSeen:v1';
+  const [showWhereToStart, setShowWhereToStart] = React.useState(false);
+  const [reducedMotion, setReducedMotion] = React.useState(true); // assume enabled until we know
+  const pulse = useRef(new Animated.Value(0)).current;
+  const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  React.useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
+  }, []);
 
   // Build account lookup map (lightweight for display)
   const accountById = useMemo(() => {
@@ -54,17 +68,22 @@ export default function DashboardScreen({ navigation }: Props) {
       map[acc.id] = Number(acc.balance) || 0;
     }
 
-    // Apply transaction deltas
+    // Apply transaction deltas (do NOT rely on accountId for transfers)
     for (const t of txs) {
-      const id = t?.accountId;
-      if (!id) continue;
-
       const amt = Number(t.amount) || 0;
-      if (map[id] === undefined) map[id] = 0;
 
-      if (t.type === 'income') map[id] += amt;
-      else if (t.type === 'expense') map[id] -= amt;
-      // transfer handling can be added later if you model it as paired txs
+      if (t.type === 'transfer' && t.fromAccountId && t.toAccountId) {
+        if (map[t.fromAccountId] === undefined) map[t.fromAccountId] = 0;
+        if (map[t.toAccountId] === undefined) map[t.toAccountId] = 0;
+        map[t.fromAccountId] -= amt;
+        map[t.toAccountId] += amt;
+      } else {
+        const id = t?.accountId;
+        if (!id) continue;
+        if (map[id] === undefined) map[id] = 0;
+        if (t.type === 'income') map[id] += amt;
+        else if (t.type === 'expense') map[id] -= amt;
+      }
     }
 
     const total = Object.values(map).reduce((sum, v) => sum + (Number(v) || 0), 0);
@@ -149,6 +168,16 @@ export default function DashboardScreen({ navigation }: Props) {
     return { exceeded, warning, totalRemaining };
   }, [budgets, spentByCategory]);
 
+  // ---- Upcoming recurring (next 30 days) + stats ----
+  const upcomingWithStats = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return getUpcomingOccurrencesWithStats(recurring, today, 30);
+  }, [recurring]);
+
+  const upcomingOccurrences = upcomingWithStats.occurrences;
+  const skippedIncompleteTransfers = upcomingWithStats.skippedIncompleteTransfers;
+
   // ---- Forecast (next 30 days) ----
   const forecast = useMemo(() => {
     const today = new Date();
@@ -160,8 +189,8 @@ export default function DashboardScreen({ navigation }: Props) {
       Object.values(balanceById).reduce((sum, bal) => sum + (bal < 0 ? bal : 0), 0)
     );
 
-    // Get upcoming occurrences
-    const upcoming = getUpcomingOccurrences(recurring, today, 30);
+    // Use same occurrences as Upcoming card (no double call)
+    const upcoming = upcomingOccurrences;
 
     // Clone balance map for forecast
     const forecastBalances = { ...balanceById };
@@ -254,15 +283,7 @@ export default function DashboardScreen({ navigation }: Props) {
       delta,
       unassignedCount,
     };
-  }, [totalBalance, balanceById, recurring, accounts]);
-
-  // ---- Upcoming recurring (next 30 days) ----
-  const upcomingOccurrences = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return getUpcomingOccurrences(recurring, today, 30);
-  }, [recurring]);
-
+  }, [totalBalance, balanceById, accounts, upcomingOccurrences]);
 
   // ---- Upcoming totals (30 days + weekly average) ----
   const upcomingTotals = useMemo(() => {
@@ -337,6 +358,60 @@ export default function DashboardScreen({ navigation }: Props) {
     });
   }, [navigation, handleLogout]);
 
+  React.useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem(STORAGE_KEY_WHERE_TO_START);
+        if (mounted && !seen) setShowWhereToStart(true);
+      } catch {
+        if (mounted) setShowWhereToStart(true);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const dismissWhereToStart = useCallback(async () => {
+    setShowWhereToStart(false);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_WHERE_TO_START, 'true');
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!showWhereToStart) {
+      pulseLoopRef.current?.stop();
+      pulse.setValue(0);
+      return;
+    }
+
+    if (reducedMotion) {
+      pulse.setValue(0);
+      return;
+    }
+
+    if (!pulseLoopRef.current) {
+      pulseLoopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+        ])
+      );
+    }
+    pulseLoopRef.current.start();
+
+    return () => {
+      pulseLoopRef.current?.stop();
+      pulse.setValue(0);
+    };
+  }, [showWhereToStart, reducedMotion, pulse]);
+
   return (
     <SafeAreaView style={styles.safeWrap}>
       <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
@@ -346,6 +421,68 @@ export default function DashboardScreen({ navigation }: Props) {
             Quick view of balances, activity & upcoming payments
           </Text>
         </View>
+
+        {showWhereToStart ? (
+          <View style={styles.whereCard}>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>Where to start</Text>
+              <Pressable onPress={dismissWhereToStart} hitSlop={8}>
+                <Text style={styles.cardLink}>Got it</Text>
+              </Pressable>
+            </View>
+
+            <Text style={styles.subtle}>
+              Start small — one account and a few transactions is enough. You can change or remove anything later.
+            </Text>
+
+            <Text style={styles.whereBullet}>• Add an account</Text>
+            <Text style={styles.whereBullet}>• Add a transaction</Text>
+            <Text style={styles.whereBullet}>• Come back here for your overview</Text>
+
+            <View style={styles.whereActions}>
+              <Pressable
+                style={[styles.smallBtn, styles.whereBtnGhost]}
+                onPress={() => navigation.navigate('Help')}
+                hitSlop={6}
+              >
+                <Text style={styles.smallBtnText}>Open guide</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.smallBtn, styles.whereBtnGhost]}
+                onPress={() => navigation.navigate('DataExportImport')}
+                hitSlop={6}
+              >
+                <Text style={styles.smallBtnText}>Import data</Text>
+              </Pressable>
+
+              <Animated.View
+                style={{
+                  transform: [
+                    {
+                      scale: pulse.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1, 1.04],
+                      }),
+                    },
+                  ],
+                  opacity: pulse.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 0.92],
+                  }),
+                }}
+              >
+                <Pressable
+                  style={[styles.smallBtn, styles.whereBtnPrimary, styles.whereBtnPrimaryPulse]}
+                  onPress={() => navigation.navigate('AddAccount')}
+                  hitSlop={6}
+                >
+                  <Text style={styles.smallBtnText}>Add account</Text>
+                </Pressable>
+              </Animated.View>
+            </View>
+          </View>
+        ) : null}
 
         {/* ---------- Summary Card ---------- */}
         <View style={styles.summaryCard}>
@@ -425,9 +562,21 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
 
           {upcomingTop.length === 0 ? (
-            <Text style={styles.subtle}>
-              No active recurring items due in the next 30 days.
-            </Text>
+            <>
+              <Text style={styles.subtle}>
+                No active recurring items due in the next 30 days.
+              </Text>
+              {skippedIncompleteTransfers > 0 ? (
+                <Pressable
+                  style={[styles.upcomingWarningBanner, { marginTop: 10 }]}
+                  onPress={() => navigation.navigate('Recurring')}
+                >
+                  <Text style={styles.upcomingWarningText}>
+                    {skippedIncompleteTransfers} recurring transfer(s) incomplete and not scheduled. Tap to fix.
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
           ) : (
             <>
               {upcomingTotals && (
@@ -473,6 +622,17 @@ export default function DashboardScreen({ navigation }: Props) {
                 </View>
               )}
 
+              {skippedIncompleteTransfers > 0 ? (
+                <Pressable
+                  style={styles.upcomingWarningBanner}
+                  onPress={() => navigation.navigate('Recurring')}
+                >
+                  <Text style={styles.upcomingWarningText}>
+                    {skippedIncompleteTransfers} recurring transfer(s) incomplete and not scheduled. Tap to fix.
+                  </Text>
+                </Pressable>
+              ) : null}
+
               {upcomingTop.map((occ, idx) => {
                 const d = getOccurrenceDisplay(occ, accountById, formatMoney, formatDate);
 
@@ -513,7 +673,7 @@ export default function DashboardScreen({ navigation }: Props) {
             <Text style={styles.cardTitle}>Your accounts</Text>
 
             <Pressable
-              style={styles.smallBtn}
+              style={[styles.smallBtn, noAccounts && styles.firstActionHighlight]}
               onPress={() => navigation.navigate('AddAccount')}
               hitSlop={8}
             >
@@ -522,7 +682,39 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
 
           {accounts.length === 0 ? (
-            <Text style={styles.emptyText}>No accounts yet.</Text>
+            <View style={{ marginTop: 6 }}>
+              <Text style={styles.emptyText}>No accounts yet.</Text>
+              <Text style={[styles.subtle, { marginTop: 6 }]}>
+                Tip: add your main bank account first — you can add more later.
+              </Text>
+
+              <View style={styles.hintRow}>
+                <Text style={styles.hintArrow}>➜</Text>
+                <Text style={styles.hintText}>
+                  Tap <Text style={styles.hintEmphasis}>Add</Text> to create your first account.
+                </Text>
+              </View>
+
+              <Text style={styles.recommendedLabel}>Recommended</Text>
+              <Pressable
+                style={[styles.smallBtn, { marginTop: 6, alignSelf: 'flex-start' }]}
+                onPress={() => navigation.navigate('AddAccount')}
+                hitSlop={8}
+              >
+                <Text style={styles.smallBtnText}>Add your first account</Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.smallBtn,
+                  { marginTop: 8, alignSelf: 'flex-start', backgroundColor: theme.border },
+                ]}
+                onPress={() => navigation.navigate('DataExportImport')}
+                hitSlop={8}
+              >
+                <Text style={styles.smallBtnText}>Import from CSV / restore backup</Text>
+              </Pressable>
+            </View>
           ) : (
             <View style={{ marginTop: 10 }}>
               {accounts.map((a) => (
@@ -772,6 +964,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: theme.border,
   },
+  upcomingWarningBanner: {
+    marginTop: 6,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    backgroundColor: theme.cardAlt,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: theme.negative,
+  },
+  upcomingWarningText: {
+    fontSize: 12,
+    color: theme.textDim,
+  },
   upcomingTotalsLine: {
     fontSize: 12,
   },
@@ -881,6 +1087,72 @@ const styles = StyleSheet.create({
   smallBtnText: {
     color: theme.pillText,
     fontWeight: '700',
+  },
+
+  whereCard: {
+    backgroundColor: theme.card,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  whereActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 8,
+    marginTop: 10,
+  },
+  whereBullet: {
+    color: theme.textDim,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  whereBtnPrimary: {
+    backgroundColor: theme.primary,
+  },
+  whereBtnPrimaryPulse: {
+    borderWidth: 1,
+    borderColor: theme.link,
+  },
+  whereBtnGhost: {
+    backgroundColor: theme.border,
+  },
+
+  firstActionHighlight: {
+    borderWidth: 1,
+    borderColor: theme.link,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  hintArrow: {
+    color: theme.link,
+    fontSize: 16,
+    marginRight: 8,
+    fontWeight: '800',
+  },
+  hintText: {
+    color: theme.textDim,
+    fontSize: 13,
+    lineHeight: 18,
+    flex: 1,
+  },
+  hintEmphasis: {
+    color: theme.text,
+    fontWeight: '800',
+  },
+  recommendedLabel: {
+    color: theme.link,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 10,
+    marginBottom: 6,
   },
 
   badge: {

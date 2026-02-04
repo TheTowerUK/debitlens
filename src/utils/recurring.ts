@@ -1,5 +1,17 @@
+// NOTE: Transfer and recurring invariants are locked.
+// See: DATA_MODEL_LOCK.md
 // src/utils/recurring.ts
 import type { RecurringItem, RecurringFrequency } from '../state/AppContext';
+
+/** True when item has at least one transfer account field set. */
+export function hasAnyTransferFields(item: RecurringItem): boolean {
+  return !!(item.fromAccountId || item.toAccountId);
+}
+
+/** True when item has both transfer account fields set (valid recurring transfer). */
+export function isValidTransferFields(item: RecurringItem): boolean {
+  return !!(item.fromAccountId && item.toAccountId);
+}
 
 export type UpcomingOccurrence = {
   itemId: string;
@@ -15,8 +27,7 @@ export type UpcomingOccurrence = {
   // non-transfer
   accountId?: string;
 
-  // transfer-specific
-  isTransfer?: boolean;
+  // transfer-only (when type === 'transfer')
   fromAccountId?: string;
   toAccountId?: string;
 
@@ -63,14 +74,19 @@ function advanceDateByFrequency(date: Date, frequency: RecurringFrequency): Date
   return d;
 }
 
+export type UpcomingOccurrencesWithStats = {
+  occurrences: UpcomingOccurrence[];
+  skippedIncompleteTransfers: number;
+};
+
 /**
- * Gets upcoming occurrences for recurring items within a date range.
+ * Gets upcoming occurrences for recurring items within a date range, plus count of skipped incomplete transfers.
  */
-export function getUpcomingOccurrences(
+export function getUpcomingOccurrencesWithStats(
   recurringItems: RecurringItem[],
   fromDate: Date,
   daysAhead: number
-): UpcomingOccurrence[] {
+): UpcomingOccurrencesWithStats {
   const start = new Date(fromDate);
   start.setHours(0, 0, 0, 0);
 
@@ -79,6 +95,7 @@ export function getUpcomingOccurrences(
   end.setHours(23, 59, 59, 999);
 
   const occurrences: UpcomingOccurrence[] = [];
+  let skippedIncompleteTransfers = 0;
 
   for (const item of recurringItems) {
     // Only exclude explicitly paused items (treat missing/undefined as active)
@@ -97,6 +114,17 @@ export function getUpcomingOccurrences(
       continue;
     }
 
+    const hasAny = hasAnyTransferFields(item);
+    const isValid = isValidTransferFields(item);
+
+    // Skip malformed recurring transfers (half-configured)
+    if (hasAny && !isValid) {
+      skippedIncompleteTransfers++;
+      continue;
+    }
+
+    const isTransfer = isValid;
+
     // Default frequency to 'monthly' for backward compatibility
     const frequency = item.frequency || 'monthly';
     let currentDate = new Date(nextDue);
@@ -106,9 +134,7 @@ export function getUpcomingOccurrences(
       currentDate = advanceDateByFrequency(currentDate, frequency);
     }
 
-    // Generate occurrences within the date range
     while (currentDate <= end) {
-      const isTransfer = !!item.isTransfer;
       const occType: UpcomingOccurrence['type'] = isTransfer ? 'transfer' : item.type;
 
       occurrences.push({
@@ -122,8 +148,7 @@ export function getUpcomingOccurrences(
         // normal items
         accountId: isTransfer ? undefined : item.accountId,
 
-        // transfer fields
-        isTransfer,
+        // transfer-only
         fromAccountId: isTransfer ? item.fromAccountId : undefined,
         toAccountId: isTransfer ? item.toAccountId : undefined,
 
@@ -148,5 +173,17 @@ export function getUpcomingOccurrences(
     return a.title.localeCompare(b.title);
   });
 
-  return occurrences;
+  return { occurrences, skippedIncompleteTransfers };
+}
+
+/**
+ * Gets upcoming occurrences for recurring items within a date range.
+ * Backward-compatible wrapper; use getUpcomingOccurrencesWithStats when you need skippedIncompleteTransfers.
+ */
+export function getUpcomingOccurrences(
+  recurringItems: RecurringItem[],
+  fromDate: Date,
+  daysAhead: number
+): UpcomingOccurrence[] {
+  return getUpcomingOccurrencesWithStats(recurringItems, fromDate, daysAhead).occurrences;
 }

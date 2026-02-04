@@ -1,5 +1,5 @@
 // src/screens/DataExportImportScreen.tsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -7,10 +7,10 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList } from '../navigations/types';
 
 import {
@@ -30,9 +30,50 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors as theme } from '../theme/colors';
 
 import { createBackupV1, parseAndValidateBackup, type BackupLatest } from '../utils/backup';
+import { CSV_TEMPLATE } from '../utils/csvTemplate';
+import {
+  buildHeaderMap,
+  validateRequiredHeaders,
+  type HeaderMap,
+  type CanonicalCsvKey,
+} from '../utils/csvImport';
 
 const FS: any = FileSystem as any;
 const norm = (s: string) => s.trim().toLowerCase();
+
+// Yield helper for UI responsiveness
+const yieldToUI = () => new Promise<void>((res) => setTimeout(res, 0));
+
+const MAX_CSV_IMPORT_ROWS = 200;
+const PENDING_IMPORT_KEY = 'debitlens:pendingCsvImport:v1';
+
+function isExcelFilename(name?: string): boolean {
+  const n = String(name || '').toLowerCase().trim();
+  return n.endsWith('.xlsx') || n.endsWith('.xls');
+}
+
+// Account resolution helpers
+const normName = (s: string) =>
+  stripBom(s).replace(/\u00A0/g, ' ').trim().toLowerCase();
+
+function resolveAccountId(
+  accountCell: string,
+  accounts: { id?: string; name?: string }[]
+): string | null {
+  const v = String(accountCell ?? '').replace(/\u00A0/g, ' ').trim();
+  if (!v) return null;
+
+  // exact ID match
+  const byId = accounts.find((a) => a?.id === v);
+  if (byId?.id) return byId.id;
+
+  // name match (case-insensitive)
+  const n = normName(v);
+  const byName = accounts.find((a) => a?.name && normName(a.name) === n);
+  if (byName?.id) return byName.id;
+
+  return null;
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'DataExportImport'>;
 
@@ -44,27 +85,6 @@ type BackupPayload = {
 
 function isArray(v: any): v is any[] {
   return Array.isArray(v);
-}
-
-function buildCsvTemplate(): string {
-  const header = ['Date', 'Account', 'Amount', 'Description', 'Merchant', 'Category', 'Type'];
-  const instructionRow = [
-    'YYYY-MM-DD',
-    'Account name',
-    '-12.34',
-    'Transaction description',
-    'Merchant or Payee',
-    'Category',
-    'Expense|Income|Transfer',
-  ];
-
-  const esc = (v: string) => {
-    const s = String(v ?? '');
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-
-  return [header.map(esc).join(','), instructionRow.map(esc).join(',')].join('\n') + '\n';
 }
 
 function buildIdSet(items: any[]) {
@@ -95,6 +115,13 @@ function validateBackup(payload: BackupPayload) {
    CSV helpers
 =========================== */
 
+function normalizeHeader(h: unknown): string {
+  return String(h ?? '')
+    .replace(/\u00A0/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 function csvEscape(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
   const s = String(value);
@@ -112,11 +139,59 @@ function csvUnescapeCell(cell: string): string {
   return trimmed;
 }
 
+const stripBom = (s: string) => String(s ?? '').replace(/^\uFEFF/, '');
+
+/** Treat literal "null" and "undefined" (case-insensitive) as empty string to avoid crashes. */
+function normalizeCellValue(s: string): string {
+  const raw = String(s ?? '').trim();
+  const lower = raw.toLowerCase();
+  if (lower === 'null' || lower === 'undefined') return '';
+  return raw;
+}
+
+/** Normalize category for CSV import. Preserves exact string for unknown categories. */
+function normalizeCategory(raw: string | undefined | null): string | undefined {
+  const s = String(raw ?? '').replace(/\u00A0/g, ' ').trim();
+  return s || undefined;
+}
+
+function cleanDescription(s: unknown) {
+  let v = String(s ?? '').replace(/\u00A0/g, ' ').trim();
+  if (!v) return '';
+
+  v = v.replace(/\*[A-Z0-9]{3,}/gi, ' ');
+  v = v.replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ');
+  v = v.replace(/\b\d{6,}\b/g, ' ');
+  v = v.replace(/\s+/g, ' ').trim();
+
+  return v;
+}
+
+function detectDelimiter(raw: string): ',' | ';' | '\t' {
+  const firstLine = (stripBom(raw).split(/\r?\n/)[0] ?? '');
+  const comma = (firstLine.match(/,/g) || []).length;
+  const semi = (firstLine.match(/;/g) || []).length;
+  const tab = (firstLine.match(/\t/g) || []).length;
+
+  // choose the delimiter that appears most in the header line
+  if (tab >= semi && tab >= comma) return '\t';
+  if (semi >= comma) return ';';
+  return ',';
+}
+
 function parseCsvLines(raw: string): string[][] {
-  const lines = raw
+  const cleaned = stripBom(raw);
+
+  const delim = detectDelimiter(cleaned);
+
+  const lines = cleaned
     .split(/\r?\n/)
     .map((l) => l.trimEnd())
-    .filter((l) => l.length > 0);
+    .filter((l) => {
+      if (!l) return false;
+      // Ignore rows that are only delimiters (tabs / commas / semicolons)
+      return l.replace(/[,\t;]+/g, '').trim().length > 0;
+    });
 
   const rows: string[][] = [];
 
@@ -127,6 +202,7 @@ function parseCsvLines(raw: string): string[][] {
 
     for (let i = 0; i < line.length; i++) {
       const ch = line[i];
+
       if (ch === '"') {
         if (inQuotes && line[i + 1] === '"') {
           current += '"';
@@ -134,13 +210,14 @@ function parseCsvLines(raw: string): string[][] {
         } else {
           inQuotes = !inQuotes;
         }
-      } else if (ch === ',' && !inQuotes) {
+      } else if (ch === delim && !inQuotes) {
         cells.push(csvUnescapeCell(current));
         current = '';
       } else {
         current += ch;
       }
     }
+
     cells.push(csvUnescapeCell(current));
     rows.push(cells);
   }
@@ -194,6 +271,17 @@ function normalizeType(typeRaw: string, amountRaw: number): 'income' | 'expense'
    File pick/read + write/share
 =========================== */
 
+function isExcelFile(name?: string, mimeType?: string): boolean {
+  const n = String(name || '').toLowerCase();
+  const m = String(mimeType || '').toLowerCase();
+  return (
+    n.endsWith('.xlsx') ||
+    n.endsWith('.xls') ||
+    m.includes('spreadsheetml') ||
+    m.includes('ms-excel')
+  );
+}
+
 async function pickAndReadTextFile(options: {
   types: string[];
   fallbackName: string;
@@ -208,6 +296,15 @@ async function pickAndReadTextFile(options: {
 
   const asset = res.assets?.[0];
   if (!asset?.uri) throw new Error('No file selected.');
+
+  // Guard against Excel files
+  if (isExcelFile(asset.name, asset.mimeType)) {
+    Alert.alert(
+      'Excel file selected',
+      'DebitLens currently imports CSV, not .xlsx.\n\nOpen the file in Excel and use: File → Save As → CSV (Comma delimited).\nThen import the CSV.'
+    );
+    return null;
+  }
 
   const filename = asset.name || options.fallbackName;
 
@@ -252,14 +349,20 @@ type CsvImportStats = {
   importedCount: number;
   createdAccountsCount: number;
   skippedUnknownAccount: number;
-  skippedBadAmount: number;
+  skippedBadAmountOrDate: number;
   skippedMissingAccountName: number;
   skippedCouldNotCreateAccount: number;
   skippedDuplicate?: number;
+  skippedInvalidType?: number;
+  skippedInvalidAccountForType?: number;
+  skippedTransferMissingAccountB?: number;
   finishedAt: string; // ISO
   source: 'file' | 'manual';
   operation?: 'import' | 'restore';
   mode?: RestoreMode;
+  batchOffset?: number;
+  batchEnd?: number;
+  totalRows?: number;
 };
 
 const CSV_STATS_KEY = 'debitlens:lastCsvImportStats:v1';
@@ -282,6 +385,20 @@ export default function DataExportImportScreen(_props: Props) {
   const [jsonPreview, setJsonPreview] = useState<BackupLatest | null>(null);
   const [jsonRestoreMode, setJsonRestoreMode] = useState<'replace' | 'merge'>('replace');
 
+  const [showPreview, setShowPreview] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setShowPreview(false);
+        setJsonPreview(null);
+        setShowTemplatePreview(false);
+        setShowExportPreview(false);
+        setShowCsvPreview(false);
+      };
+    }, [])
+  );
+
   const handleExportJsonFile = async () => {
     try {
       const backup = createBackupV1({
@@ -299,6 +416,7 @@ export default function DataExportImportScreen(_props: Props) {
 
       await writeAndShareFile(filename, json, 'application/json');
       setLastStatus('Backup JSON exported to Files (via Share).');
+      setShowPreview(false);
     } catch (err: any) {
       console.error(err);
       setLastStatus(`JSON export failed: ${String(err?.message ?? err)}`);
@@ -383,6 +501,7 @@ export default function DataExportImportScreen(_props: Props) {
           if (jsonRestoreMode === 'replace') applyJsonReplace();
           else applyJsonMerge();
 
+          setShowPreview(false);
           setJsonPreview(null);
           setLastStatus(`JSON restore applied (${jsonRestoreMode}).`);
         },
@@ -406,30 +525,24 @@ export default function DataExportImportScreen(_props: Props) {
   }, [accounts]);
 
   const [exportCsvText, setExportCsvText] = useState<string>('');
-  const [templateCsvText, setTemplateCsvText] = useState<string>('');
+  const [templateCsvText] = useState<string>(CSV_TEMPLATE);
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false);
+  const [showExportPreview, setShowExportPreview] = useState(false);
 
-  const isTemplateGenerated = useMemo(() => !!templateCsvText.trim(), [templateCsvText]);
+  const isTemplateGenerated = true;
 
   const isTransactionsCsvGenerated = useMemo(() => {
     return !!exportCsvText.trim();
   }, [exportCsvText]);
 
-  const handleGenerateCsvTemplate = useCallback(() => {
-    const csv = buildCsvTemplate();
-    setTemplateCsvText(csv);
-    setLastStatus('Template generated. You can now export/share it.');
-  }, []);
-
   const handleExportCsvPreview = async () => {
     try {
-      if (!templateCsvText.trim()) {
-        Alert.alert('CSV not ready', 'Generate the template first.');
-        setLastStatus('CSV not ready. Generate template first.');
-        return;
-      }
       const filename = 'DebitLens-CSV-Template.csv';
       await writeAndShareFile(filename, templateCsvText, 'text/csv');
       setLastStatus('CSV template exported to Files (via Share).');
+      setShowTemplatePreview(false);
+      setShowExportPreview(false);
+      setShowCsvPreview(false);
     } catch (err: any) {
       console.error(err);
       setLastStatus(`CSV export failed: ${String(err?.message ?? err)}`);
@@ -476,7 +589,7 @@ export default function DataExportImportScreen(_props: Props) {
       lines.push(row.map(csvEscape).join(','));
     }
 
-    const csv = lines.join('\n') + '\n';
+    const csv = '\uFEFF' + (lines.join('\n') + '\n');
     setExportCsvText(csv);
     setLastStatus('Transactions CSV generated. You can export it to Files below.');
   };
@@ -495,6 +608,9 @@ export default function DataExportImportScreen(_props: Props) {
 
       await writeAndShareFile(filename, exportCsvText, 'text/csv');
       setLastStatus('Transactions CSV exported to Files (via Share).');
+      setShowTemplatePreview(false);
+      setShowExportPreview(false);
+      setShowCsvPreview(false);
     } catch (err: any) {
       console.error(err);
       setLastStatus(`CSV export failed: ${String(err?.message ?? err)}`);
@@ -507,7 +623,6 @@ export default function DataExportImportScreen(_props: Props) {
   =========================== */
 
   const [importCsvText, setImportCsvText] = useState<string>('');
-  const [csvHasHeaderRow, setCsvHasHeaderRow] = useState<boolean>(true);
 
   const [lastImportSummary, setLastImportSummary] = useState<string>('');
   const [createMissingAccounts, setCreateMissingAccounts] = useState<boolean>(false);
@@ -515,6 +630,126 @@ export default function DataExportImportScreen(_props: Props) {
 
   const [csvRestoreMode, setCsvRestoreMode] = useState<RestoreMode>('merge');
   const [lastCsvStats, setLastCsvStats] = useState<CsvImportStats | null>(null);
+  const [showCsvPreview, setShowCsvPreview] = useState(false);
+  
+  type RecurringRebuildMode = 'none' | 'importedOnly' | 'last18Months' | 'all';
+  // Default to 'importedOnly' for better performance on slower devices
+  const [recurringRebuildMode, setRecurringRebuildMode] = useState<RecurringRebuildMode>('importedOnly');
+
+  // Import batching (hard cap 200 rows per run)
+  const [importBatchOffset, setImportBatchOffset] = useState<number>(0);
+  const [importLastFilename, setImportLastFilename] = useState<string>('');
+  const [importTotalDataRows, setImportTotalDataRows] = useState<number>(0);
+  const [importHasMoreBatches, setImportHasMoreBatches] = useState<boolean>(false);
+
+  // Pending import buffer (accumulates batches until commit)
+  const [pendingTxs, setPendingTxs] = useState<Transaction[]>([]);
+  const [pendingAccounts, setPendingAccounts] = useState<Account[]>([]);
+  const [pendingActive, setPendingActive] = useState<boolean>(false);
+
+  // Refs for immediate access to pending state during async operations
+  const pendingTxsRef = useRef<Transaction[]>([]);
+  const pendingAccountsRef = useRef<Account[]>([]);
+
+  // Sync refs with state
+  useEffect(() => {
+    pendingTxsRef.current = pendingTxs;
+  }, [pendingTxs]);
+
+  useEffect(() => {
+    pendingAccountsRef.current = pendingAccounts;
+  }, [pendingAccounts]);
+
+  // Cache parsed CSV rows (parse once, reuse for all batches)
+  const cachedParsedRowsRef = useRef<string[][] | null>(null);
+  const cachedTotalRowsRef = useRef<number>(0);
+  const cachedFilenameRef = useRef<string>('');
+  const cachedHeaderMapRef = useRef<HeaderMap | null>(null);
+
+  // De-dupe keys built ONCE per import (not per batch)
+  const existingKeysRef = useRef<Set<string> | null>(null);
+
+  // Progress indicator state
+  type ProgressStage =
+    | 'idle'
+    | 'parsing'
+    | 'validating'
+    | 'building'
+    | 'deduping'
+    | 'recurring'
+    | 'saving'
+    | 'done'
+    | 'error';
+
+  type ProgressState = {
+    active: boolean;
+    stage: ProgressStage;
+    message: string;
+    startedAt: number; // Date.now()
+    parsedRows?: number;
+    toImport?: number;
+    imported?: number;
+    skipped?: number;
+  };
+
+  const [progress, setProgress] = useState<ProgressState>({
+    active: false,
+    stage: 'idle',
+    message: '',
+    startedAt: 0,
+  });
+
+  // Progress helpers
+  const startProgress = useCallback((message: string) => {
+    setProgress({
+      active: true,
+      stage: 'parsing',
+      message,
+      startedAt: Date.now(),
+      parsedRows: 0,
+      toImport: 0,
+      imported: 0,
+      skipped: 0,
+    });
+  }, []);
+
+  const updateProgress = useCallback((patch: Partial<ProgressState>) => {
+    setProgress((p) => ({ ...p, ...patch, active: true }));
+  }, []);
+
+  const finishProgress = useCallback((message: string) => {
+    setProgress((p) => ({
+      ...p,
+      active: false,
+      stage: 'done',
+      message,
+    }));
+  }, []);
+
+  const failProgress = useCallback((message: string) => {
+    setProgress((p) => ({
+      ...p,
+      active: false,
+      stage: 'error',
+      message,
+    }));
+  }, []);
+
+  // Live elapsed time tick
+  const [nowTick, setNowTick] = useState<number>(Date.now());
+
+  useEffect(() => {
+    if (!progress.active) return;
+
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [progress.active]);
+
+  const progressElapsedSec = useMemo(() => {
+    if (!progress.startedAt) return 0;
+    const end = progress.active ? nowTick : Date.now();
+    return Math.max(0, Math.floor((end - progress.startedAt) / 1000));
+  }, [progress.startedAt, progress.active, nowTick]);
 
   useEffect(() => {
     (async () => {
@@ -527,12 +762,56 @@ export default function DataExportImportScreen(_props: Props) {
     })();
   }, []);
 
+  // Persist pending import to AsyncStorage (for crash recovery)
+  const persistPending = useCallback(async (payload: {
+    pendingTxs: Transaction[];
+    pendingAccounts: Account[];
+    offset: number;
+    total: number;
+    filename: string;
+  }) => {
+    try {
+      await AsyncStorage.setItem(PENDING_IMPORT_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  const clearPending = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(PENDING_IMPORT_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  // Restore pending import on screen load
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(PENDING_IMPORT_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.pendingTxs) && Array.isArray(parsed.pendingAccounts)) {
+          setPendingTxs(parsed.pendingTxs);
+          setPendingAccounts(parsed.pendingAccounts);
+          setPendingActive(true);
+          setImportBatchOffset(parsed.offset ?? 0);
+          setImportTotalDataRows(parsed.total ?? 0);
+          setImportLastFilename(parsed.filename ?? '');
+          setImportHasMoreBatches((parsed.offset ?? 0) < (parsed.total ?? 0)); // offset < total
+          setLastStatus('Recovered a pending CSV import. You can continue or commit.');
+        }
+      } catch {
+        // ignore parse errors
+      }
+    })();
+  }, []);
+
   const handlePickCsvFile = async () => {
     try {
-      setCsvHasHeaderRow(true);
-
       const picked = await pickAndReadTextFile({
-        types: ['text/csv', 'text/comma-separated-values', 'text/plain', '*/*'],
+        types: ['text/csv', 'text/plain', 'public.comma-separated-values-text'],
         fallbackName: 'import.csv',
       });
 
@@ -541,15 +820,93 @@ export default function DataExportImportScreen(_props: Props) {
         return;
       }
 
+      // Guard: users often try to import Excel (.xlsx). We only support CSV text import.
+      if (isExcelFilename(picked.filename)) {
+        Alert.alert(
+          'Excel file selected',
+          'DebitLens currently imports CSV files, not Excel (.xlsx).\n\nOpen the file in Excel and use:\nFile → Save As → CSV (Comma delimited)\n\nThen import the CSV.'
+        );
+        setLastStatus('Excel file selected. Please export to CSV and try again.');
+        return;
+      }
+
+      if (!picked.text || !picked.text.trim()) {
+        Alert.alert('Empty file', 'The selected file appears to be empty.');
+        setLastStatus('Selected file is empty.');
+        return;
+      }
+
+      // Clear any existing pending import when picking a new file
+      setPendingTxs([]);
+      setPendingAccounts([]);
+      setPendingActive(false);
+      existingKeysRef.current = null; // Clear de-dupe keys for new import
+      await clearPending();
+
       setImportCsvText(picked.text);
       setImportSource('file');
       setLastImportSummary('');
+      setImportBatchOffset(0);
+      setImportLastFilename(picked.filename || '');
+      setImportTotalDataRows(0);
+      setImportHasMoreBatches(false);
 
-      setLastStatus(`Loaded CSV from file: ${picked.filename}. Import or restore it.`);
+      // Parse once and cache (so Continue doesn't re-parse)
+      try {
+        startProgress('Preparing CSV…');
+        updateProgress({ stage: 'parsing', message: 'Parsing CSV…' });
+        await yieldToUI();
+
+        const rows = parseCsvLines(picked.text);
+        if (!rows.length) throw new Error('CSV parsed but contains no rows.');
+
+        const headerRow = (rows[0] ?? []).map((h) => String(h ?? ''));
+        const headerMap = buildHeaderMap(headerRow);
+
+        const missingMessage = validateRequiredHeaders(headerMap);
+        if (missingMessage) {
+          throw new Error(`Missing required columns: ${missingMessage}.`);
+        }
+
+        const getCell = (row: string[], key: CanonicalCsvKey) => {
+          const idx = headerMap.indexByKey[key];
+          const raw = idx !== undefined && typeof idx === 'number' ? stripBom(row[idx] ?? '') : '';
+          return normalizeCellValue(raw);
+        };
+
+        const dataRows = rows.slice(1);
+
+        // Filter out template instruction rows + empty rows (row has at least one non-empty cell)
+        const filteredRows = dataRows.filter((r) => {
+          const d = getCell(r, 'date');
+          if (/yyyy-mm-dd/i.test(d)) return false;
+          return (r || []).some((cell) => String(cell ?? '').trim().length > 0);
+        });
+
+        cachedParsedRowsRef.current = filteredRows;
+        cachedTotalRowsRef.current = filteredRows.length;
+        cachedFilenameRef.current = picked.filename || '';
+        cachedHeaderMapRef.current = headerMap;
+
+        setImportTotalDataRows(filteredRows.length);
+        setImportHasMoreBatches(0 < filteredRows.length); // offset < total (no rows processed yet)
+
+        finishProgress(`CSV ready: ${filteredRows.length} data rows.`);
+        setLastStatus(`CSV ready: ${filteredRows.length} rows. Import will run in batches of ${MAX_CSV_IMPORT_ROWS}.`);
+      } catch (e: any) {
+        cachedParsedRowsRef.current = null;
+        cachedTotalRowsRef.current = 0;
+        cachedFilenameRef.current = '';
+        cachedHeaderMapRef.current = null;
+        failProgress(`CSV prep failed: ${e?.message ?? String(e)}`);
+        Alert.alert('CSV error', e?.message ?? 'Could not parse CSV.');
+        setLastStatus(`CSV error: ${e?.message ?? 'Could not parse CSV.'}`);
+      }
     } catch (err: any) {
-      console.error('Error picking CSV file', err);
-      Alert.alert('File error', 'Something went wrong while reading the CSV file.');
-      setLastStatus(`File error: ${String(err?.message ?? err)}`);
+      console.error('Error picking CSV file:', err);
+      const errorMsg = err?.message || String(err) || 'Unknown error';
+      Alert.alert('File error', `Something went wrong while reading the CSV file:\n\n${errorMsg}`);
+      setLastStatus(`File error: ${errorMsg}`);
     }
   };
 
@@ -629,94 +986,129 @@ export default function DataExportImportScreen(_props: Props) {
     return { freq, nextDueDate: addDaysISO(last, addDays) };
   };
 
-  const buildRecurringFromTransactions = useCallback(
-    (allTxs: Transaction[]): RecurringItem[] => {
-      type Group = {
-        key: string;
-        accountId?: string;
-        title: string;
-        category?: string;
-        description?: string;
-        amount: number;
-        type: 'income' | 'expense';
-        datesAsc: string[];
-      };
+  // Helper to filter transactions to recent window (for recurring rebuild performance)
+  function filterTxsToLastMonths(all: Transaction[], monthsBack: number): Transaction[] {
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - monthsBack);
+    const cutoffIso = cutoff.toISOString().slice(0, 10);
+    return all.filter((t) => String(t.date || '').slice(0, 10) >= cutoffIso);
+  }
 
-      const groups = new Map<string, Group>();
+  // Async chunked recurring rebuild (fast + safe)
+  async function buildRecurringFromTransactionsChunked(opts: {
+    txs: Transaction[];
+    chunkSize?: number;
+    onProgress?: (info: { phase: string; processed: number; total: number }) => void;
+  }): Promise<RecurringItem[]> {
+    const { txs, chunkSize = 800, onProgress } = opts;
 
-      for (const t of allTxs || []) {
-        if (!t?.date) continue;
+    type Group = {
+      key: string;
+      accountId?: string;
+      title: string;
+      category?: string;
+      description?: string;
+      amount: number;
+      type: 'income' | 'expense';
+      datesAsc: string[];
+    };
 
-        const type = (t.type === 'income' ? 'income' : t.type === 'expense' ? 'expense' : null) as
-          | 'income'
-          | 'expense'
-          | null;
-        if (!type) continue; // ignore transfers for recurring detection
+    const groups = new Map<string, Group>();
+    const total = txs.length;
 
-        const merchantRaw = (t as any).name || (t as any).description || '';
-        const title = String(merchantRaw).trim();
-        if (!title) continue;
+    // Phase 1: build groups in chunks
+    for (let i = 0; i < txs.length; i++) {
+      const t = txs[i];
+      if (!t?.date) continue;
 
-        const category = String((t as any).category ?? '').trim() || undefined;
+      const type =
+        t.type === 'income' ? 'income' : t.type === 'expense' ? 'expense' : null;
+      if (!type) continue; // ignore transfers
 
-        const amountPennies = Math.round(Math.abs(Number(t.amount ?? 0)) * 100);
-        if (!isFinite(amountPennies) || amountPennies <= 0) continue;
+      const merchantRaw = (t as any).name || (t as any).description || '';
+      const title = String(merchantRaw).trim();
+      if (!title) continue;
 
-        const accountId = t.accountId || undefined;
-        const iso = String(t.date).slice(0, 10);
+      const category = String((t as any).category ?? '').trim() || undefined;
 
-        const key = [
-          accountId || '__no_account__',
-          norm(title),
-          amountPennies,
-          norm(category || '__no_category__'),
+      const amountPennies = Math.round(Math.abs(Number(t.amount ?? 0)) * 100);
+      if (!isFinite(amountPennies) || amountPennies <= 0) continue;
+
+      const accountId = t.accountId || undefined;
+      const iso = String(t.date).slice(0, 10);
+
+      const key = [
+        accountId || '__no_account__',
+        norm(title),
+        amountPennies,
+        norm(category || '__no_category__'),
+        type,
+      ].join('|');
+
+      const g = groups.get(key);
+      if (!g) {
+        groups.set(key, {
+          key,
+          accountId,
+          title,
+          category,
+          description: String((t as any).description ?? '').trim() || undefined,
+          amount: amountPennies / 100,
           type,
-        ].join('|');
-
-        const g = groups.get(key);
-        if (!g) {
-          groups.set(key, {
-            key,
-            accountId,
-            title,
-            category,
-            description: String((t as any).description ?? '').trim() || undefined,
-            amount: amountPennies / 100,
-            type,
-            datesAsc: [iso],
-          });
-        } else {
-          g.datesAsc.push(iso);
-        }
-      }
-
-      const out: RecurringItem[] = [];
-
-      for (const g of groups.values()) {
-        // only keep true repeats
-        if (g.datesAsc.length < 2) continue;
-
-        const datesAsc = [...g.datesAsc].sort();
-        const { freq, nextDueDate } = inferFrequencyFromDates(datesAsc);
-
-        out.push({
-          id: `rec_${g.key}`,
-          title: g.title,
-          active: true,
-          nextDueDate,
-          frequency: freq,
-          amount: g.amount,
-          type: g.type,
-          category: g.category,
-          description: g.description,
-          accountId: g.accountId,
-          isTransfer: false,
+          datesAsc: [iso],
         });
+      } else {
+        g.datesAsc.push(iso);
       }
 
-      // strongest first (most occurrences)
-      out.sort((a, b) => {
-        const ac = groups.get(
+      if (i > 0 && i % chunkSize === 0) {
+        onProgress?.({ phase: 'grouping', processed: i, total });
+        await yieldToUI();
+      }
+    }
+
+    onProgress?.({ phase: 'grouping', processed: total, total });
+    await yieldToUI();
+
+    // Phase 2: build recurring items from groups (also chunked)
+    const groupValues = Array.from(groups.values());
+    const out: RecurringItem[] = [];
+
+    for (let i = 0; i < groupValues.length; i++) {
+      const g = groupValues[i];
+      if (g.datesAsc.length < 2) continue;
+
+      const datesAsc = [...g.datesAsc].sort();
+      const { freq, nextDueDate } = inferFrequencyFromDates(datesAsc);
+
+      out.push({
+        id: `rec_${g.key}`,
+        title: g.title,
+        active: true,
+        nextDueDate,
+        frequency: freq,
+        amount: g.amount,
+        type: g.type,
+        category: g.category,
+        description: g.description,
+        accountId: g.accountId,
+      });
+
+      if (i > 0 && i % Math.max(200, Math.floor(chunkSize / 4)) === 0) {
+        onProgress?.({ phase: 'building', processed: i, total: groupValues.length });
+        await yieldToUI();
+      }
+    }
+
+    onProgress?.({ phase: 'building', processed: groupValues.length, total: groupValues.length });
+    await yieldToUI();
+
+    // Phase 3: strongest-first sort (usually fine; yields once before/after)
+    await yieldToUI();
+
+    out.sort((a, b) => {
+      const ac =
+        groups.get(
           [
             a.accountId || '__no_account__',
             norm(a.title),
@@ -726,7 +1118,8 @@ export default function DataExportImportScreen(_props: Props) {
           ].join('|')
         )?.datesAsc.length ?? 0;
 
-        const bc = groups.get(
+      const bc =
+        groups.get(
           [
             b.accountId || '__no_account__',
             norm(b.title),
@@ -736,72 +1129,633 @@ export default function DataExportImportScreen(_props: Props) {
           ].join('|')
         )?.datesAsc.length ?? 0;
 
-        return bc - ac;
-      });
+      return bc - ac;
+    });
 
-      return out;
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+    await yieldToUI();
+    return out;
+  }
 
   /* ===========================
      CSV IMPORT (append) + rebuild recurring
   =========================== */
 
+  const runCsvImportBatch = useCallback(
+    async (offset: number) => {
+      const toIsoDate = (v: string) => {
+        const s = (v || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+          const dd = m[1].padStart(2, '0');
+          const mm = m[2].padStart(2, '0');
+          const yyyy = m[3];
+          return `${yyyy}-${mm}-${dd}`;
+        }
+        return s;
+      };
+      const parseAmount = (v: string) => {
+        const s = (v || '')
+          .trim()
+          .replace(/£/g, '')
+          .replace(/,/g, '')
+          .replace(/^\((.*)\)$/, '-$1');
+        const n = Number(s);
+        return Number.isFinite(n) ? n : NaN;
+      };
+      const normType = (v: string): 'income' | 'expense' | 'transfer' | null => {
+        const s = (v || '').trim().toLowerCase();
+        if (s === 'income') return 'income';
+        if (s === 'expense') return 'expense';
+        if (s === 'transfer') return 'transfer';
+        return null;
+      };
+      const makeTxnKey = (input: {
+        accountId: string;
+        dateISO: string;
+        type: string;
+        amountAbs: number;
+        descClean: string;
+      }) => {
+        const amt = Number(input.amountAbs || 0).toFixed(2);
+        return `${input.accountId}__${input.dateISO}__${input.type}__${amt}__${norm(input.descClean)}`;
+      };
+      const makeTransferKey = (input: {
+        fromAccountId: string;
+        toAccountId: string;
+        dateISO: string;
+        amountAbs: number;
+        descClean: string;
+      }) => {
+        const amt = Number(input.amountAbs || 0).toFixed(2);
+        return `transfer__${input.fromAccountId}__${input.toAccountId}__${input.dateISO}__${amt}__${norm(input.descClean)}`;
+      };
+
+      try {
+        startProgress('Starting CSV import…');
+        await yieldToUI();
+
+        // Only at start of new import (offset 0): clear dedupe keys. Never clear mid-continuation.
+        if (offset === 0) {
+          existingKeysRef.current = null;
+        }
+
+        // Use cached parsed rows (parsed once when file was picked)
+        const cached = cachedParsedRowsRef.current;
+        const total = cachedTotalRowsRef.current;
+
+        if (!cached || !total) {
+          Alert.alert('CSV not ready', 'Pick the CSV file again.');
+          failProgress('CSV not ready. Please pick the file again.');
+          setLastStatus('CSV not ready. Please pick the file again.');
+          return;
+        }
+
+        // end = exclusive slice end = next offset for the following batch
+        const end = Math.min(total, offset + MAX_CSV_IMPORT_ROWS);
+        const batchRows = cached.slice(offset, end);
+
+        if (!batchRows.length) {
+          Alert.alert('Nothing to import', 'No remaining rows left to import.');
+          failProgress('No remaining rows left to import.');
+          setLastStatus('No remaining rows left to import.');
+          return;
+        }
+
+        setLastStatus(`Importing rows ${offset + 1}-${end} of ${total} (batch ${MAX_CSV_IMPORT_ROWS})…`);
+
+        updateProgress({
+          stage: 'building',
+          message: `Building transactions… (${offset + 1}-${end} of ${total})`,
+          toImport: batchRows.length,
+          parsedRows: total,
+        });
+        await yieldToUI();
+
+        // Parse batch rows into transaction objects using cached headerMap
+        const headerMap = cachedHeaderMapRef.current;
+        if (!headerMap) {
+          Alert.alert('CSV not ready', 'Pick the CSV file again.');
+          failProgress('CSV header map missing. Please pick the file again.');
+          setLastStatus('CSV header map missing. Please pick the file again.');
+          return;
+        }
+
+        const getCell = (row: string[], key: CanonicalCsvKey) => {
+          const idx = headerMap.indexByKey[key];
+          const raw = idx !== undefined && typeof idx === 'number' ? stripBom(row[idx] ?? '') : '';
+          return normalizeCellValue(raw);
+        };
+
+        const parsed = batchRows.map((r, rowIndex) => {
+          const date = toIsoDate(getCell(r, 'date'));
+          const accountA = getCell(r, 'accountA');
+          const accountB = getCell(r, 'accountB');
+          const amount = parseAmount(getCell(r, 'amount'));
+          const description = getCell(r, 'description');
+          const category = getCell(r, 'category');
+          const type = normType(getCell(r, 'type'));
+          const account = accountA || accountB;
+
+          return {
+            rowIndex: offset + rowIndex + 1,
+            date,
+            accountA,
+            accountB,
+            account,
+            amount,
+            description,
+            category,
+            type,
+          };
+        });
+
+        // No early bad scan; validate per-row in the loop so stats reflect skips
+
+        const limitedParsed = parsed;
+
+              if (limitedParsed.length === 0) {
+                Alert.alert('Nothing to import', 'No remaining rows left to import from this file.');
+                failProgress('No remaining rows left to import.');
+                setLastStatus('No remaining rows left to import.');
+                return;
+              }
+
+              setLastStatus(`Importing rows ${offset + 1}-${end} of ${total} (max ${MAX_CSV_IMPORT_ROWS} per batch)…`);
+              updateProgress({
+                stage: 'building',
+                message: `Building transactions… (${offset + 1}-${end} of ${total})`,
+                toImport: limitedParsed.length,
+                parsedRows: total,
+              });
+              await yieldToUI();
+
+              let importedCount = 0;
+              let skippedUnknownAccount = 0;
+              let skippedBadAmountOrDate = 0;
+              let skippedMissingAccountName = 0;
+              let createdAccountsCount = 0;
+              let skippedCouldNotCreateAccount = 0;
+              let skippedDuplicate = 0;
+              let skippedInvalidType = 0;
+              let skippedInvalidAccountForType = 0;
+              let skippedTransferMissingAccountB = 0;
+
+              const createdAccountByName: Record<string, Account> = {};
+
+              // Initialize existingKeysRef ONCE when starting a NEW import (offset === 0)
+              if (offset === 0 || !existingKeysRef.current) {
+                updateProgress({ stage: 'deduping', message: 'Checking for duplicates…' });
+                await yieldToUI();
+
+                const existingKeys = new Set<string>();
+                // Build keys from current committed txs
+                for (const t of txs || []) {
+                  const dateISO = String((t as any).date ?? '');
+                  const type = String((t as any).type ?? '');
+                  const amountAbs = Math.abs(Number((t as any).amount ?? 0));
+                  const descClean = cleanDescription((t as any).description ?? (t as any).name ?? '');
+                  if (!dateISO || !type) continue;
+                  
+                  // Handle transfers differently (direction from fromAccountId/toAccountId)
+                  if (type === 'transfer') {
+                    const fromAccountId = String((t as any).fromAccountId ?? '');
+                    const toAccountId = String((t as any).toAccountId ?? '');
+                    if (!fromAccountId || !toAccountId) continue;
+                    existingKeys.add(makeTransferKey({ fromAccountId, toAccountId, dateISO, amountAbs, descClean }));
+                  } else {
+                    // Regular income/expense transactions
+                    const accountId = String((t as any).accountId ?? '');
+                    if (!accountId) continue;
+                    existingKeys.add(makeTxnKey({ accountId, dateISO, type, amountAbs, descClean }));
+                  }
+                }
+                // Also include pending transactions from previous batches (if continuing an import)
+                if (offset > 0 && pendingTxsRef.current.length > 0) {
+                  for (const t of pendingTxsRef.current) {
+                    const dateISO = String((t as any).date ?? '');
+                    const type = String((t as any).type ?? '');
+                    const amountAbs = Math.abs(Number((t as any).amount ?? 0));
+                    const descClean = cleanDescription((t as any).description ?? (t as any).name ?? '');
+                    if (!dateISO || !type) continue;
+                    
+                    // Handle transfers differently (direction from fromAccountId/toAccountId)
+                    if (type === 'transfer') {
+                      const fromAccountId = String((t as any).fromAccountId ?? '');
+                      const toAccountId = String((t as any).toAccountId ?? '');
+                      if (!fromAccountId || !toAccountId) continue;
+                      existingKeys.add(makeTransferKey({ fromAccountId, toAccountId, dateISO, amountAbs, descClean }));
+                    } else {
+                      // Regular income/expense transactions
+                      const accountId = String((t as any).accountId ?? '');
+                      if (!accountId) continue;
+                      existingKeys.add(makeTxnKey({ accountId, dateISO, type, amountAbs, descClean }));
+                    }
+                  }
+                }
+                existingKeysRef.current = existingKeys;
+              }
+
+              // Use the ref (shared across batches)
+              const existingKeys = existingKeysRef.current!;
+
+              updateProgress({ stage: 'building', message: `Building transactions…` });
+              await yieldToUI();
+
+              const newTxs: Transaction[] = [];
+              const yieldEvery = 50; // Yield every 50 rows to avoid watchdog kills
+              let processed = 0;
+
+              // Get all available accounts (existing + pending)
+              const allAvailableAccounts = [...accounts, ...pendingAccountsRef.current];
+              const allAccountIds = new Set(allAvailableAccounts.map((a) => a.id));
+
+              for (let i = 0; i < limitedParsed.length; i++) {
+                const p = limitedParsed[i];
+                processed++;
+
+                // Skip rows with unknown Type (normalize: income|expense|transfer only)
+                if (p.type === null || p.type === undefined) {
+                  skippedInvalidType++;
+                  continue;
+                }
+
+                // Row-level validation: require correct account column(s) for Type
+                const accountATrim = String(p.accountA ?? '').replace(/\u00A0/g, ' ').trim();
+                const accountBTrim = String(p.accountB ?? '').replace(/\u00A0/g, ' ').trim();
+                if (p.type === 'expense' && !accountATrim) {
+                  skippedInvalidAccountForType++;
+                  continue;
+                }
+                if (p.type === 'income' && !accountBTrim) {
+                  skippedInvalidAccountForType++;
+                  continue;
+                }
+                if (p.type === 'transfer') {
+                  if (!accountATrim) {
+                    skippedInvalidAccountForType++;
+                    continue;
+                  }
+                  if (!accountBTrim) {
+                    skippedTransferMissingAccountB++;
+                    continue;
+                  }
+                }
+
+                // Type already normalized
+                const isTransfer = p.type === 'transfer';
+
+                // Primary account for this row: expense = Account A, income = Account B
+                const accountName = isTransfer ? accountATrim : (p.type === 'expense' ? accountATrim : accountBTrim);
+                const accountNameSafe = accountName || 'Imported Account';
+
+                if (!accountName && !isTransfer) {
+                  skippedMissingAccountName++;
+                  continue;
+                }
+
+                let accountForRow: Account | undefined = null;
+
+                if (!isTransfer) {
+                  const accountsForLookup = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
+                  const resolvedAccountId = resolveAccountId(accountName, accountsForLookup);
+                  if (resolvedAccountId) {
+                    accountForRow = accountsForLookup.find((a) => a?.id === resolvedAccountId) ?? undefined;
+                  }
+                  if (!accountForRow) {
+                    const accountKey = normName(accountName);
+                    accountForRow = createdAccountByName[accountKey];
+                    if (!accountForRow) {
+                      if (!createMissingAccounts) {
+                        skippedUnknownAccount++;
+                        continue;
+                      }
+                      const newAccountId = makeId('acct');
+                      const created: Account = {
+                        id: newAccountId,
+                        name: accountNameSafe,
+                        type: 'bank',
+                        balance: 0,
+                      };
+                      createdAccountsCount++;
+                      createdAccountByName[accountKey] = created;
+                      accountForRow = created;
+                    }
+                  }
+                }
+
+                // Amount: validate in loop
+                const amountNum = p.amount;
+                if (!Number.isFinite(amountNum)) {
+                  skippedBadAmountOrDate++;
+                  continue;
+                }
+
+                // Date: validate in loop (reject invalid or non-ISO shape)
+                const dateISO = normalizeDateToISODate(p.date);
+                if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
+                  skippedBadAmountOrDate++;
+                  continue;
+                }
+
+                // Transfer: fromAccountId = Account A, toAccountId = Account B, amount always positive
+                if (isTransfer) {
+                  const amountAbs = Math.abs(amountNum);
+
+                  const getOrCreateAccount = (name: string): Account | null => {
+                    const list = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
+                    const resolvedId = resolveAccountId(name, list);
+                    let acc = resolvedId ? list.find((a) => a?.id === resolvedId) : null;
+                    if (!acc) {
+                      const key = normName(name);
+                      acc = createdAccountByName[key];
+                    }
+                    if (!acc && createMissingAccounts) {
+                      const newId = makeId('acct');
+                      acc = {
+                        id: newId,
+                        name: name || 'Imported Account',
+                        type: 'bank',
+                        balance: 0,
+                      };
+                      createdAccountsCount++;
+                      createdAccountByName[normName(name)] = acc;
+                    }
+                    return acc ?? null;
+                  };
+
+                  const accountAObj = getOrCreateAccount(accountATrim);
+                  const accountBObj = getOrCreateAccount(accountBTrim);
+                  if (!accountAObj?.id || !accountBObj?.id) {
+                    skippedUnknownAccount++;
+                    continue;
+                  }
+
+                  const fromAccountId = accountAObj.id;
+                  const toAccountId = accountBObj.id;
+
+                  const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
+                  const descClean = cleanDescription(descFinal);
+
+                  const transferKey = makeTransferKey({
+                    fromAccountId,
+                    toAccountId,
+                    dateISO,
+                    amountAbs,
+                    descClean,
+                  });
+
+                  if (existingKeys.has(transferKey)) {
+                    skippedDuplicate++;
+                    continue;
+                  }
+                  existingKeys.add(transferKey);
+
+                  const newTxn: Transaction = {
+                    id: makeId('tx'),
+                    accountId: fromAccountId, // primary display account = Account A (from)
+                    amount: amountAbs,
+                    type: 'transfer',
+                    date: dateISO,
+                    description: descFinal || undefined,
+                    category: normalizeCategory(p.category) ?? undefined,
+                    merchant: accountBObj?.name ?? undefined, // UI display: other-side account name
+                    fromAccountId,
+                    toAccountId,
+                  };
+
+                  newTxs.push(newTxn);
+                  importedCount++;
+                  continue;
+                }
+
+                // Non-transfer: Income or Expense — require resolved account
+                if (!accountForRow?.id) {
+                  skippedUnknownAccount++;
+                  continue;
+                }
+
+                let finalType: 'income' | 'expense';
+                if (p.type === 'income') {
+                  finalType = 'income';
+                } else if (p.type === 'expense') {
+                  finalType = 'expense';
+                } else if (amountNum < 0) {
+                  finalType = 'expense';
+                } else if (amountNum > 0) {
+                  finalType = 'income';
+                } else {
+                  finalType = 'expense';
+                }
+
+                const amountAbs = Math.abs(amountNum);
+                const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
+                const descClean = cleanDescription(descFinal);
+
+                // Dedupe key: always use cleaned description for consistency
+                const key = makeTxnKey({
+                  accountId: accountForRow.id,
+                  dateISO,
+                  type: String(finalType),
+                  amountAbs,
+                  descClean, // always cleaned
+                });
+
+                if (existingKeys.has(key)) {
+                  skippedDuplicate++;
+                  continue;
+                }
+                existingKeys.add(key);
+
+                const categoryFinal = normalizeCategory(p.category);
+
+                // Build transaction object directly (don't call addTransaction to avoid state conflicts)
+                const newTxn: Transaction = {
+                  id: makeId('tx'),
+                  accountId: accountForRow.id,
+                  amount: amountAbs,
+                  type: finalType,
+                  date: dateISO,
+                  name: descClean || undefined,
+                  description: descFinal || undefined,
+                  category: categoryFinal,
+                };
+
+                newTxs.push(newTxn);
+                importedCount++;
+
+                // Yield frequently to avoid watchdog kills (every 50 rows)
+                if (processed % yieldEvery === 0) {
+                  const totalSkipped =
+                    skippedUnknownAccount +
+                    skippedBadAmountOrDate +
+                    skippedMissingAccountName +
+                    skippedCouldNotCreateAccount +
+                    skippedDuplicate +
+                    skippedInvalidType +
+                    skippedInvalidAccountForType +
+                    skippedTransferMissingAccountB;
+                  updateProgress({
+                    imported: importedCount,
+                    skipped: totalSkipped,
+                    message: `Building transactions… (${offset + processed}/${total})`,
+                  });
+                  await yieldToUI();
+                }
+              }
+
+              // ✅ Build the final accounts list (include any created during this batch)
+              // Start with existing accounts + pending accounts from previous batches
+              const accountsAfter = [...accounts, ...pendingAccountsRef.current];
+              const existingIds = new Set(accountsAfter.map((a) => a.id));
+
+              // Add newly created accounts from this batch
+              for (const a of Object.values(createdAccountByName)) {
+                if (a?.id && !existingIds.has(a.id)) {
+                  accountsAfter.push(a);
+                  existingIds.add(a.id);
+                }
+              }
+
+              // Final progress update after loop
+              const totalSkipped =
+                skippedUnknownAccount +
+                skippedBadAmountOrDate +
+                skippedMissingAccountName +
+                skippedCouldNotCreateAccount +
+                skippedDuplicate +
+                skippedInvalidType +
+                skippedInvalidAccountForType +
+                skippedTransferMissingAccountB;
+              updateProgress({
+                imported: importedCount,
+                skipped: totalSkipped,
+                message: `Built ${importedCount} transactions, ${totalSkipped} skipped`,
+              });
+              await yieldToUI();
+
+              // ✅ Add to pending buffer instead of persisting immediately
+              setPendingActive(true);
+
+              // Merge accounts into pendingAccounts (dedupe by id)
+              setPendingAccounts((prev) => {
+                const map = new Map(prev.map((a) => [a.id, a]));
+                // Include existing accounts when pending starts
+                for (const a of accounts) map.set(a.id, a);
+                // Add newly created accounts
+                for (const a of accountsAfter) map.set(a.id, a);
+                return Array.from(map.values());
+              });
+
+              // Append transactions into pendingTxs
+              setPendingTxs((prev) => [...prev, ...newTxs]);
+
+              setImportBatchOffset(end);
+              setImportHasMoreBatches(end < total); // offset < total after this batch
+
+              // Persist pending snapshot (for crash recovery)
+              // Include prior pendingTxsRef.current + new transactions
+              const currentPendingTxs = [...pendingTxsRef.current, ...newTxs];
+              // Include prior pendingAccountsRef.current + newly created accounts
+              const currentPendingAccounts = Array.from(
+                new Map([
+                  ...pendingAccountsRef.current.map((a) => [a.id, a] as const),
+                  ...accounts.map((a) => [a.id, a] as const), // existing accounts
+                  ...Object.values(createdAccountByName).map((a) => [a.id, a] as const), // newly created
+                ]).values()
+              );
+              await persistPending({
+                pendingTxs: currentPendingTxs,
+                pendingAccounts: currentPendingAccounts,
+                offset: end,
+                total,
+                filename: importLastFilename,
+              });
+
+              const summaryLines: string[] = [];
+              summaryLines.push(`Batch imported: rows ${offset + 1}-${end} of ${total}`);
+              summaryLines.push(`Remaining after batch: ${Math.max(0, total - end)}`);
+              summaryLines.push(`Imported transactions: ${importedCount}`);
+              summaryLines.push(`New accounts created from CSV: ${createdAccountsCount}`);
+              summaryLines.push(`Skipped duplicates: ${skippedDuplicate}`);
+              summaryLines.push(`Skipped unknown accounts: ${skippedUnknownAccount}`);
+              summaryLines.push(`Skipped invalid amount/date: ${skippedBadAmountOrDate}`);
+              summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
+              summaryLines.push(`Skipped unknown Type: ${skippedInvalidType}`);
+              summaryLines.push(`Skipped wrong account for Type (expense=A, income=B, transfer=A+B): ${skippedInvalidAccountForType}`);
+              if (skippedTransferMissingAccountB > 0) {
+                summaryLines.push(`Transfer rows missing Account B (to-account) skipped: ${skippedTransferMissingAccountB}`);
+              }
+              summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
+              if (end >= total) {
+                summaryLines.push(`All batches complete. Press "Commit import" to save to app.`);
+              } else {
+                summaryLines.push(`Pending in buffer. Use "Continue import" for next batch, then "Commit import" to save.`);
+              }
+
+              setLastImportSummary(summaryLines.join('\n'));
+              if (end >= total) {
+                setLastStatus(`CSV import complete. All ${total} rows in pending buffer. Press "Commit import" to save to app.`);
+              } else {
+                setLastStatus(`CSV import batch complete. Rows ${offset + 1}-${end} of ${total} in pending buffer. Use "Continue import" for next batch.`);
+              }
+              setShowTemplatePreview(false);
+              setShowExportPreview(false);
+              setShowCsvPreview(false);
+
+              await persistCsvStats({
+                importedCount,
+                createdAccountsCount,
+                skippedDuplicate,
+                skippedUnknownAccount,
+                skippedBadAmountOrDate,
+                skippedMissingAccountName,
+                skippedCouldNotCreateAccount,
+                finishedAt: new Date().toISOString(),
+                source: importSource === 'file' ? 'file' : 'manual',
+                operation: 'import',
+                batchOffset: offset,
+                batchEnd: end,
+                totalRows: total,
+              });
+
+              finishProgress(`Import complete: ${importedCount} imported (rows ${offset + 1}-${end} of ${total}).`);
+      } catch (err: any) {
+        console.error('CSV import error:', err);
+        const errorMsg = err?.message || String(err) || 'Unknown error';
+        failProgress(`Import failed: ${errorMsg}`);
+        Alert.alert('Import error', `Something went wrong during CSV import:\n\n${errorMsg}`);
+        setLastStatus(`Import error: ${errorMsg}`);
+      }
+    },
+    [
+      accounts,
+      txs,
+      recurring,
+      budgets,
+      actions,
+      updateProgress,
+      startProgress,
+      finishProgress,
+      failProgress,
+      persistCsvStats,
+      createMissingAccounts,
+      importSource,
+      persistPending,
+      importLastFilename,
+    ]
+  );
+
   const handleApplyCsvImportPress = () => {
-    if (!importCsvText.trim()) {
-      setLastStatus('Paste CSV text or pick a file first.');
+    if (!importCsvText || !importCsvText.trim()) {
+      Alert.alert('No CSV data', 'Pick a CSV file first.');
+      setLastStatus('Pick a CSV file first.');
       return;
     }
-
-    const cleanDescription = (s: unknown) => {
-      let v = String(s ?? '').replace(/\u00A0/g, ' ').trim();
-      if (!v) return '';
-
-      v = v.replace(/\*[A-Z0-9]{3,}/gi, ' ');
-      v = v.replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ');
-      v = v.replace(/\b\d{6,}\b/g, ' ');
-      v = v.replace(/\s+/g, ' ').trim();
-
-      return v;
-    };
-
-    const normalizeHeader = (h: unknown) =>
-      String(h ?? '')
-        .replace(/\u00A0/g, ' ')
-        .trim()
-        .toLowerCase();
-
-    const parseTypeCell = (typeStrRaw: unknown): 'income' | 'expense' | 'transfer' | null => {
-      const s = String(typeStrRaw ?? '').trim().toLowerCase();
-      if (!s) return null;
-      if (s === 'expense' || s === 'out' || s === 'debit') return 'expense';
-      if (s === 'income' || s === 'in' || s === 'credit') return 'income';
-      if (s === 'transfer') return 'transfer';
-      return null;
-    };
-
-    const parseAmount = (raw: unknown): number | null => {
-      const s = String(raw ?? '').trim();
-      if (!s) return null;
-      const cleaned = s.replace(/[£$\s]/g, '').replace(/,/g, '');
-      const n = Number(cleaned);
-      if (!isFinite(n) || isNaN(n)) return null;
-      return n;
-    };
-
-    const makeTxnKey = (input: {
-      accountId: string;
-      dateISO: string;
-      type: string;
-      amountAbs: number;
-      descClean: string;
-    }) => {
-      const amt = Number(input.amountAbs || 0).toFixed(2);
-      return `${input.accountId}__${input.dateISO}__${input.type}__${amt}__${norm(input.descClean)}`;
-    };
-
+    if (progress.active) {
+      Alert.alert('Import in progress', 'Please wait for the current import to complete.');
+      return;
+    }
     Alert.alert(
       'Confirm CSV import',
       createMissingAccounts
@@ -813,241 +1767,117 @@ export default function DataExportImportScreen(_props: Props) {
           text: 'Import',
           style: 'destructive',
           onPress: async () => {
-            try {
-              const rows = parseCsvLines(importCsvText);
-              if (!rows.length) {
-                setLastStatus('CSV parsed but contains no rows.');
-                return;
-              }
-
-              const [firstRow, ...restRows] = rows;
-              let dataRows = rows;
-              let headerRow: string[] | null = null;
-
-              if (csvHasHeaderRow) {
-                headerRow = firstRow;
-                dataRows = restRows;
-              }
-
-              // template order: Date, Account, Amount, Description, Merchant, Category, Type
-              let dateCol = 0;
-              let accountCol = 1;
-              let amountCol = 2;
-              let descriptionCol = 3;
-              let merchantCol = 4;
-              let categoryCol = 5;
-              let typeCol = 6;
-
-              if (headerRow) {
-                const headerLower = headerRow.map(normalizeHeader);
-                const findIndex = (names: string[]) => headerLower.findIndex((h) => names.includes(h));
-
-                const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
-                const accIdx = findIndex(['account', 'account_name', 'account name']);
-                const amountIdx = findIndex(['amount', 'value', 'amt']);
-                const descIdx = findIndex(['description', 'desc', 'details', 'note']);
-                const merchantIdx = findIndex(['merchant', 'payee', 'name']);
-                const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
-                const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
-
-                if (dateIdx >= 0) dateCol = dateIdx;
-                if (accIdx >= 0) accountCol = accIdx;
-                if (amountIdx >= 0) amountCol = amountIdx;
-                if (descIdx >= 0) descriptionCol = descIdx;
-                if (merchantIdx >= 0) merchantCol = merchantIdx;
-                if (catIdx >= 0) categoryCol = catIdx;
-                if (typeIdx >= 0) typeCol = typeIdx;
-              }
-
-              const safeCell = (row: string[], idx: number) =>
-                idx >= 0 && idx < row.length ? String(row[idx] ?? '').trim() : '';
-
-              let importedCount = 0;
-              let skippedUnknownAccount = 0;
-              let skippedBadAmount = 0;
-              let skippedMissingAccountName = 0;
-              let createdAccountsCount = 0;
-              let skippedCouldNotCreateAccount = 0;
-              let skippedDuplicate = 0;
-
-              const createdAccountByName: Record<string, Account> = {};
-
-              // Existing transaction keys (de-dupe)
-              const existingKeys = new Set<string>();
-              for (const t of txs || []) {
-                const accountId = String((t as any).accountId ?? '');
-                const dateISO = String((t as any).date ?? '');
-                const type = String((t as any).type ?? '');
-                const amountAbs = Math.abs(Number((t as any).amount ?? 0));
-                const descClean = cleanDescription((t as any).description ?? (t as any).name ?? '');
-                if (!accountId || !dateISO || !type) continue;
-                existingKeys.add(makeTxnKey({ accountId, dateISO, type, amountAbs, descClean }));
-              }
-
-              const newTxs: Transaction[] = [];
-
-              for (const row of dataRows) {
-                if (!row.length) continue;
-
-                const dateStr = safeCell(row, dateCol);
-                const typeStrRaw = safeCell(row, typeCol);
-                const amountRaw = safeCell(row, amountCol);
-                const rawDesc = safeCell(row, descriptionCol);
-                const rawMerchant = safeCell(row, merchantCol);
-                const category = safeCell(row, categoryCol);
-                const rawAccountName = safeCell(row, accountCol);
-
-                const accountKey = norm(rawAccountName);
-                const accountName = String(rawAccountName).replace(/\u00A0/g, ' ').trim();
-                const accountNameSafe = accountName || 'Imported Account';
-
-                if (!accountName) {
-                  skippedMissingAccountName++;
-                  continue;
-                }
-
-                let accountForRow: Account | undefined =
-                  createdAccountByName[accountKey] ??
-                  accounts.find((a) => a?.name && norm(a.name) === accountKey);
-
-                if (!accountForRow) {
-                  if (!createMissingAccounts) {
-                    skippedUnknownAccount++;
-                    continue;
-                  }
-
-                  let created: Account | null = null;
-                  try {
-                    created = actions.addAccount({
-                      name: accountNameSafe,
-                      type: 'bank',
-                      balance: 0,
-                    });
-                  } catch (err) {
-                    console.error('Error creating account from CSV row', err);
-                  }
-
-                  if (!created?.id) {
-                    skippedCouldNotCreateAccount++;
-                    continue;
-                  }
-
-                  createdAccountsCount++;
-                  createdAccountByName[accountKey] = created;
-                  accountForRow = created;
-                }
-
-                const amountNum = parseAmount(amountRaw);
-                if (amountNum === null) {
-                  skippedBadAmount++;
-                  continue;
-                }
-
-                const dateISO = normalizeDateToISODate(String(dateStr || ''));
-                if (!dateISO) {
-                  skippedBadAmount++;
-                  continue;
-                }
-
-                let finalType: TransactionType;
-                const typeFromCell = parseTypeCell(typeStrRaw);
-                if (typeFromCell) finalType = typeFromCell;
-                else if (amountNum < 0) finalType = 'expense';
-                else if (amountNum > 0) finalType = 'income';
-                else finalType = 'expense';
-
-                const amountAbs = Math.abs(amountNum);
-                const descClean = cleanDescription(rawDesc);
-                const descFinal = String(rawDesc ?? '').replace(/\u00A0/g, ' ').trim();
-
-                const key = makeTxnKey({
-                  accountId: accountForRow.id,
-                  dateISO,
-                  type: String(finalType),
-                  amountAbs,
-                  descClean: descClean || descFinal,
-                });
-
-                if (existingKeys.has(key)) {
-                  skippedDuplicate++;
-                  continue;
-                }
-                existingKeys.add(key);
-
-                const added = actions.addTransaction({
-                  accountId: accountForRow.id,
-                  amount: amountAbs,
-                  type: finalType,
-                  date: dateISO,
-                  name: descClean || undefined,
-                  description: descFinal || undefined,
-                  merchant: rawMerchant || undefined,
-                  category: category || undefined,
-                } as any);
-
-                if (added) newTxs.push(added);
-                importedCount++;
-              }
-
-              // ✅ Build the final accounts list (include any created during this import)
-              const accountsAfter = [...accounts];
-              const existingIds = new Set(accountsAfter.map((a) => a.id));
-
-              for (const a of Object.values(createdAccountByName)) {
-                if (a?.id && !existingIds.has(a.id)) {
-                  accountsAfter.push(a);
-                  existingIds.add(a.id);
-                }
-              }
-
-
-              // ✅ Persist transactions + recurring in one go
-              const allTxsAfter = [...txs, ...newTxs];
-              const nextRecurring = buildRecurringFromTransactions(allTxsAfter);
-
-              actions.replaceAllData({
-                accounts: accountsAfter,          // ✅ use accountsAfter
-                transactions: allTxsAfter,
-                recurring: nextRecurring,
-                budgets,
-              });
-
-
-              const summaryLines: string[] = [];
-              summaryLines.push(`Imported transactions: ${importedCount}`);
-              summaryLines.push(`New accounts created from CSV: ${createdAccountsCount}`);
-              summaryLines.push(`Skipped duplicates: ${skippedDuplicate}`);
-              summaryLines.push(`Skipped unknown accounts: ${skippedUnknownAccount}`);
-              summaryLines.push(`Skipped invalid amount/date: ${skippedBadAmount}`);
-              summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
-              summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
-              summaryLines.push(`Recurring items generated: ${nextRecurring.length}`);
-
-              setLastImportSummary(summaryLines.join('\n'));
-              setLastStatus('CSV import completed. Recurring rebuilt.');
-
-              await persistCsvStats({
-                importedCount,
-                createdAccountsCount,
-                skippedDuplicate,
-                skippedUnknownAccount,
-                skippedBadAmount,
-                skippedMissingAccountName,
-                skippedCouldNotCreateAccount,
-                finishedAt: new Date().toISOString(),
-                source: importSource === 'file' ? 'file' : 'manual',
-                operation: 'import',
-              });
-            } catch (err: any) {
-              console.error(err);
-              Alert.alert('Import error', 'Something went wrong during CSV import.');
-              setLastStatus(`Import error: ${String(err?.message ?? err)}`);
-            }
+            // Clear any existing pending import when starting a new one
+            setPendingTxs([]);
+            setPendingAccounts([]);
+            setPendingActive(false);
+            existingKeysRef.current = null; // Clear de-dupe keys for new import
+            await clearPending();
+            setImportBatchOffset(0);
+            await runCsvImportBatch(0);
           },
         },
       ]
     );
   };
+
+  const handleContinueCsvImportPress = () => {
+    if (!importCsvText.trim()) {
+      Alert.alert('No CSV loaded', 'Pick a CSV file first.');
+      return;
+    }
+    if (!importHasMoreBatches) {
+      Alert.alert('No more rows', 'There are no remaining rows to import.');
+      return;
+    }
+    Alert.alert(
+      'Continue CSV import',
+      `This will import the next ${MAX_CSV_IMPORT_ROWS} rows from the currently loaded file.\n\nContinue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: async () => {
+            await runCsvImportBatch(importBatchOffset);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCommitPendingImport = useCallback(async () => {
+    if (!pendingActive || (!pendingTxs.length && !pendingAccounts.length)) {
+      Alert.alert('Nothing to commit', 'No pending imported data found.');
+      return;
+    }
+
+    // Capture values at alert time for consistency
+    const txsToCommit = pendingTxs.length;
+    const accountsToCommit = pendingAccounts.length;
+
+    Alert.alert(
+      'Commit imported data',
+      `This will add ${txsToCommit} transactions to your app and save them.\n\nContinue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Commit',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Capture current pending state at commit time
+              const currentPendingTxs = pendingTxsRef.current;
+              const currentPendingAccounts = pendingAccountsRef.current;
+
+              if (!currentPendingTxs.length && !currentPendingAccounts.length) {
+                Alert.alert('Nothing to commit', 'Pending data was cleared.');
+                return;
+              }
+
+              startProgress('Committing import…');
+              updateProgress({ stage: 'saving', message: 'Saving imported data…' });
+              await yieldToUI();
+
+              const finalAccounts = currentPendingAccounts.length ? currentPendingAccounts : accounts;
+              const finalTxs = [...txs, ...currentPendingTxs];
+
+              // Rebuild recurring ONLY ONCE here (chunked) - default to last18Months only
+              // User can rebuild manually with "Rebuild recurring now" button if needed
+              updateProgress({ stage: 'saving', message: 'Finalizing commit…' });
+              await yieldToUI();
+
+              // Default to 'none' for commit - user can rebuild manually if needed
+              // This avoids heavy recurring rebuild during commit which can cause hangs
+              const nextRecurring = recurring; // Keep existing recurring, user can rebuild manually
+
+              updateProgress({ stage: 'saving', message: 'Final save…' });
+              await yieldToUI();
+
+              actions.replaceAllData({
+                accounts: finalAccounts,
+                transactions: finalTxs,
+                recurring: nextRecurring,
+                budgets,
+              });
+
+              setPendingTxs([]);
+              setPendingAccounts([]);
+              setPendingActive(false);
+              existingKeysRef.current = null; // Clear de-dupe keys after commit
+              await clearPending();
+
+              finishProgress('Import committed successfully.');
+              setLastStatus(`Committed ${currentPendingTxs.length} imported transactions. Recurring items kept as-is. Use "Rebuild recurring now" if needed.`);
+            } catch (e: any) {
+              failProgress(e?.message ?? String(e));
+              Alert.alert('Commit failed', e?.message ?? 'Unknown error');
+            }
+          },
+        },
+      ]
+    );
+  }, [pendingActive, pendingTxs, pendingAccounts, accounts, txs, actions, budgets, startProgress, updateProgress, finishProgress, failProgress, clearPending]);
 
   /* ===========================
      CSV RESTORE (replace/merge) + rebuild recurring
@@ -1057,131 +1887,246 @@ export default function DataExportImportScreen(_props: Props) {
     const rows = parseCsvLines(csvText);
     if (!rows.length) throw new Error('CSV parsed but contains no rows.');
 
-    const [firstRow, ...restRows] = rows;
-    let dataRows = rows;
-    let headerRow: string[] | null = null;
+    // Excel-friendly normalizers
+    const toIsoDate = (v: string) => {
+      const s = (v || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s; // already ISO
 
-    if (csvHasHeaderRow) {
-      headerRow = firstRow;
-      dataRows = restRows;
+      // Accept DD/MM/YYYY (Excel format)
+      const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) {
+        const dd = m[1].padStart(2, '0');
+        const mm = m[2].padStart(2, '0');
+        const yyyy = m[3];
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      return s; // let validation handle anything else
+    };
+
+    const parseAmount = (v: string) => {
+      const s = (v || '')
+        .trim()
+        .replace(/£/g, '')
+        .replace(/,/g, '') // 1,234.56
+        .replace(/^\((.*)\)$/, '-$1'); // (12.34)
+      const n = Number(s);
+      return Number.isFinite(n) ? n : NaN;
+    };
+
+    const normType = (v: string): 'income' | 'expense' | 'transfer' | null => {
+      const s = (v || '').trim().toLowerCase();
+      if (s === 'income') return 'income';
+      if (s === 'expense') return 'expense';
+      if (s === 'transfer') return 'transfer';
+      return null;
+    };
+
+    const headerRow = (rows[0] ?? []).map((h) => String(h ?? ''));
+    const headerMap = buildHeaderMap(headerRow);
+
+    const missingMessage = validateRequiredHeaders(headerMap);
+    if (missingMessage) {
+      throw new Error(`Missing required columns: ${missingMessage}.`);
     }
 
-    // template order: Date, Account, Amount, Description, Merchant, Category, Type
-    let dateCol = 0;
-    let accountCol = 1;
-    let amountCol = 2;
-    let descriptionCol = 3;
-    let merchantCol = 4;
-    let categoryCol = 5;
-    let typeCol = 6;
+    const getCell = (row: string[], key: CanonicalCsvKey) => {
+      const idx = headerMap.indexByKey[key];
+      const raw = idx !== undefined && typeof idx === 'number' ? stripBom(row[idx] ?? '') : '';
+      return normalizeCellValue(raw);
+    };
 
-    if (headerRow) {
-      const headerLower = headerRow.map((h) => String(h).trim().toLowerCase());
-      const findIndex = (names: string[]) => headerLower.findIndex((h) => names.includes(h));
+    const dataRows = rows.slice(1);
+    const filteredRows = dataRows.filter((r) => {
+      const d = getCell(r, 'date');
+      if (/yyyy-mm-dd/i.test(d)) return false;
+      return (r || []).some((cell) => String(cell ?? '').trim().length > 0);
+    });
 
-      const dateIdx = findIndex(['date', 'tx_date', 'txn_date']);
-      const typeIdx = findIndex(['type', 'txn_type', 'tx_type']);
-      const amountIdx = findIndex(['amount', 'value', 'amt']);
-      const accIdx = findIndex(['account', 'account_name', 'account name']);
-      const descIdx = findIndex(['description', 'desc', 'details', 'note']);
-      const merchantIdx = findIndex(['merchant', 'payee', 'name']);
-      const catIdx = findIndex(['category', 'cat', 'category_name', 'category name']);
-
-      if (dateIdx >= 0) dateCol = dateIdx;
-      if (accIdx >= 0) accountCol = accIdx;
-      if (amountIdx >= 0) amountCol = amountIdx;
-      if (typeIdx >= 0) typeCol = typeIdx;
-      if (descIdx >= 0) descriptionCol = descIdx;
-      if (merchantIdx >= 0) merchantCol = merchantIdx;
-      if (catIdx >= 0) categoryCol = catIdx;
-    }
-
-    const safeCell = (row: string[], idx: number) =>
-      idx >= 0 && idx < row.length ? String(row[idx] ?? '').trim() : '';
-
-    const accountByName: Record<string, Account> = {};
-    for (const a of accounts) {
-      if (a?.name) accountByName[String(a.name).trim()] = a;
+    if (!filteredRows.length) {
+      throw new Error('CSV contains only the header/instruction row.');
     }
 
     const newAccounts: Account[] = [...accounts];
     const builtTxs: Transaction[] = [];
+    const createdAccountByName: Record<string, Account> = {};
 
     let importedCount = 0;
     let skippedUnknownAccount = 0;
-    let skippedBadAmount = 0;
+    let skippedBadAmountOrDate = 0;
     let skippedMissingAccountName = 0;
+    let skippedInvalidType = 0;
+    let skippedInvalidAccountForType = 0;
+    let skippedTransferMissingAccountB = 0;
     let createdAccountsCount = 0;
     let skippedCouldNotCreateAccount = 0;
 
-    for (const row of dataRows) {
-      if (!row.length) continue;
+    const parsed = filteredRows.map((r, rowIndex) => {
+      const date = toIsoDate(getCell(r, 'date'));
+      const accountA = getCell(r, 'accountA');
+      const accountB = getCell(r, 'accountB');
+      const amount = parseAmount(getCell(r, 'amount'));
+      const description = getCell(r, 'description');
+      const category = getCell(r, 'category');
+      const type = normType(getCell(r, 'type'));
+      const account = accountA || accountB;
 
-      const rawDate = safeCell(row, dateCol);
-      const rawType = safeCell(row, typeCol);
-      const rawAmountStr = safeCell(row, amountCol);
-      const accountName = safeCell(row, accountCol);
-      const description = safeCell(row, descriptionCol);
-      const merchant = safeCell(row, merchantCol);
-      const category = safeCell(row, categoryCol);
+      return {
+        rowIndex: rowIndex + 2,
+        date,
+        accountA,
+        accountB,
+        account,
+        amount,
+        description,
+        category,
+        type,
+      };
+    });
 
-      if (!accountName) {
+    // No early bad scan; validate per-row in the loop so stats reflect skips
+
+    for (const p of parsed) {
+      if (p.type === null || p.type === undefined) {
+        skippedInvalidType++;
+        continue;
+      }
+
+      const accountATrim = String(p.accountA ?? '').replace(/\u00A0/g, ' ').trim();
+      const accountBTrim = String(p.accountB ?? '').replace(/\u00A0/g, ' ').trim();
+      if (p.type === 'expense' && !accountATrim) {
+        skippedInvalidAccountForType++;
+        continue;
+      }
+      if (p.type === 'income' && !accountBTrim) {
+        skippedInvalidAccountForType++;
+        continue;
+      }
+      if (p.type === 'transfer') {
+        if (!accountATrim) {
+          skippedInvalidAccountForType++;
+          continue;
+        }
+        if (!accountBTrim) {
+          skippedTransferMissingAccountB++;
+          continue;
+        }
+      }
+
+      const accountName = p.type === 'expense' ? accountATrim : p.type === 'income' ? accountBTrim : accountATrim;
+      const accountNameSafe = accountName || 'Imported Account';
+
+      if (!accountName && p.type !== 'transfer') {
         skippedMissingAccountName++;
         continue;
       }
 
-      const amountNum = Number(String(rawAmountStr).replace(/[£$\s]/g, '').replace(/,/g, ''));
-      if (!isFinite(amountNum) || isNaN(amountNum)) {
-        skippedBadAmount++;
+      const amountNum = p.amount;
+      if (!Number.isFinite(amountNum)) {
+        skippedBadAmountOrDate++;
         continue;
       }
 
-      let acct = accountByName[accountName];
+      const amount = Math.abs(amountNum);
+      const isoDate = normalizeDateToISODate(p.date);
+      if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+        skippedBadAmountOrDate++;
+        continue;
+      }
 
-      if (!acct) {
-        if (!createMissingAccounts) {
+      const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
+      const descClean = cleanDescription(descFinal);
+      const categoryFinal = normalizeCategory(p.category);
+
+      if (p.type === 'transfer') {
+        const getOrCreate = (name: string): Account | null => {
+          const resolvedId = resolveAccountId(name, newAccounts);
+          let acc = resolvedId ? newAccounts.find((a) => a?.id === resolvedId) ?? null : null;
+          if (!acc) acc = createdAccountByName[normName(name)] ?? null;
+          if (!acc && createMissingAccounts) {
+            try {
+              const created = actions.addAccount({
+                name: name || 'Imported Account',
+                type: 'bank',
+                balance: 0,
+              });
+              if (created?.id) {
+                acc = created;
+                createdAccountByName[normName(name)] = acc;
+                newAccounts.push(acc);
+                createdAccountsCount++;
+              }
+            } catch {
+              return null;
+            }
+          }
+          return acc ?? null;
+        };
+        const acctA = getOrCreate(accountATrim);
+        const acctB = getOrCreate(accountBTrim);
+        if (!acctA || !acctB) {
           skippedUnknownAccount++;
           continue;
         }
+        builtTxs.push({
+          id: makeId('tx'),
+          accountId: acctA.id,
+          amount,
+          type: 'transfer',
+          date: isoDate,
+          description: descFinal || undefined,
+          name: descClean || undefined,
+          category: categoryFinal,
+          fromAccountId: acctA.id,
+          toAccountId: acctB.id,
+          merchant: acctB.name,
+        } as any);
+        importedCount++;
+        continue;
+      }
 
-        try {
-          const created = actions.addAccount({
-            name: accountName,
-            type: 'bank',
-            balance: 0,
-          });
-
-          if (!created?.id) {
+      let acct: Account | undefined = null;
+      const resolvedAccountId = resolveAccountId(accountName, newAccounts);
+      if (resolvedAccountId) {
+        acct = newAccounts.find((a) => a?.id === resolvedAccountId) ?? null;
+      }
+      if (!acct) {
+        const accountKey = normName(accountName);
+        acct = createdAccountByName[accountKey] ?? null;
+        if (!acct && createMissingAccounts) {
+          try {
+            const created = actions.addAccount({
+              name: accountNameSafe,
+              type: 'bank',
+              balance: 0,
+            });
+            if (created?.id) {
+              acct = created;
+              createdAccountByName[accountKey] = acct;
+              newAccounts.push(acct);
+              createdAccountsCount++;
+            }
+          } catch (e) {
+            console.error('CSV restore: could not create account', e);
             skippedCouldNotCreateAccount++;
             continue;
           }
-
-          acct = created;
-        } catch (e) {
-          console.error('CSV restore: could not create account', e);
-          skippedCouldNotCreateAccount++;
+        }
+        if (!acct?.id) {
+          skippedUnknownAccount++;
           continue;
         }
-
-        accountByName[accountName] = acct;
-        newAccounts.push(acct);
-        createdAccountsCount++;
       }
-
-      const finalType = normalizeType(rawType, amountNum);
-      const amount = Math.abs(amountNum);
-      const isoDate = normalizeDateToISODate(String(rawDate));
 
       builtTxs.push({
         id: makeId('tx'),
-        accountId: acct.id,
+        accountId: acct!.id,
         date: isoDate,
-        type: finalType,
+        type: p.type,
         amount,
-        category: category || undefined,
-        description: description || undefined,
-        merchant: merchant || undefined,
-        name: description ? norm(description) : undefined,
+        category: categoryFinal,
+        description: descFinal || undefined,
+        name: descClean || undefined,
       } as any);
 
       importedCount++;
@@ -1194,16 +2139,93 @@ export default function DataExportImportScreen(_props: Props) {
         importedCount,
         createdAccountsCount,
         skippedUnknownAccount,
-        skippedBadAmount,
+        skippedBadAmountOrDate,
         skippedMissingAccountName,
+        skippedInvalidType,
+        skippedInvalidAccountForType,
+        skippedTransferMissingAccountB,
         skippedCouldNotCreateAccount,
       },
     };
   };
 
+  const handleRebuildRecurringNow = useCallback(async () => {
+    try {
+      if (!txs.length) {
+        Alert.alert('No transactions', 'There are no transactions to rebuild recurring from.');
+        return;
+      }
+
+      // If user selected importedOnly, there's no "import batch" here.
+      // Treat it as last18Months to avoid confusion / heavy processing.
+      const effectiveMode =
+        recurringRebuildMode === 'importedOnly' ? 'last18Months' : recurringRebuildMode;
+
+      startProgress('Rebuilding recurring…');
+      updateProgress({
+        stage: 'recurring',
+        message: `Rebuilding recurring (${effectiveMode})…`,
+        toImport: txs.length,
+      });
+      await yieldToUI();
+
+      setLastStatus(
+        effectiveMode === 'none'
+          ? 'Recurring rebuild skipped (mode: none).'
+          : `Rebuilding recurring (${effectiveMode})...`
+      );
+
+      if (effectiveMode === 'none') {
+        finishProgress('Recurring rebuild skipped (mode: none).');
+        return;
+      }
+
+      let sourceTxs: Transaction[] = txs;
+      if (effectiveMode === 'last18Months') sourceTxs = filterTxsToLastMonths(txs, 18);
+      // else 'all' uses txs
+
+      const nextRecurring = await buildRecurringFromTransactionsChunked({
+        txs: sourceTxs,
+        chunkSize: 800,
+        onProgress: ({ phase, processed, total }) => {
+          updateProgress({
+            message:
+              phase === 'grouping'
+                ? `Recurring: grouping… (${processed}/${total})`
+                : `Recurring: building… (${processed}/${total})`,
+          });
+        },
+      });
+
+      updateProgress({ stage: 'saving', message: 'Saving recurring…' });
+      await yieldToUI();
+
+      actions.replaceAllData({
+        accounts,
+        transactions: txs,
+        recurring: nextRecurring,
+        budgets,
+      });
+
+      setLastStatus(`Recurring rebuilt: ${nextRecurring.length} items (${effectiveMode}).`);
+      setLastImportSummary((prev) => {
+        const extra = `Recurring rebuilt manually: ${nextRecurring.length} (${effectiveMode})`;
+        return prev ? `${prev}\n${extra}` : extra;
+      });
+
+      finishProgress(`Recurring rebuilt: ${nextRecurring.length} items (${effectiveMode}).`);
+    } catch (err: any) {
+      console.error('Manual recurring rebuild failed:', err);
+      const msg = err?.message || String(err) || 'Unknown error';
+      failProgress(`Recurring rebuild failed: ${msg}`);
+      Alert.alert('Recurring rebuild failed', msg);
+      setLastStatus(`Recurring rebuild failed: ${msg}`);
+    }
+  }, [txs, recurring, recurringRebuildMode, actions, accounts, budgets, startProgress, updateProgress, finishProgress, failProgress]);
+
   const handleApplyCsvRestore = () => {
     if (!importCsvText.trim()) {
-      setLastStatus('Pick a CSV file or paste CSV text first.');
+      setLastStatus('Pick a CSV file first.');
       return;
     }
 
@@ -1220,16 +2242,19 @@ export default function DataExportImportScreen(_props: Props) {
         style: 'destructive',
         onPress: async () => {
           try {
+            // Yield to UI thread to prevent watchdog kill
+            await yieldToUI();
+
             const built = buildCsvTransactions(importCsvText);
 
             const finalTxs = csvRestoreMode === 'replace' ? built.builtTxs : [...txs, ...built.builtTxs];
 
-            const nextRecurring = buildRecurringFromTransactions(finalTxs);
-
+            // Skip rebuilding recurring during restore to avoid blocking (keep existing recurring)
+            // User can rebuild recurring separately if needed
             actions.replaceAllData({
               accounts: built.newAccounts,
               transactions: finalTxs,
-              recurring: nextRecurring,
+              recurring, // keep existing recurring to avoid heavy CPU work during restore
               budgets,
             });
 
@@ -1242,13 +2267,19 @@ export default function DataExportImportScreen(_props: Props) {
             summaryLines.push(`Imported transactions: ${built.stats.importedCount}`);
             summaryLines.push(`New accounts created: ${built.stats.createdAccountsCount}`);
             summaryLines.push(`Skipped unknown accounts: ${built.stats.skippedUnknownAccount}`);
-            summaryLines.push(`Skipped invalid amount: ${built.stats.skippedBadAmount}`);
+            summaryLines.push(`Skipped invalid amount/date: ${built.stats.skippedBadAmountOrDate}`);
             summaryLines.push(`Skipped missing account name: ${built.stats.skippedMissingAccountName}`);
+            if ((built.stats.skippedTransferMissingAccountB ?? 0) > 0) {
+              summaryLines.push(`Transfer rows missing Account B (to-account) skipped: ${built.stats.skippedTransferMissingAccountB}`);
+            }
             summaryLines.push(`Account creation failed: ${built.stats.skippedCouldNotCreateAccount}`);
-            summaryLines.push(`Recurring items generated: ${nextRecurring.length}`);
+            summaryLines.push(`Recurring items: (not rebuilt during restore - use "Rebuild recurring" button if needed)`);
 
             setLastImportSummary(summaryLines.join('\n'));
-            setLastStatus('CSV restore/merge completed. Recurring rebuilt.');
+            setLastStatus('CSV restore/merge completed. Recurring items not rebuilt (use "Rebuild recurring" button if needed).');
+            setShowTemplatePreview(false);
+            setShowExportPreview(false);
+            setShowCsvPreview(false);
 
             await persistCsvStats({
               ...built.stats,
@@ -1293,7 +2324,7 @@ export default function DataExportImportScreen(_props: Props) {
           <Text style={styles.btnPrimaryText}>Export full backup as JSON (Files)</Text>
         </Pressable>
 
-        <Pressable style={styles.btnSecondary} onPress={handlePickJsonBackup}>
+        <Pressable style={styles.btnSecondaryFull} onPress={handlePickJsonBackup}>
           <Text style={styles.btnSecondaryText}>Select JSON backup to restore</Text>
         </Pressable>
 
@@ -1317,7 +2348,17 @@ export default function DataExportImportScreen(_props: Props) {
           </View>
         ) : null}
 
-        {jsonPreview ? (
+        <Pressable
+          style={[styles.btnSecondaryFull, !jsonPreview && styles.btnSecondaryDisabled]}
+          onPress={() => setShowPreview((v) => !v)}
+          disabled={!jsonPreview}
+        >
+          <Text style={[styles.btnPrimaryText, !jsonPreview && styles.btnSecondaryTextDisabled]}>
+            {showPreview ? 'Hide preview' : 'Show preview'}
+          </Text>
+        </Pressable>
+
+        {showPreview && jsonPreview ? (
           <View style={styles.previewBox}>
             <Text style={styles.sectionTitle}>JSON preview</Text>
             <Text style={styles.previewMeta}>Exported: {jsonPreview.exportedAt}</Text>
@@ -1332,34 +2373,53 @@ export default function DataExportImportScreen(_props: Props) {
         ) : null}
       </View>
 
-      {/* CSV TEMPLATE */}
+      {/* CSV TEMPLATE
+          App Store Connect / Apple reviewer note (copy when updating):
+          "DebitLens supports CSV import using a provided template (exportable in-app). Required fields: Date, Amount, Description, Category, Type, and Account A or Account B. Extra columns are ignored."
+      */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>CSV Template</Text>
+        <Text style={styles.sectionTitle}>CSV Template (Import Format)</Text>
         <Text style={styles.sectionText}>
-          Generate the official CSV template and export it to Files.
+          Use this template to format transactions for importing into DebitLens.
+        </Text>
+        <Text style={styles.sectionText}>
+          Required columns: Date, Amount, Description, Category, Type, and Account A or Account B (at least one).
+          Extra columns are allowed and will be ignored.
+        </Text>
+        <Text style={styles.sectionText}>
+          • Date format recommended: YYYY-MM-DD{'\n'}
+          • Type must be: expense, income, or transfer{'\n'}
+          • For transfers, include both Account A and Account B (from → to)
+        </Text>
+        <Text style={styles.subtle}>
+          If you see “Missing required columns: Account A or Account B”, your CSV header row must include at least one of those columns.
         </Text>
 
-        <Pressable 
-          style={[styles.btnSecondary, isTemplateGenerated && styles.btnSecondaryActive]} 
-          onPress={handleGenerateCsvTemplate}
+        <Pressable
+          style={styles.btnSecondaryFull}
+          onPress={() => setShowTemplatePreview((v) => !v)}
         >
-          <Text style={[styles.btnSecondaryText, isTemplateGenerated && styles.btnSecondaryTextActive]}>
-            {isTemplateGenerated ? '✓ Template Generated' : 'Generate CSV Template (text)'}
+          <Text style={[styles.btnPrimaryText, showTemplatePreview && styles.btnSecondaryTextActive]}>
+            {showTemplatePreview ? 'Hide preview' : 'Show preview'}
           </Text>
         </Pressable>
 
-        {isTemplateGenerated && (
-          <Text style={styles.statusHint}>Template generated. Ready to export.</Text>
-        )}
+        {showTemplatePreview ? (
+          <View style={styles.previewBox}>
+            <Text style={styles.sectionTitle}>Preview (read-only):</Text>
+            <Text style={[styles.sectionText, { marginBottom: 6 }]}>
+              Copy this format into your own spreadsheet, then save as CSV.
+            </Text>
+            <ScrollView style={styles.csvPreviewScroll} nestedScrollEnabled>
+              <Text selectable style={styles.csvPreviewText}>
+                {templateCsvText}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
 
-        <Pressable 
-          style={[styles.btnPrimary, !isTemplateGenerated && styles.btnPrimaryDisabled]} 
-          onPress={handleExportCsvPreview}
-          disabled={!isTemplateGenerated}
-        >
-          <Text style={[styles.btnPrimaryText, !isTemplateGenerated && styles.btnPrimaryTextDisabled]}>
-            Export Template CSV (Files)
-          </Text>
+        <Pressable style={[styles.btnPrimary, { marginTop: 12 }]} onPress={handleExportCsvPreview}>
+          <Text style={styles.btnPrimaryText}>Export Template CSV (Files)</Text>
         </Pressable>
 
       </View>
@@ -1386,7 +2446,7 @@ export default function DataExportImportScreen(_props: Props) {
         </View>
 
         <Pressable 
-          style={[styles.btnSecondary, isTransactionsCsvGenerated && styles.btnSecondaryActive]} 
+          style={[styles.btnSecondaryFull, isTransactionsCsvGenerated && styles.btnSecondaryActive]} 
           onPress={handleGenerateCsv}
         >
           <Text style={[styles.btnSecondaryText, isTransactionsCsvGenerated && styles.btnSecondaryTextActive]}>
@@ -1397,6 +2457,33 @@ export default function DataExportImportScreen(_props: Props) {
         {isTransactionsCsvGenerated && (
           <Text style={styles.statusHint}>Transactions CSV generated. Ready to export.</Text>
         )}
+
+        <Pressable
+          style={[styles.btnSecondaryFull, !exportCsvText.trim() && styles.btnSecondaryDisabled]}
+          onPress={() => setShowExportPreview((v) => !v)}
+          disabled={!exportCsvText.trim()}
+        >
+          <Text style={[styles.btnPrimaryText, !exportCsvText.trim() && styles.btnSecondaryTextDisabled]}>
+            {showExportPreview ? 'Hide preview' : 'Show preview'}
+          </Text>
+        </Pressable>
+
+        {showExportPreview && exportCsvText.trim() ? (
+          <View style={styles.previewBox}>
+            <Text style={styles.sectionTitle}>Transactions CSV preview</Text>
+            <ScrollView style={styles.csvPreviewScroll} nestedScrollEnabled>
+              <Text selectable style={styles.csvPreviewText}>
+                {(() => {
+                  const lines = exportCsvText.split(/\r?\n/);
+                  const maxLines = 100;
+                  const truncated = lines.length > maxLines;
+                  const previewContent = truncated ? lines.slice(0, maxLines).join('\n') : exportCsvText;
+                  return truncated ? `${previewContent}\n\n… truncated (${lines.length} total lines)` : previewContent;
+                })()}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
 
         <Pressable 
           style={[styles.btnPrimary, !isTransactionsCsvGenerated && styles.btnPrimaryDisabled]} 
@@ -1414,13 +2501,13 @@ export default function DataExportImportScreen(_props: Props) {
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>CSV import / restore</Text>
         <Text style={styles.sectionText}>
-          Pick a CSV file or paste CSV text below. Import (append) or restore (replace/merge).
+          CSV import is limited to 200 rows per batch for stability. If your file has more rows, use Continue import to import the next batch. Pick a CSV file, then import (append) or restore (replace/merge).
         </Text>
 
-        <View style={styles.optionRow}>
-          <Text style={styles.optionLabel}>First row is header</Text>
-          <Switch value={csvHasHeaderRow} onValueChange={setCsvHasHeaderRow} />
-        </View>
+        <Text style={styles.subtle}>
+          Note: DebitLens imports <Text style={styles.bold}>CSV</Text> files. If you have an Excel file (.xlsx), export or
+          "Save As" <Text style={styles.bold}>CSV (Comma delimited)</Text> first.
+        </Text>
 
         <View style={styles.optionRow}>
           <Text style={styles.optionLabel}>Create missing accounts from CSV</Text>
@@ -1432,6 +2519,63 @@ export default function DataExportImportScreen(_props: Props) {
             CSV restore mode: {csvRestoreMode === 'replace' ? 'Replace' : 'Merge'}
           </Text>
           <Switch value={csvRestoreMode === 'merge'} onValueChange={(v) => setCsvRestoreMode(v ? 'merge' : 'replace')} />
+        </View>
+
+        <View style={styles.optionsBox}>
+          <Text style={styles.optionsTitle}>Recurring rebuild mode</Text>
+          <View style={styles.rowButtons}>
+            <Pressable
+              style={[
+                styles.btnSecondary,
+                recurringRebuildMode === 'none' && styles.btnSecondaryActive,
+              ]}
+              onPress={() => setRecurringRebuildMode('none')}
+            >
+              <Text
+                style={[
+                  styles.btnSecondaryText,
+                  recurringRebuildMode === 'none' && styles.btnSecondaryTextActive,
+                ]}
+              >
+                None
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.btnSecondary,
+                recurringRebuildMode === 'last18Months' && styles.btnSecondaryActive,
+              ]}
+              onPress={() => setRecurringRebuildMode('last18Months')}
+            >
+              <Text
+                style={[
+                  styles.btnSecondaryText,
+                  recurringRebuildMode === 'last18Months' && styles.btnSecondaryTextActive,
+                ]}
+              >
+                18mo
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.btnSecondary,
+                recurringRebuildMode === 'all' && styles.btnSecondaryActive,
+              ]}
+              onPress={() => setRecurringRebuildMode('all')}
+            >
+              <Text
+                style={[
+                  styles.btnSecondaryText,
+                  recurringRebuildMode === 'all' && styles.btnSecondaryTextActive,
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+          </View>
+          <Text style={styles.hint}>
+            Controls rebuild scope: None (keep current), Last 18 months (recommended), or All data (slow).
+          </Text>
         </View>
 
         <View style={styles.rowButtons}>
@@ -1446,29 +2590,141 @@ export default function DataExportImportScreen(_props: Props) {
           </Pressable>
         </View>
 
-        <Text style={{ height: 12 }} />
+        <Pressable
+          style={[styles.btnSecondaryFull, !importCsvText.trim() && styles.btnSecondaryDisabled]}
+          onPress={() => setShowCsvPreview((v) => !v)}
+          disabled={!importCsvText.trim()}
+        >
+          <Text style={[styles.btnPrimaryText, !importCsvText.trim() && styles.btnSecondaryTextDisabled]}>
+            {showCsvPreview ? 'Hide preview' : 'Show preview'}
+          </Text>
+        </Pressable>
 
-        <Text style={styles.textBoxLabel}>Or paste CSV text below.</Text>
-        <TextInput
-          style={[styles.input, styles.inputMultiline]}
-          multiline
-          value={importCsvText}
-          onChangeText={(text) => {
-            setImportCsvText(text);
-            setImportSource('manual');
-          }}
-          placeholder="Paste CSV text…"
-          textAlignVertical="top"
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable
-        />
+        {showCsvPreview && importCsvText.trim() ? (
+          <View style={styles.previewBox}>
+            <Text style={styles.sectionTitle}>CSV preview</Text>
+            <ScrollView style={styles.csvPreviewScroll} nestedScrollEnabled>
+              <Text selectable style={styles.csvPreviewText}>
+                {(() => {
+                  const lines = importCsvText.split(/\r?\n/);
+                  const maxLines = 100;
+                  const truncated = lines.length > maxLines;
+                  const previewContent = truncated ? lines.slice(0, maxLines).join('\n') : importCsvText;
+                  return truncated ? `${previewContent}\n\n… truncated (${lines.length} total lines)` : previewContent;
+                })()}
+              </Text>
+            </ScrollView>
+          </View>
+        ) : null}
 
         <View style={styles.rowButtons}>
-          <Pressable style={styles.btnDestructive} onPress={handleApplyCsvImportPress}>
-            <Text style={styles.btnDestructiveText}>Apply CSV import</Text>
+          <Pressable 
+            style={[styles.btnDestructive, progress.active && styles.btnPrimaryDisabled]} 
+            onPress={handleApplyCsvImportPress}
+            disabled={progress.active}
+          >
+            <Text style={[styles.btnDestructiveText, progress.active && styles.btnPrimaryTextDisabled]}>
+              Apply CSV import
+            </Text>
           </Pressable>
         </View>
+
+        <Pressable
+          style={[styles.btnSecondaryFull, (!importCsvText.trim() || !importHasMoreBatches) && styles.btnSecondaryDisabled]}
+          onPress={handleContinueCsvImportPress}
+          disabled={!importCsvText.trim() || !importHasMoreBatches || progress.active}
+        >
+          <Text style={[styles.btnSecondaryText, (!importCsvText.trim() || !importHasMoreBatches) && styles.btnSecondaryTextDisabled]}>
+            Continue import (next {MAX_CSV_IMPORT_ROWS})
+          </Text>
+        </Pressable>
+
+        {pendingActive ? (
+          <View style={styles.statusBox}>
+            <Text style={styles.statusLabel}>Pending import</Text>
+            <Text style={styles.statusText}>
+              Pending transactions: {pendingTxs.length}
+            </Text>
+            <Text style={styles.statusText}>
+              Progress: {Math.min(importBatchOffset, importTotalDataRows)} / {importTotalDataRows}
+            </Text>
+          </View>
+        ) : null}
+
+        <Pressable
+          style={[styles.btnPrimary, (!pendingActive || pendingTxs.length === 0 || progress.active) && styles.btnPrimaryDisabled]}
+          onPress={handleCommitPendingImport}
+          disabled={!pendingActive || pendingTxs.length === 0 || progress.active}
+        >
+          <Text style={[styles.btnPrimaryText, (!pendingActive || pendingTxs.length === 0 || progress.active) && styles.btnPrimaryTextDisabled]}>
+            Commit import (save to app)
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={[styles.btnSecondaryFull, (!pendingActive || progress.active) && styles.btnSecondaryDisabled]}
+          onPress={async () => {
+            Alert.alert('Discard pending import', 'This will remove pending imported data. Continue?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Discard',
+                style: 'destructive',
+                onPress: async () => {
+                  setPendingTxs([]);
+                  setPendingAccounts([]);
+                  setPendingActive(false);
+                  existingKeysRef.current = null; // Clear de-dupe keys when discarding
+                  await clearPending();
+                  setLastStatus('Pending import discarded.');
+                },
+              },
+            ]);
+          }}
+          disabled={!pendingActive || progress.active}
+        >
+          <Text style={[styles.btnSecondaryText, (!pendingActive || progress.active) && styles.btnSecondaryTextDisabled]}>
+            Discard pending import
+          </Text>
+        </Pressable>
+
+        {importCsvText.trim() ? (
+          <Text style={styles.hint}>
+            File: {importLastFilename || 'selected CSV'} • Imported: {Math.min(importBatchOffset, importTotalDataRows)} / {importTotalDataRows || '…'}
+          </Text>
+        ) : null}
+
+        <Pressable
+          style={[styles.btnSecondaryFull, !txs.length && styles.btnSecondaryDisabled]}
+          onPress={handleRebuildRecurringNow}
+          disabled={!txs.length}
+        >
+          <Text style={[styles.btnSecondaryText, !txs.length && styles.btnSecondaryTextDisabled]}>
+            Rebuild recurring now (uses selected mode)
+          </Text>
+        </Pressable>
+
+        <Text style={styles.hint}>
+          Rebuild recurring is optional and can be slow on large datasets. Use "Last 18 months" for best performance.
+        </Text>
+
+        {(progress.stage !== 'idle' && (progress.message || progress.active)) ? (
+          <View style={styles.progressBox}>
+            <Text style={styles.progressTitle}>
+              {progress.active ? 'Working…' : progress.stage === 'error' ? 'Failed' : 'Done'}
+            </Text>
+            <Text style={styles.progressText}>
+              {progress.message}
+            </Text>
+            <Text style={styles.progressMeta}>
+              Stage: {progress.stage} • Elapsed: {progressElapsedSec}s
+            </Text>
+            {(progress.parsedRows || progress.toImport || progress.imported || progress.skipped) ? (
+              <Text style={styles.progressMeta}>
+                Parsed: {progress.parsedRows ?? 0} • To import: {progress.toImport ?? 0} • Imported: {progress.imported ?? 0} • Skipped: {progress.skipped ?? 0}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {lastCsvStats ? (
           <View style={styles.statusBox}>
@@ -1482,7 +2738,7 @@ export default function DataExportImportScreen(_props: Props) {
             <Text style={styles.statusText}>Imported: {lastCsvStats.importedCount}</Text>
             <Text style={styles.statusText}>Accounts created: {lastCsvStats.createdAccountsCount}</Text>
             <Text style={styles.statusText}>Skipped unknown: {lastCsvStats.skippedUnknownAccount}</Text>
-            <Text style={styles.statusText}>Bad amount: {lastCsvStats.skippedBadAmount}</Text>
+            <Text style={styles.statusText}>Bad amount/date: {lastCsvStats.skippedBadAmountOrDate}</Text>
             <Text style={styles.statusText}>Missing account: {lastCsvStats.skippedMissingAccountName}</Text>
           </View>
         ) : null}
@@ -1502,6 +2758,7 @@ export default function DataExportImportScreen(_props: Props) {
         ) : null}
 
       </View>
+
     </ScrollView>
   );
 }
@@ -1511,7 +2768,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingTop: 35, paddingBottom: 32 },
 
   h1: { color: 'white', fontSize: 24, fontWeight: '800', marginBottom: 8 },
-  subtle: { color: theme.textDim, marginBottom: 16 },
+  subtle: { color: theme.textDim, marginBottom: 16, marginTop: 6, lineHeight: 18 },
+  bold: { fontWeight: '800', color: theme.text },
 
   card: {
     backgroundColor: theme.card,
@@ -1575,6 +2833,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37, 99, 235, 0.1)',
   },
   btnSecondaryTextActive: { color: '#93C5FD', fontWeight: '700' },
+  btnSecondaryDisabled: { opacity: 0.5 },
+  btnSecondaryTextDisabled: { color: '#9CA3AF' },
+
+  btnSecondaryFull: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4B5563',
+  },
 
   btnDestructive: {
     flex: 1,
@@ -1632,6 +2902,18 @@ const styles = StyleSheet.create({
   statusLabel: { color: theme.textDim, fontWeight: '600', marginBottom: 2 },
   statusText: { color: '#E5E7EB' },
 
+  progressBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: '#020617',
+  },
+  progressTitle: { color: '#E5E7EB', fontWeight: '800', marginBottom: 4 },
+  progressText: { color: '#E5E7EB' },
+  progressMeta: { color: theme.textDim, marginTop: 6, fontSize: 12 },
+
   previewBox: {
     marginTop: 16,
     marginBottom: 12,
@@ -1642,6 +2924,13 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   previewMeta: { color: theme.textDim, fontSize: 12, marginBottom: 8 },
+  csvPreviewScroll: { maxHeight: 220, marginTop: 8 },
+  csvPreviewText: {
+    color: '#E5E7EB',
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: 'monospace',
+  },
 
   hint: { color: theme.textDim, opacity: 0.7, marginTop: 6 },
   statusHint: {

@@ -1,29 +1,18 @@
 export type RootStackParamList = {
   Login: undefined;
   Dashboard: undefined;
-  Payments: undefined;
-  Recurring: undefined;
-  Notifications: undefined;
-  Budgets: undefined;
-  Settings: undefined;
-  ImportCSV: undefined;
-  Account: { accountId: string };
-  DataExportImport: undefined;
+
+  Account: { accountId?: string } | undefined;
   AddAccount: undefined;
+  Transfer: { fromAccountId?: string } | undefined;
+  RecentActivity: undefined;
   History: undefined;
-  Reports: undefined;
 
   ReportDetail: {
     categoryKey: string;
     period: 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
     monthKey?: string; // 'YYYY-MM' when period === 'month'
   };
-
-  RecurringEditor:
-    | {
-        id?: string;
-      }
-    | undefined;
 
   TxnEditor:
     | {
@@ -33,13 +22,21 @@ export type RootStackParamList = {
       }
     | undefined;
 
-  Transfer:
-    | {
-        fromAccountId?: string;
-      }
-    | undefined;
+  Payments: undefined;
+  Recurring: undefined;
 
-  // 🔹 NEW
-  RecentActivity: undefined;
-  Data: undefined;
+  Budgets: undefined;
+  BudgetEditor: { id?: string; mode?: 'create' } | undefined;
+
+  Notifications: undefined;
+  RecurringEditor: { id?: string } | undefined;
+
+  Settings: undefined;
+  Reports: undefined;
+  Help: undefined;
+  About: undefined;
+  PrivacyPolicy: undefined;
+
+  DataExportImport: undefined;
+  ImportCSV: undefined;
 };

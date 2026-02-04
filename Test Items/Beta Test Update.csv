@@ -1,0 +1,635 @@
+Date,Account A,Account B,Amount,Description,Category,Type
+2025-07-31,NatWest Main,,31.7,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-07-31,NatWest Main,NW General Savings,0.6,ROUND UP TO 5372,Transfer,Transfer
+2025-07-28,NatWest Main,,20.9,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-28,NatWest Main,,20,"ZETTLE_*GREEN MAN , SANDRIDGE GB",Pubs and Bars,Expense
+2025-07-28,NatWest Main,,20,"ZETTLE_*GREEN MAN , SANDRIDGE GB",Pubs and Bars,Expense
+2025-07-28,NatWest Main,,17.9,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-28,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-07-28,NatWest Main,NW General Savings,0.4,ROUND UP TO 5372,Transfer,Transfer
+2025-07-25,NatWest Main,First Direct,800,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 25/07/25 10 , 14085429234681000N",Transfer,Transfer
+2025-07-25,NatWest Main,,192.64,"ZIOS PIZZERIA , HARPENDEN GB",Restaurant,Expense
+2025-07-25,NatWest Main,,31.41,"AMZNMKTPLAC , E*RS6S23SF4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-07-25,NatWest Main,,21.6,"HARPENDEN ARMS , HARPENDEN GB",Pubs and Bars,Expense
+2025-07-25,NatWest Main,NW General Savings,2.7,ROUND UP TO 5372,Transfer,Transfer
+2025-07-25,NW Holiday Funds,NatWest Main,1000,"From A/C 23655399 , General Savings , Via Mobile Xfer",NW Holiday Fund,Transfer
+2025-07-24,NatWest Main,First Direct,200,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 24/07/25 10 , 57170028100326000N",Transfer,Transfer
+2025-07-23,NatWest Main,First Direct,300,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 22/07/25 10 , 07210307786909000N",Transfer,Transfer
+2025-07-23,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-07-22,NatWest Main,,50.28,"SAINSBURYS SUPERMA, MARSHALSWICK GB",Groceries,Expense
+2025-07-22,NatWest Main,,41.29,"PAYPAL , *WANNALIMITE , 35314369001 GB",Shopping,Expense
+2025-07-22,NatWest Main,NW General Savings,2.86,ROUND UP TO 5372,Transfer,Transfer
+2025-07-22,,NatWest Main,15,"WINTER SJ & KE , Drinks Sat night , VIA MOBILE - LVP",Transfer,Income
+2025-07-21,NatWest Main,,109.23,"SQ *LA FABRICA , LONDON GB",Restaurant,Expense
+2025-07-21,NatWest Main,,33,"MAD SQUIRREL TAP , ST A , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-21,NatWest Main,,30.75,"DYLANS AT THE , KINGS AR , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-21,NatWest Main,,26.02,"RIAS , INTERNET GB",Insurance,Expense
+2025-07-21,NatWest Main,,16.96,"OPENAI *CHATGPT , SUBSCR , DUBLIN IE , EUR 19.01, VRATE 1.1514, N-S TRN FEE 0.45",Education,Expense
+2025-07-21,NatWest Main,,15.96,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-07-21,NatWest Main,,15.78,"SCREWFIX DIR LTD , ST ALBANS1614 GB",Shopping,Expense
+2025-07-21,NatWest Main,,13.5,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-21,NatWest Main,,12.95,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-07-21,NatWest Main,NW General Savings,5.62,ROUND UP TO 5372,Transfer,Transfer
+2025-07-21,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-07-21,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-07-21,NW General Savings,NatWest Main,200,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+2025-07-21,First Direct,NatWest Main,800,"KERR PA&JH , 4751290105540447 , FP 19/07/25 1817 , 840228447181917001",Transfer,Transfer
+,,,,,,
+2025-07-18,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-07-17,NatWest Main,,32.44,"MINIC ASIAN PANTRY, LONDON GB",Restaurant,Expense
+2025-07-17,NatWest Main,,11.2,"WAITROSE 740 , GREENWICH GB",Groceries,Expense
+2025-07-17,NatWest Main,,6,"THE GREENWICH NEST, LONDON GB",Pubs and Bars,Expense
+2025-07-17,NatWest Main,NW General Savings,2.72,ROUND UP TO 5372,Transfer,Transfer
+2025-07-15,NatWest Main,First Direct,300,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 15/07/25 10 , 36083831774423000N",Transfer,Transfer
+2025-07-15,NatWest Main,,149,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-15,NatWest Main,,27,"MARYLEBONE CRICKET, CLU , LONDON GB",Pubs and Bars,Expense
+2025-07-15,NatWest Main,,25.5,"MARYLEBONE CRICKET, CLU , LONDON GB",Pubs and Bars,Expense
+2025-07-15,NatWest Main,NW General Savings,1,ROUND UP TO 5372,Transfer,Transfer
+2025-07-14,NatWest Main,,78.19,"SPAGNOLETTI , LONDON GB",Restaurant,Expense
+2025-07-14,NatWest Main,,26.99,"SCREWFIX DIR LTD , ST ALBANS1614 GB",Shopping,Expense
+2025-07-14,NatWest Main,,25.1,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-07-14,NatWest Main,,15,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-14,NatWest Main,,14.35,"RAILWAY (WEST , HAMPSTEA , WEST HAMPSTEA GB",Travel,Expense
+2025-07-14,NatWest Main,,12.55,"TSGN TL ST ALBANS , SST , ST ALBANS GB",Travel,Expense
+2025-07-14,NatWest Main,,8.99,"APPLE.COM/BILL , APPLE.COM/BIL IE",Direct Debit,Expense
+2025-07-14,NatWest Main,NW General Savings,5.66,ROUND UP TO 5372,Transfer,Transfer
+2025-07-11,NatWest Main,NW Holiday Funds,1250,"To A/C 23655399 , General Savings , Via Mobile Xfer",Natwest Main,Transfer
+2025-07-11,NatWest Main,NW Holiday Funds,1000,"To A/C 23655399 , General Savings , Via Mobile Xfer",Natwest Main,Transfer
+2025-07-11,NatWest Main,,582.5,"RORY O CONNOR , Sanford Springs , VIA MOBILE - PYMT , FP 11/07/25 10 , 31092110181732000N",Holiday,Expense
+2025-07-11,First Direct,NatWest Main,1200,"KERR PA&JH , 4751290105540447 , FP 11/07/25 0916 , 379351456190117001",Transfer,Transfer
+2025-07-11,First Direct,NatWest Main,1250,"KERR PA&JH , 4751290105540447 , FP 11/07/25 1532 , 343432542351117001",Transfer,Transfer
+2025-07-10,NatWest Main,,55.31,"TESCO PAY AT PUMP , 3821 , HATFIELD GB",Petrol,Expense
+2025-07-10,NatWest Main,,32.99,"CLR*ESSENDON C.C , HATFIELD GB",Sports,Expense
+2025-07-10,NatWest Main,,20.67,"PAYPAL *EBAY UK , 35314369001 GB",Shopping,Expense
+2025-07-10,NatWest Main,NW General Savings,2.06,ROUND UP TO 5372,Transfer,Transfer
+2025-07-09,NatWest Main,,27.3,"DELIVEROO , LONDON GB",Restaurant,Expense
+2025-07-09,NatWest Main,,19.8,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-09,NatWest Main,,15,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-09,NatWest Main,NW General Savings,1.8,ROUND UP TO 5372,Transfer,Transfer
+2025-07-09,,NatWest Main,75,"KEV , KEV-PAYYOU , FP 09/07/25 1105 , 47110512707784000N, UNSTRUCTURED",Transfer,Income
+2025-07-08,NatWest Main,,33.88,PAYPAL PAYMENT,Creditcard,Expense
+2025-07-08,,NatWest Main,95,"WILLIS N , NIGEL WILLIS , VIA MOBILE - PYMT",Transfer,Transfer
+2025-07-07,NatWest Main,NW Car Maintenance,100,PAUL,NW Car Maintenance,Transfer
+2025-07-07,NatWest Main,,34.13,"DELIVEROO , LONDON GB",Restaurant,Expense
+2025-07-07,NatWest Main,,28,"B & Q 1058 , WELWYN GARDEN GB",Shopping,Expense
+2025-07-07,NatWest Main,,18.25,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-07,NatWest Main,,18.1,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-07,NatWest Main,,11.8,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-07-07,NatWest Main,,10,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-07,NatWest Main,NW General Savings,5.44,ROUND UP TO 5372,Transfer,Transfer
+2025-07-07,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 06/07/25 0558 , 991053948550607001",Transfer,Transfer
+2025-07-03,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-07-02,NatWest Main,,35.72,"SAINSBURYS SUPERMA, MARSHALSWICK GB",Groceries,Expense
+2025-07-02,NatWest Main,,14,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-07-02,NatWest Main,,8.98,"TOOLSTATION LTD , ST ALBANS GB",Shopping,Expense
+2025-07-02,NatWest Main,NW General Savings,0.6,ROUND UP TO 5372,Transfer,Transfer
+2025-07-01,,NatWest Main,150.98,"EBAY COMMERCE UK L, P.6950132711 , FP 01/07/25 0835 , CWPZ92F8XHHB , P.6950132711",Sales,Income
+2025-07-01,,NW Car Maintenance,0.26,30JUN GRS ,Interest,Income
+2025-07-01,,NW Holiday Funds,1.27,30JUN GRS 23655399,Interest,Income
+2025-07-01,,NW General Savings,5.14,30JUN GRS 23655372,Natwest Main,Income
+2025-06-30,NatWest Main,,1400,"Liam Howard , Building Services , VIA MOBILE - PYMT , FP 30/06/25 10 , 36102436259590000N",Payment,Transfer
+2025-06-30,NatWest Main,First Direct,1300,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 30/06/25 10 , 31103137038841000N",Transfer,Transfer
+2025-06-30,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-06-30,NatWest Main,,10.5,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-06-30,NatWest Main,NW General Savings,1,ROUND UP TO 5372,Transfer,Transfer
+2025-06-30,NW Holiday Funds,NatWest Main,1300,"From A/C 23655399 , General Savings , Via Mobile Xfer",NW Holiday Fund,Transfer
+2025-06-30,NW General Savings,NatWest Main,1400,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+,,,,,,
+2025-06-27,NatWest Main,,43.96,"SAINSBURYS S/MKTS , LONDON COLNEY GB",Groceries,Expense
+2025-06-27,NatWest Main,,4,"RYANAIR , DUBLIN IE",Travel,Expense
+2025-06-27,NatWest Main,NW General Savings,0.08,ROUND UP TO 5372,Transfer,Transfer
+2025-06-24,NatWest Main,,14.26,PAYPAL PAYMENT,Creditcard,Expense
+2025-06-24,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-06-23,NatWest Main,,42.94,"ZARA INTERNET UK , LONDON GB",Shopping,Expense
+2025-06-23,NatWest Main,,40,"WEMBLEY STADIUM , MANCHESTER GB",Entertainment,Expense
+2025-06-23,NatWest Main,,35.33,"TESCO PAY AT PUMP , 4195 , STEVENAGE GB",Petrol,Expense
+2025-06-23,NatWest Main,,31.6,"AFRIKANA WEMBLEY , WEMBLEY GB",Pubs and Bars,Expense
+2025-06-23,NatWest Main,,29,"SQ *PEPPERMINT , EVENTS , LONDON GB",Entertainment,Expense
+2025-06-23,NatWest Main,,28.3,"SQ *PEPPERMINT , EVENTS , LONDON GB",Entertainment,Expense
+2025-06-23,NatWest Main,,26.6,"SQ *PEPPERMINT , EVENTS , LONDON GB",Entertainment,Expense
+2025-06-23,NatWest Main,,25,"SUMUP *PCC ST , AUGUSTI , WEMBLEY GB",Restaurant,Expense
+2025-06-23,NatWest Main,,15.8,"PRAE WOOD ARMS, , ST. A , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-23,NatWest Main,,13.95,"SQ *T - TAIGA , BURGER K , LONDON GB",Street Food,Expense
+2025-06-23,NatWest Main,,12,"SQ *T - JAFFNA , KITCHEN , LONDON GB",Street Food,Expense
+2025-06-23,NatWest Main,,12,"ZETTLE_*JAFFNA , KITCHEN , WIMBELDON GB",Street Food,Expense
+2025-06-23,NatWest Main,,11.85,"PRAE WOOD ARMS, , ST. A , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-23,NatWest Main,,11.4,"DELAWARE NORTH , WEMBLEY , WEMBLEY GB",Pubs and Bars,Expense
+2025-06-23,NatWest Main,,9,"CEC ICE CREAM , GROUP LT , COVENTRY GB",Restaurant,Expense
+2025-06-23,NatWest Main,,8.2,"DELAWARE NORTH , WEMBLEY , WEMBLEY GB",Pubs and Bars,Expense
+2025-06-23,NatWest Main,NW General Savings,8.06,ROUND UP TO 5372,Transfer,Transfer
+2025-06-23,NatWest Main,,8,"ZETTLE_*JAFFNA , KITCHEN , WIMBELDON GB",Street Food,Expense
+2025-06-19,NatWest Main,,726.43,"Tony Hall , Madrid , VIA MOBILE - PYMT",Holiday,Expense
+2025-06-19,NatWest Main,,26.32,"INTRUSO , MADRID ES , EUR 30.00, VRATE 1.1709, N-S TRN FEE 0.70",Pubs and Bars,Expense
+2025-06-19,NatWest Main,,20.85,"KFC FUENCARRAL , MADRID ES , EUR 23.76, VRATE 1.1710, N-S TRN FEE 0.56",Restaurant,Expense
+2025-06-19,NatWest Main,,16.69,"OPENAI *CHATGPT , SUBSCR , DUBLIN IE , EUR 19.01, VRATE 1.1705, N-S TRN FEE 0.45",Education,Expense
+2025-06-19,NatWest Main,,15.79,"INTRUSO , MADRID ES , EUR 18.00, VRATE 1.1711, N-S TRN FEE 0.42",Pubs and Bars,Expense
+2025-06-19,NatWest Main,,5.26,"MCVILA , MADRID ES , EUR 6.00, VRATE 1.1718, N-S TRN FEE 0.14",Pubs and Bars,Expense
+2025-06-18,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-06-18,NatWest Main,,37.46,PAYPAL PAYMENT,Creditcard,Expense
+2025-06-18,NatWest Main,,17.55,"INTRUSO , MADRID ES , EUR 20.00, VRATE 1.1709, N-S TRN FEE 0.47",Pubs and Bars,Expense
+2025-06-17,NatWest Main,,8,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-06-16,NatWest Main,,109.08,"VILLIERS HOTEL , BUCKINGHAM GB",NW General Savings,Expense
+2025-06-16,NatWest Main,,52.97,"SHELL KING WILLIAM, ST ALBANS GB",Pubs and Bars,Expense
+2025-06-16,NatWest Main,,38,"DUNCAN THOMPSON , Festival Hotel , VIA MOBILE - PYMT , FP 15/06/25 10 , 34113919229626000N",Payment,Transfer
+2025-06-16,NatWest Main,,23.6,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-16,NatWest Main,,17.5,"BENUGO LIMITED , LONDON GB",Pubs and Bars,Expense
+2025-06-16,NatWest Main,,15.9,"THE BUCKINGHAM , BUCKINGHAM GB",Pubs and Bars,Expense
+2025-06-16,NatWest Main,,10.6,"THE BUCKINGHAM , BUCKINGHAM GB",Pubs and Bars,Expense
+2025-06-16,NatWest Main,,5,"THEO KERR , THEOS NATWEST , VIA MOBILE - PYMT",Payment,Transfer
+2025-06-16,NatWest Main,NW General Savings,4.7,ROUND UP TO 5372,Transfer,Transfer
+2025-06-16,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 14/06/25 0917 , 071506137190416001",Transfer,Transfer
+2025-06-13,NatWest Main,,8.99,"APPLE.COM/BILL , CORK IE",Direct Debit,Expense
+2025-06-13,NatWest Main,,8.6,"B AND Q , ALBANS GB",Shopping,Expense
+2025-06-13,NatWest Main,,2.99,"THE RANGE , PLYMOUTH GB",Shopping,Expense
+2025-06-13,NatWest Main,NW General Savings,0.84,ROUND UP TO 5372,Transfer,Transfer
+2025-06-12,NatWest Main,,54,"BRITISH FILM , INSTITUTE , LONDON GB",Entertainment,Expense
+2025-06-12,,NatWest Main,23,"BRENNAN C V33 , Caroline , VIA MOBILE - LVP",Transfer,Income
+2025-06-11,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-06-11,NatWest Main,,40,"CHARRINGTON, , CROSS, L , ST. ALBANS GB",Travel,Expense
+2025-06-10,NatWest Main,,42.36,"TESCO PAY AT PUMP , 3821 , HATFIELD GB",Petrol,Expense
+2025-06-10,NatWest Main,,5.46,"PAYBYPHONE RE , NORTH HE , HATFIELD GB",Parking,Expense
+2025-06-10,NatWest Main,NW General Savings,2.36,ROUND UP TO 5372,Transfer,Transfer
+2025-06-09,NatWest Main,,16171.15,"HMRC GOV.UK SA , GLASGOW GB",HMRC,Expense
+2025-06-09,NatWest Main,,57.4,"THE MALTINGS , DENTAL SU , ST ALBANS GB",Healthcare,Expense
+2025-06-09,NatWest Main,,57.4,"THE MALTINGS , DENTAL SU , ST ALBANS GB",Healthcare,Expense
+2025-06-09,NatWest Main,,49.98,"T K MAXX , ST ALBANS GB",Shopping,Expense
+2025-06-09,NatWest Main,,29.2,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-09,NatWest Main,,16.5,"MARKS&SPENCER PLC , SACA , ST ALBANS GB",Groceries,Expense
+2025-06-09,NatWest Main,NW General Savings,7.74,ROUND UP TO 5372,Transfer,Transfer
+2025-06-09,NatWest Main,,3.5,"THE MALTINGS , SHOPPING , ST ALBANS GB",Healthcare,Expense
+2025-06-09,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 07/06/25 0936 , 986389526390706001",Transfer,Transfer
+2025-06-09,NW General Savings,NatWest Main,16171,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+,,,,,,
+2025-06-06,NatWest Main,NW Car Maintenance,100,PAUL,NW Car Maintenance,Transfer
+2025-06-06,NatWest Main,,10.91,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-06-06,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-06-06,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-06-06,NatWest Main,NW General Savings,0.18,ROUND UP TO 5372,Transfer,Transfer
+2025-06-05,NatWest Main,,11.1,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-06-05,NatWest Main,NW General Savings,1.8,ROUND UP TO 5372,Transfer,Transfer
+2025-06-03,NatWest Main,,20,"Charlie Irish , IRISH CJ , VIA MOBILE - PYMT",Payment,Transfer
+2025-06-02,NatWest Main,,75,"AL FARID , SAINT ALBANS GB",Restaurant,Expense
+2025-06-02,NatWest Main,,52.93,"THE HUB ST ALBANS , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-02,NatWest Main,,46,"ZOOHAUSE LIMITED , MILTON KEYNES GB",Shopping,Expense
+2025-06-02,NatWest Main,,23.96,"WILKO , ST ALBANS GB",Shopping,Expense
+2025-06-02,NatWest Main,,23.5,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-02,NatWest Main,,23.2,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-02,NatWest Main,,12.95,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-06-02,NatWest Main,,11.9,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-06-02,NatWest Main,,8.47,"STREET CAFE , ST. ALBANS GB",Restaurant,Expense
+2025-06-02,NatWest Main,NW General Savings,6.48,ROUND UP TO 5372,Transfer,Transfer
+2025-06-02,NatWest Main,,6.3,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-06-02,NatWest Main,,4.55,"TESCO-STORES-5749 , ST ALBANS GB",Shopping,Expense
+2025-06-02,NatWest Main,,40.45,"PAYPAL , PPWDL5V922223ZPX6U, FP 02/06/25 1110 , PPWD100000000JVN7X",Transfer,Transfer
+2025-06-02,,NW Car Maintenance,0.2,30MAY GRS ,Interest,Income
+2025-06-02,,NW Holiday Funds,1.55,30MAY GRS 23655399,Interest,Income
+2025-06-02,,NW General Savings,19.14,30MAY GRS 23655372,Natwest Main,Income
+2025-05-29,NatWest Main,,20,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-29,NatWest Main,,3.3,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-05-29,NatWest Main,NW General Savings,1.4,ROUND UP TO 5372,Transfer,Transfer
+2025-05-28,NatWest Main,First Direct,1000,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 28/05/25 10 , 45084041981629000N",Transfer,Transfer
+2025-05-28,NatWest Main,,38.75,"T K MAXX , ST ALBANS GB",Shopping,Expense
+2025-05-28,NatWest Main,,15,"TIMPSON LTD , MANCHESTER GB",Shopping,Expense
+2025-05-28,NatWest Main,,2,"THE MALTINGS , SHOPPING , ST ALBANS GB",Healthcare,Expense
+2025-05-28,NatWest Main,NW General Savings,0.5,ROUND UP TO 5372,Transfer,Transfer
+2025-05-27,NatWest Main,,100,"PAUL KERR , 6592BD49FE6C7F2857, 54F19B3F0B73B , TPP VOLT TECHNOLOG, FP 24/05/25 10 , 46075651965684000N",Car Maintenance,Expense
+2025-05-27,NatWest Main,,90,"TOP GOLF WATFORD , WATFORD GB",Sports,Expense
+2025-05-27,NatWest Main,,75.9,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-27,NatWest Main,,70,ROYAL BANK 25MAY,Payment,Expense
+2025-05-27,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-05-27,NatWest Main,,51.19,"SHELL KING WILLIAM, ST ALBANS GB",Pubs and Bars,Expense
+2025-05-27,NatWest Main,,47.48,"FOX EXCEL , LONDON GB",Pubs and Bars,Expense
+2025-05-27,NatWest Main,,45,"SUMUP *TOGOUT , SAFFRON WALDE GB",Sports,Expense
+2025-05-27,NatWest Main,,44,"W M MORRISON STORE, ST ALBANS GB",Groceries,Expense
+2025-05-27,NatWest Main,,40.45,"THEO KERR , THEOS NATWEST , VIA MOBILE - PYMT",Payment,Transfer
+2025-05-27,NatWest Main,,30,"SUMUP *CRIOS , MDP4MUS2 , SALFORD GB",Music,Expense
+2025-05-27,NatWest Main,,25,"TOPGOLF WATFORD , WATFORD GB",Sports,Expense
+2025-05-27,NatWest Main,,24.76,"PAYPAL *TEMU , 35314369001 GB",Shopping,Expense
+2025-05-27,NatWest Main,,12.55,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-05-27,NatWest Main,,12,"MINIMUM MOUSE , B'HAM B31 GB",Shopping,Expense
+2025-05-27,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-05-27,NatWest Main,,10.29,"PAYPAL *TEMU , 35314369001 GB",Shopping,Expense
+2025-05-27,NatWest Main,,8,"SUMUP *AMAZING , CANDY , WARRINGTON GB",Restaurant,Expense
+2025-05-27,NatWest Main,NW General Savings,6.36,ROUND UP TO 5372,Transfer,Transfer
+2025-05-27,NatWest Main,,5.65,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-27,NatWest Main,,5,"DUNCAN THOMPSON , FOOD BOOZE STUFF , VIA MOBILE - PYMT , FP 26/05/25 10 , 07162241842034000N",Payment,Transfer
+2025-05-27,NatWest Main,,4,"TOP GOLF WATFORD , WATFORD GB",Sports,Expense
+2025-05-23,NatWest Main,,22.63,"LIDL GB WELWYN , GARDEN , WELWYN GARDEN GB",Groceries,Expense
+2025-05-23,NatWest Main,,3.95,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-23,NatWest Main,NW General Savings,0.84,ROUND UP TO 5372,Transfer,Transfer
+2025-05-22,NatWest Main,,25.3,"JOLLY SAILOR , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-22,NatWest Main,,13.36,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-05-22,NatWest Main,NW General Savings,4.48,ROUND UP TO 5372,Transfer,Transfer
+2025-05-22,NatWest Main,,1.1,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-21,NatWest Main,,43,"SAINSBURYS DPASS , MOTO GB",Groceries,Expense
+2025-05-21,NatWest Main,,39.21,"AMZNMKTPLAC , E*BP3ZI0MM5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-21,NatWest Main,NW General Savings,1.58,ROUND UP TO 5372,Transfer,Transfer
+2025-05-20,NatWest Main,,20.38,"SCREWFIX DIR LTD , ST ALBANS1614 GB",Shopping,Expense
+2025-05-20,NatWest Main,,20,"THEO KERR , THEOS NATWEST , VIA MOBILE - PYMT",Payment,Transfer
+2025-05-20,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-05-20,NatWest Main,NW General Savings,1.24,ROUND UP TO 5372,Transfer,Transfer
+2025-05-20,,NatWest Main,36.3,"AMAZON.CO.UK , AMAZON.CO.UK GB , REFUND",Shopping,Income
+2025-05-19,NatWest Main,,237.51,"EL PASTOR CDY , LONDON GB",Restaurant,Expense
+2025-05-19,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-05-19,NatWest Main,,115.52,"SAINSBURYS.CO.UK , 0800 328 1700 GB",Groceries,Expense
+2025-05-19,NatWest Main,,98.82,"GREAT AMWELL , GARDEN CE , PETERBOROUGH GB",Restaurant,Expense
+2025-05-19,NatWest Main,,39.85,"SAINSBURYS SUPERMA, MARSHALSWICK GB",Groceries,Expense
+2025-05-19,NatWest Main,,36.2,"THE COCK INN , ST. ALBANS AL GB",Pubs and Bars,Expense
+2025-05-19,NatWest Main,,21.8,"GREAT AMWELL , RESTAURAN , GREAT AMWELL GB",Restaurant,Expense
+2025-05-19,NatWest Main,,20.75,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-19,NatWest Main,,20,"CARMEN'S CARIBBEAN, KI , ST. ALBANS GB",Restaurant,Expense
+2025-05-19,NatWest Main,,17.99,"AMZNMKTPLAC , E*JV7BL16R5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-19,NatWest Main,,17,"SUMUP *ANNAPOORNA, HOS , DARTFORD GB",Healthcare,Expense
+2025-05-19,NatWest Main,,16.3,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-05-19,NatWest Main,,15.99,"AMAZON* 192H10OK5 , LONDON GB",Shopping,Expense
+2025-05-19,NatWest Main,,11.97,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-05-19,NatWest Main,,11,"ZETTLE_*O-BITE , EAST DULWICH GB",Restaurant,Expense
+2025-05-19,NatWest Main,NW General Savings,9.62,ROUND UP TO 5372,Transfer,Transfer
+2025-05-19,NatWest Main,,9.5,"OVERPROOF BAKES , LTD , LUTON GB",Street Food,Expense
+2025-05-19,NatWest Main,,8.99,"APPLE.COM/BILL , CORK IE",Direct Debit,Expense
+2025-05-19,NatWest Main,,7,"OVERPROOF BAKES , LTD , LUTON GB",Street Food,Expense
+2025-05-19,NatWest Main,,6.5,"TESCO STORES 2654 , HATFIELD GB",Shopping,Expense
+2025-05-19,NatWest Main,,2.5,"ST ALBANS CITY & , DISTR , ST ALBANS GB",Travel,Expense
+2025-05-19,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-05-19,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-05-19,First Direct,NatWest Main,1500,"KERR PA&JH , 4751290105540447 , FP 17/05/25 0832 , 880092122380715001",Transfer,Transfer
+2025-05-16,NatWest Main,,6.2,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-16,NatWest Main,NW General Savings,1.6,ROUND UP TO 5372,Transfer,Transfer
+2025-05-15,NatWest Main,,78.45,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-15,NatWest Main,,15.21,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-15,NatWest Main,,11.24,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-15,NatWest Main,,4.12,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-15,NatWest Main,NW General Savings,3.28,ROUND UP TO 5372,Transfer,Transfer
+2025-05-15,,NatWest Main,17.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-05-14,NatWest Main,,40.45,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-14,NatWest Main,,36.3,"AMAZON.CO.U , K*UD5304JL5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-14,NatWest Main,,21.94,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-14,NatWest Main,,9.1,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-14,NatWest Main,,4.2,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-14,NatWest Main,NW General Savings,3.02,ROUND UP TO 5372,Transfer,Transfer
+2025-05-14,NatWest Main,,2.99,"AD FREE FOR , PRIMEVIDEO , 353-12477661 GB",Prime Video,Expense
+2025-05-13,NatWest Main,,69.69,"AMZNMKTPLAC , E*A89CI3UB5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-13,NatWest Main,,17.99,"AMZNMKTPLAC , E*RL8C91374 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-13,NatWest Main,,4.96,"MOONPIG , LONDON GB",Shopping,Expense
+2025-05-13,NatWest Main,NW General Savings,0.72,ROUND UP TO 5372,Transfer,Transfer
+2025-05-12,NatWest Main,,129.12,"SAINSBURYS.CO.UK , 0800 328 1700 GB",Groceries,Expense
+2025-05-12,NatWest Main,,83.99,"COGGLES , MANCHESTER GB",Shopping,Expense
+2025-05-12,NatWest Main,,68.08,"ZARA WATFORD 14689, WATFORD GB",Shopping,Expense
+2025-05-12,NatWest Main,,46.5,"DIRECT SIGHT , AMERSHAM GB",Shopping,Expense
+2025-05-12,NatWest Main,,43.31,"FEGO MARLOW , MARLOW GB",Pubs and Bars,Expense
+2025-05-12,NatWest Main,,23.7,"COMPLEAT ANGLER , MARLOW ON THA GB",Pubs and Bars,Expense
+2025-05-12,NatWest Main,,16.9,"ROSE AND CROWN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-12,NatWest Main,,14.9,"ROSE AND CROWN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-12,NatWest Main,,14.45,"TESCO STORES 3275 , ST ALBANS GB",Shopping,Expense
+2025-05-12,NatWest Main,NW General Savings,12.54,ROUND UP TO 5372,Transfer,Transfer
+2025-05-12,NatWest Main,,12.2,"COMPLEAT ANGLER , MARLOW ON THA GB",Pubs and Bars,Expense
+2025-05-12,NatWest Main,,2.2,"WATFORD SHOPPING , CENTR , WATFORD GB",Parking,Expense
+2025-05-12,NatWest Main,,1.38,"THE OLD VILLAGE , STORE , ST. ALBANS GB",Shopping,Expense
+2025-05-12,,NatWest Main,3.3,"SAINSBURYS.CO.UK , 0800 328 1700 GB , REFUND",Refund,Income
+2025-05-12,,NatWest Main,8.36,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-05-09,NatWest Main,,9.9,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-05-09,NatWest Main,NW General Savings,0.2,ROUND UP TO 5372,Transfer,Transfer
+2025-05-09,First Direct,NatWest Main,129,"KERR PA&JH , 4751290105540447 , FP 09/05/25 1102 , 658335732011905001",Transfer,Transfer
+2025-05-08,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-05-08,NatWest Main,,43.95,"STONEGATE PUB , GROUP , LUTON GB",Pubs and Bars,Expense
+2025-05-08,NatWest Main,,16.18,"AMZNMKTPLAC , E*V78HB9P75 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-08,NatWest Main,NW General Savings,1.74,ROUND UP TO 5372,Transfer,Transfer
+2025-05-08,,NatWest Main,15.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-05-08,First Direct,NatWest Main,2000,"KERR PA&JH , 4751290105540447 , FP 08/05/25 1243 , 616066253421805001",Transfer,Transfer
+2025-05-07,NatWest Main,,47.98,"AMZNMKTPLAC , E*319F635K5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-07,NatWest Main,,45,"SUMUP **LONDON , ROAD ST , BALDOCK GB",Music,Expense
+2025-05-07,NatWest Main,NW General Savings,0.04,ROUND UP TO 5372,Transfer,Transfer
+2025-05-07,,NatWest Main,19.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-05-07,,NatWest Main,45,"WARD C SNAKE , STUDIO PAYMENT , FP 07/05/25 0903 , RP4679963870570900",Transfer,Transfer
+2025-05-06,NatWest Main,NW Car Maintenance,100,PAUL,NW Car Maintenance,Transfer
+2025-05-06,NatWest Main,,57.92,"T K MAXX , ST ALBANS GB",Shopping,Expense
+2025-05-06,NatWest Main,,53.76,"AMZNMKTPLAC , E*AJ3TK8TR5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-06,NatWest Main,,25.1,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-05-06,NatWest Main,,21.57,"TST-MR FOGGS HAT , TAVER , LONDON GB",Restaurant,Expense
+2025-05-06,NatWest Main,,20.7,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-06,NatWest Main,,19.9,PAYPAL PAYMENT,Creditcard,Expense
+2025-05-06,NatWest Main,,15,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-05-06,NatWest Main,,14.49,"TST-MR FOGGS HAT , TAVER , LONDON GB",Restaurant,Expense
+2025-05-06,NatWest Main,,13.99,"AMZNMKTPLAC , E*IG8AC2G55 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-06,NatWest Main,,13.99,"AMZNMKTPLAC , E*IG8AC2G55 , AMAZON.CO.UK GB",Shopping,Expense
+2025-05-06,NatWest Main,,9.6,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-05-06,NatWest Main,,9.6,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-05-06,NatWest Main,NW General Savings,7.56,ROUND UP TO 5372,Transfer,Transfer
+2025-05-06,NatWest Main,,4.5,"THE MALTINGS , SHOPPING , ST ALBANS GB",Healthcare,Expense
+2025-05-06,,NatWest Main,9.6,DUPLICATE REVERSAL,Refund,Income
+2025-05-06,,NatWest Main,13.99,DUPLICATE REVERSAL,Refund,Income
+2025-05-06,,NatWest Main,30.59,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-05-06,First Direct,NatWest Main,1500,"KERR PA&JH , 4751290105540447 , FP 06/05/25 1031 , 503022251301605001",Transfer,Transfer
+2025-05-02,NatWest Main,First Direct,500,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 01/05/25 10 , 46214244503221000N",Transfer,Transfer
+2025-05-02,NatWest Main,,32.5,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-05-02,NatWest Main,,2.8,"TFL TRAVEL CH , TFL.GOV.UK/CP GB",Travel,Expense
+2025-05-02,NatWest Main,NW General Savings,1.4,ROUND UP TO 5372,Transfer,Transfer
+2025-05-02,NW General Savings,NatWest Main,500,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+,,,,,,
+2025-05-01,NatWest Main,,33.1,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-05-01,NatWest Main,,21.94,"CP LONDON , DOCKLANDS , LONDON GB",Pubs and Bars,Expense
+2025-05-01,NatWest Main,,12.85,"COSTA COFFEE , 43011434 , LONDON GB",Pubs and Bars,Expense
+2025-05-01,NatWest Main,,9.1,"TFL TRAVEL CH , TFL.GOV.UK/CP GB",Travel,Expense
+2025-05-01,NatWest Main,NW General Savings,6.82,ROUND UP TO 5372,Transfer,Transfer
+2025-05-01,NatWest Main,,4.55,"ZETTLE_*TRIPLE TWO, COF , LONDON GB",Pubs and Bars,Expense
+2025-05-01,NatWest Main,,4.05,"BOOTS 1111 , LONDON GB",Shopping,Expense
+2025-05-01,,NW Holiday Funds,1.41,30APR GRS 23655399,Interest,Income
+2025-05-01,,NW General Savings,18.48,30APR GRS 23655372,Natwest Main,Income
+2025-04-30,NatWest Main,NW Car Maintenance,100,"TO A/C 68727488, SAO - XFER",NW Car Maintenance,Transfer
+2025-04-30,NatWest Main,,41.58,"AMZNMKTPLAC , E*OR5ZZ8X55 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-30,NatWest Main,,18.75,"BLACKSMITH ARMS ST, ST ALBANS GB",Pubs and Bars,Expense
+2025-04-30,NatWest Main,,7.05,"BLACKSMITH ARMS ST, ST ALBANS GB",Pubs and Bars,Expense
+2025-04-30,NatWest Main,,6.2,"BLACKSMITH ARMS ST, ST ALBANS GB",Pubs and Bars,Expense
+2025-04-30,NatWest Main,NW General Savings,4.84,ROUND UP TO 5372,Transfer,Transfer
+2025-04-30,,NatWest Main,3.27,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-04-28,NatWest Main,,66.08,"ZARA WATFORD 14689, WATFORD GB",Shopping,Expense
+2025-04-28,NatWest Main,,59.81,"AMZNMKTPLAC , E*A468L8E75 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-28,NatWest Main,,49.02,"SHELL & WAITROSE , SCEPTRE, WATF GB",Petrol,Expense
+2025-04-28,NatWest Main,,25.4,"THE BEEHIVE , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-28,NatWest Main,,24.9,"THE WHITE SWAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-28,NatWest Main,,20.99,"AMZNMKTPLAC , E*R59Q55395 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-28,NatWest Main,,16.5,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-28,NatWest Main,,13.99,"AMZNMKTPLAC , E*0F67U9LO5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-28,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-04-28,NatWest Main,NW General Savings,8.64,ROUND UP TO 5372,Transfer,Transfer
+2025-04-28,NatWest Main,,7.49,"AMAZON* 8T4EC63E5 , LONDON GB",Shopping,Expense
+2025-04-28,NatWest Main,,4.5,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-04-28,,NatWest Main,49.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-04-25,NatWest Main,,500,"SCS AUTOS LTD , WATFORD GB",Car Maintenance,Expense
+2025-04-25,NatWest Main,,10.98,"BUDGENS ST ALBANS , ST. ALBANS GB",Groceries,Expense
+2025-04-25,NatWest Main,NW General Savings,0.04,ROUND UP TO 5372,Transfer,Transfer
+2025-04-25,,NatWest Main,32.2,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-04-24,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-04-24,NatWest Main,,49.99,"AMZNMKTPLAC , E*HD1VM34D5 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-24,NatWest Main,,39.78,"SHELL KING WILLIAM, ST ALBANS GB",Pubs and Bars,Expense
+2025-04-24,NatWest Main,,13.63,PAYPAL PAYMENT,Creditcard,Expense
+2025-04-24,NatWest Main,NW General Savings,0.46,ROUND UP TO 5372,Transfer,Transfer
+2025-04-23,NatWest Main,,36.51,"AMZNMKTPLAC , E*RA18I66O4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-23,NatWest Main,,23.5,"WICKES ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-04-23,NatWest Main,,11,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-04-23,NatWest Main,NW General Savings,1.98,ROUND UP TO 5372,Transfer,Transfer
+2025-04-23,,NatWest Main,9.98,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-04-22,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-04-22,NatWest Main,,87,"ZETTLE_*RAMEN , ELECTRA , ST. ALBANS GB",Restaurant,Expense
+2025-04-22,NatWest Main,,50.16,"AMZNMKTPLAC , E*RA7U91T64 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-22,NatWest Main,,45.47,"MORR ST ALBANS , ST ALBANS GB",Groceries,Expense
+2025-04-22,NatWest Main,,41.12,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,37.5,"WHITTLEBURY PARK , WHITTLEBURY GB",Holiday,Expense
+2025-04-22,NatWest Main,,33.75,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,32.4,"COCK HOTEL (STONY , STRA , STONY STRATFO GB",Holiday,Expense
+2025-04-22,NatWest Main,,27.1,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,27,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,26.5,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,24.7,"THE BEEHIVE , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,23.6,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,17.8,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,NW General Savings,14.2,ROUND UP TO 5372,Transfer,Transfer
+2025-04-22,NatWest Main,,8.8,"WHITTLEBURY PARK , NORTHAMPTONSH GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,6.5,"THE BEEHIVE , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-22,NatWest Main,,6.5,"THE WHITE HART , HOTEL , ST ALBANS GB",Pubs and Bars,Expense
+2025-04-22,,NatWest Main,43.5,"WINTER SJ & KE , Beehive , VIA MOBILE - LVP",Transfer,Transfer
+2025-04-17,NatWest Main,NW Holiday Funds,100,"To A/C 23655399 , General Savings , Via Mobile Xfer",Natwest Main,Transfer
+2025-04-17,First Direct,NatWest Main,1500,"KERR PA&JH , 4751290105540447 , FP 17/04/25 1114 , 328667144111714001",Transfer,Transfer
+2025-04-15,NatWest Main,,30,"SUMUP *LONDON , ROAD ST , BALDOCK GB",Music,Expense
+2025-04-15,NatWest Main,,15,"SUMUP *LONDON , ROAD ST , BALDOCK GB",Music,Expense
+2025-04-15,,NatWest Main,45,"WARD C SNAKE , STUDIO PAYMENT 2 , FP 14/04/25 2203 , RP4679960243361700",Transfer,Transfer
+2025-04-14,NatWest Main,,415.95,"NIGEL , Whittlebury , VIA MOBILE - PYMT",Holiday,Expense
+2025-04-14,NatWest Main,,126,"SEFA RESTAURANT , LONDON GB",Restaurant,Expense
+2025-04-14,NatWest Main,,55.55,"OYSTERCATCHER , GREENWI , LONDON GB",Restaurant,Expense
+2025-04-14,NatWest Main,,42.75,"SAINSBURYS S/MKTS , LONDON COLNEY GB",Groceries,Expense
+2025-04-14,NatWest Main,,21.9,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-14,NatWest Main,,19.8,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-04-14,NatWest Main,,18.7,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-14,NatWest Main,,13.9,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-04-14,NatWest Main,,9.9,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-04-14,NatWest Main,,7.09,"SCREWFIX DIR LTD , ST ALBANS1614 GB",Shopping,Expense
+2025-04-14,NatWest Main,NW General Savings,4.84,ROUND UP TO 5372,Transfer,Transfer
+2025-04-14,NatWest Main,,2.99,"AD FREE FOR , PRIMEVIDEO , 353-12477661 GB",Prime Video,Expense
+2025-04-14,NW General Savings,NatWest Main,500,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+,,,,,,
+2025-04-10,NatWest Main,,36.3,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-04-10,NatWest Main,NW General Savings,1.4,ROUND UP TO 5372,Transfer,Transfer
+2025-04-09,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-04-08,NatWest Main,,30.27,"AMZNMKTPLAC , E*R641W90N4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-08,NatWest Main,,8,"NYX*MFG , STALBANS GB",NW General Savings,Expense
+2025-04-08,NatWest Main,NW General Savings,1.46,ROUND UP TO 5372,Transfer,Transfer
+2025-04-08,,NatWest Main,45,"WARD C SNAKE , STUDIO PAYMENT , FP 07/04/25 1937 , RP4679969185378500",Transfer,Transfer
+2025-04-08,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 08/04/25 0836 , 887032346380804001",Transfer,Transfer
+2025-04-07,NatWest Main,,93.01,"IDFS MARRAKECH G , MARRAKECH MA , EUR 107.10, VRATE 1.1831, N-S TRN FEE 2.49",Restaurant,Expense
+2025-04-07,NatWest Main,,34.83,"NIGEL , MARRAKECH BALANCE , VIA MOBILE - PYMT",Holiday,Expense
+2025-04-07,NatWest Main,,29.76,"MORR ST ALBANS , ST ALBANS GB",Groceries,Expense
+2025-04-07,NatWest Main,,3.5,"DUNELM F0765 , ST ALBANS GB",Shopping,Expense
+2025-04-07,NatWest Main,NW General Savings,1.48,ROUND UP TO 5372,Transfer,Transfer
+2025-04-07,,NatWest Main,50,"J SINNOTT + K MC , CHEERS MATE , FP 05/04/25 1015 , RP4659982474171000",Transfer,Income
+2025-04-04,NatWest Main,,189,PAYPAL PAYMENT,Creditcard,Expense
+2025-04-04,NatWest Main,,100,"FREETRADE LIMITED , FTDHE6474154 , TPP TRUELAYER LIMI, FP 04/04/25 10 , 24144505620274000N",Gambling,Expense
+2025-04-04,NatWest Main,,22.9,"0000012757 , RRAKESH MA",Restaurant,Expense
+2025-04-04,NatWest Main,,22.9,"0000012864 , RRAKESH MA",Restaurant,Expense
+2025-04-04,NatWest Main,,20,"Paul Kerr , ClearBank , VIA MOBILE - PYMT , FP 04/04/25 10 , 60141526239777000N",Shopping,Expense
+2025-04-04,NatWest Main,,16.17,"RESTAURANT , ASSOUFID , MARRAKECH MA , MAD 195.00, VRATE 12.3888, N-S TRN FEE 0.43",Restaurant,Expense
+2025-04-04,First Direct,NatWest Main,120,"KERR PA&JH , 4751290105540447 , FP 04/04/25 1444 , 298078114441404001",Transfer,Transfer
+2025-04-03,NatWest Main,,46.91,"AMAZON.CO.U , K*RN79605G4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-04-03,NatWest Main,NW General Savings,0.18,ROUND UP TO 5372,Transfer,Transfer
+2025-04-02,NatWest Main,,107.52,"SENSORIEL SPA , BELIVE , MARRAKECH MA , MAD 1300.00, VRATE 12.4235, N-S TRN FEE 2.88",Restaurant,Expense
+2025-04-02,NatWest Main,,50.45,"AL MAADEN GOLF , RESORT , MARRAKECH MA , MAD 610.00, VRATE 12.4236, N-S TRN FEE 1.35",Shopping,Expense
+2025-04-02,NatWest Main,,33.09,"SENSORIEL SPA , BELIVE , MARRAKECH MA , MAD 400.00, VRATE 12.4223, N-S TRN FEE 0.89",Restaurant,Expense
+2025-04-01,NatWest Main,,50,"FREETRADE LIMITED , FTDHE6474154 , TPP TRUELAYER LIMI, FP 31/03/25 10 , 42193610067488000N",Gambling,Expense
+2025-04-01,,NatWest Main,100,"EBAY COMMERCE UK L, P.6815261759 , FP 01/04/25 0756 , BLHSBVTCKK0W , P.6815261759",Sales,Income
+2025-04-01,,NW Holiday Funds,1.35,31MAR GRS 23655399,Interest,Income
+2025-04-01,,NW General Savings,18.75,31MAR GRS 23655372,Natwest Main,Income
+2025-03-31,NatWest Main,,95.61,"0000012757 , RRAKESH MA",Restaurant,Expense
+2025-03-31,NatWest Main,,87.08,"004522 , TENSIFT MA",Restaurant,Expense
+2025-03-31,NatWest Main,,33.2,"LODGING H BELIVE , COLLE , MARRAKECH MA , MAD 400.40, VRATE 12.3924, N-S TRN FEE 0.89",Pubs and Bars,Expense
+2025-03-31,NatWest Main,,4.13,"ALPHA PALACE CLUB , MARRAKECH MA , MAD 50.00, VRATE 12.4378, N-S TRN FEE 0.11",Shopping,Expense
+2025-03-31,NatWest Main,,3.95,"EASYJET I , MANCHESTER GB",Travel,Expense
+2025-03-31,NatWest Main,NW General Savings,0.1,ROUND UP TO 5372,Transfer,Transfer
+2025-03-31,,NatWest Main,35,"KERR J H , PERSONAL ACCOUNT , VIA MOBILE - PYMT",Transfer,Transfer
+2025-03-28,NatWest Main,,111.95,"TK MAXX , ST ALBANS GB",Shopping,Expense
+2025-03-28,NatWest Main,,17.03,"HUBBY ESIM , AMSTERDAM NL , EUR 19.80, VRATE 1.1949, N-S TRN FEE 0.46",Shopping,Expense
+2025-03-28,NatWest Main,NW General Savings,0.1,ROUND UP TO 5372,Transfer,Transfer
+2025-03-28,NW General Savings,NatWest Main,500,"From A/C 23655372 , KERR PA , Via Mobile Xfer",Natwest Main,Transfer
+,,,,,,
+2025-03-26,NatWest Main,,85.74,"T K MAXX LTD , HATFIELD GB",Shopping,Expense
+2025-03-26,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-03-26,NatWest Main,NW General Savings,0.52,ROUND UP TO 5372,Transfer,Transfer
+2025-03-25,NatWest Main,,44.14,"AMZNMKTPLAC , E*RW62E6654 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-25,NatWest Main,,15.86,"AMZNMKTPLAC , E*RW6LF7UR4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-25,NatWest Main,NW General Savings,2,ROUND UP TO 5372,Transfer,Transfer
+2025-03-24,NatWest Main,,104.97,"T K MAXX , ST ALBANS GB",Shopping,Expense
+2025-03-24,NatWest Main,,28,"BATCHWOOD GOLF , COURSE , ST ALBANS GB",Sports,Expense
+2025-03-24,NatWest Main,,27.7,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-24,NatWest Main,,22.25,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-24,NatWest Main,,20.2,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-24,NatWest Main,,10.94,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-03-24,NatWest Main,,10.6,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-24,NatWest Main,,9.41,"AMZNMKTPLAC , E*RW4RT9MG4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-24,NatWest Main,NW General Savings,7.66,ROUND UP TO 5372,Transfer,Transfer
+2025-03-24,NatWest Main,,7,"BATCHWOOD HALL , GOLF CL , ST. ALBANS AL GB",Sports,Expense
+2025-03-24,NatWest Main,,5.3,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-24,NatWest Main,,4.8,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-21,NatWest Main,,33,"COMPANIESHOUSE CHS, - G , CARDIFF GB",HMRC,Expense
+2025-03-21,NatWest Main,,23.76,"AMZNMKTPLAC , E*RW8SC33N4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-21,NatWest Main,NW General Savings,0.48,ROUND UP TO 5372,Transfer,Transfer
+2025-03-20,NatWest Main,First Direct,300,"FIRST DIRECT JOINT, JOINT ACCOUNT , VIA MOBILE - PYMT , FP 20/03/25 10 , 31174222089820000N",Transfer,Transfer
+2025-03-20,NatWest Main,,52,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-03-20,NatWest Main,,7.99,"SCREWFIX DIR LTD , ST ALBANS1614 GB",Shopping,Expense
+2025-03-20,NatWest Main,NW General Savings,0.02,ROUND UP TO 5372,Transfer,Transfer
+2025-03-19,NatWest Main,,3.99,"NORMANDY PHARMACY , ST. ALBANS GB",Healthcare,Expense
+2025-03-19,NatWest Main,,3.99,"QUADRANT PHARMACY , ST ALBANS GB",Healthcare,Expense
+2025-03-19,NatWest Main,,3.5,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-03-19,NatWest Main,,2,"THE MALTINGS , SHOPPING , ST ALBANS GB",Healthcare,Expense
+2025-03-19,NatWest Main,NW General Savings,1.04,ROUND UP TO 5372,Transfer,Transfer
+2025-03-18,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-03-17,NatWest Main,,8547,"RLD, PROMMT-9E789114-02, TPP TOKEN.IO LTD , FP 15/03/25 10 , 49100600488866000N",Shopping,Expense
+2025-03-17,NatWest Main,,23.98,"AMZNMKTPLAC , E*RI8UC8J54 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-17,NatWest Main,,23.38,"DUNCAN THOMPSON , Food Booze Stuff , VIA MOBILE - PYMT , FP 16/03/25 10 , 08060542120751000N",Payment,Transfer
+2025-03-17,NatWest Main,,22.5,"THE QUEENS HEAD , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-17,NatWest Main,,20.7,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-17,NatWest Main,,19.1,"TSGN SN EAST , CROYDON , CROYDON GB",Travel,Expense
+2025-03-17,NatWest Main,,17.7,"THE OLD COCK INN , HARPENDEN GB",Pubs and Bars,Expense
+2025-03-17,NatWest Main,,16.1,"THE OLD COCK INN , HARPENDEN GB",Pubs and Bars,Expense
+2025-03-17,NatWest Main,NW General Savings,6.34,ROUND UP TO 5372,Transfer,Transfer
+2025-03-17,NatWest Main,,1.75,"TFL TRAVEL CH , TFL.GOV.UK/CP GB",Travel,Expense
+2025-03-14,NatWest Main,,36.67,"NIGEL , MARRAKECH BALANCE , VIA MOBILE - PYMT",Holiday,Expense
+2025-03-14,NatWest Main,,2.99,"AD FREE FOR , PRIMEVIDEO , 353-12477661 GB",Prime Video,Expense
+2025-03-14,NatWest Main,NW General Savings,0.02,ROUND UP TO 5372,Transfer,Transfer
+2025-03-14,First Direct,NatWest Main,1500,"KERR PA&JH , 4751290105540447 , FP 14/03/25 0959 , 482364809590413001",Transfer,Transfer
+2025-03-13,NatWest Main,,49,"HATFIELD PRACTICE , HATFIELD GB",Healthcare,Expense
+2025-03-11,NatWest Main,,42.93,"SAINSBURYS SUPERMA, MARSHALSWICK GB",Groceries,Expense
+2025-03-11,NatWest Main,,24.27,"AMZNMKTPLAC , E*RB1YR3MM4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-11,NatWest Main,NW General Savings,1.6,ROUND UP TO 5372,Transfer,Transfer
+2025-03-11,,NatWest Main,12.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-03-10,NatWest Main,,37,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-10,NatWest Main,,20.99,"HALFORDS 0726 , ST ALBANS GB",Car Maintenance,Expense
+2025-03-10,NatWest Main,,15.44,"AMZNMKTPLAC , E*RB0T423V4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-10,NatWest Main,,9.6,"THE DINING ROOM , WATFORD GB",Healthcare,Expense
+2025-03-10,NatWest Main,,2.9,"THE DINING ROOM , WATFORD GB",Healthcare,Expense
+2025-03-10,NatWest Main,NW General Savings,2.14,ROUND UP TO 5372,Transfer,Transfer
+2025-03-10,,NatWest Main,8000,"KERR J H , PERSONAL ACCOUNT , VIA MOBILE - PYMT",Transfer,Transfer
+2025-03-07,NatWest Main,,12.99,"AMZNMKTPLAC , E*R21LA5R64 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-07,NatWest Main,,12.99,"AMZNMKTPLAC , E*R28UF2RL4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-07,NatWest Main,,9.9,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-03-07,NatWest Main,NW General Savings,0.24,ROUND UP TO 5372,Transfer,Transfer
+2025-03-06,NatWest Main,,42.69,"MORR ST ALBANS , ST ALBANS GB",Groceries,Expense
+2025-03-06,NatWest Main,,9.99,"AMAZON.CO.U , K*R20322SU4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-06,NatWest Main,,7.59,"AMZNMKTPLAC , E*R28P956M4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-06,NatWest Main,NW General Savings,1.46,ROUND UP TO 5372,Transfer,Transfer
+2025-03-05,NatWest Main,,40,"CHARRINGTON, , CROSS, L , ST. ALBANS GB",Travel,Expense
+2025-03-04,NatWest Main,,85.54,"AMZNMKTPLAC , E*R26OT1194 , AMAZON.CO.UK GB",Shopping,Expense
+2025-03-04,NatWest Main,NW General Savings,0.92,ROUND UP TO 5372,Transfer,Transfer
+2025-03-03,NatWest Main,,170,"B AND Q , ALBANS GB",Shopping,Expense
+2025-03-03,NatWest Main,,117.42,"TICKETMASTER UK , LIMITE , LONDON GB",Entertainment,Expense
+2025-03-03,NatWest Main,,117.42,"TICKETMASTER UK , LIMITE , LONDON GB",Entertainment,Expense
+2025-03-03,NatWest Main,,64.7,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-03,NatWest Main,,37.72,"EB *SPACE SAFARI , DRONE , 801-413-7200 GB",Entertainment,Expense
+2025-03-03,NatWest Main,,27.98,"T K MAXX , WATFORD GB",Shopping,Expense
+2025-03-03,NatWest Main,,26.25,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-03-03,NatWest Main,NW General Savings,8.74,ROUND UP TO 5372,Transfer,Transfer
+2025-03-03,NatWest Main,,8.4,"JAMAICA BLUE , WATFORD GB",Restaurant,Expense
+2025-03-03,NatWest Main,,4.85,"EB *SPACE SAFARI , DRONE , 801-413-7200 GB",Entertainment,Expense
+2025-03-03,NatWest Main,,3.69,"BOOTS 0821 , WATFORD GB",Shopping,Expense
+2025-03-03,NatWest Main,,3.2,"WATFORD SHOPPING , CENTR , WATFORD GB",Parking,Expense
+2025-03-03,First Direct,NatWest Main,1500,"KERR PA&JH , 4751290105540447 , FP 01/03/25 1240 , 161697500421103001",Transfer,Transfer
+2025-03-03,,NW Holiday Funds,1.48,28FEB GRS 23655399,Interest,Income
+2025-03-03,,NW General Savings,14.44,28FEB GRS 23655372,Natwest Main,Income
+2025-02-28,NatWest Main,,303.97,"TANDEM MONEY , BLACKPOOL GB",Loan,Expense
+2025-02-28,NatWest Main,,10,"THEO KERR , THEOS NATWEST , VIA MOBILE - PYMT",Payment,Transfer
+2025-02-28,NatWest Main,,6.99,"NYX*MOTORFU , ELLIMITED , STALBANS GB",Shopping,Expense
+2025-02-28,NatWest Main,NW General Savings,0.08,ROUND UP TO 5372,Transfer,Transfer
+2025-02-27,NatWest Main,,41,"AMAZON.CO.U , K*R07JC7V24 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-27,NatWest Main,,14.99,"AMZNMKTPLAC , E*R02FB4M94 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-27,NatWest Main,,12.16,"AMZNMKTPLAC , E*R02BI2MS4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-27,NatWest Main,NW General Savings,1.7,ROUND UP TO 5372,Transfer,Transfer
+2025-02-26,NatWest Main,,108,"SUMMIT PEST , CONTROL , ST. ALBANS GB",Houshold,Expense
+2025-02-26,NatWest Main,,64.15,"PAYPAL *GOGGLES4U , 35314369001 GB",Shopping,Expense
+2025-02-26,NatWest Main,NW General Savings,1.7,ROUND UP TO 5372,Transfer,Transfer
+2025-02-25,NatWest Main,,60.96,"AMZNMKTPLAC , E*R00VI8NQ4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-25,NatWest Main,NW General Savings,0.08,ROUND UP TO 5372,Transfer,Transfer
+2025-02-24,NatWest Main,,55.97,"AMZNMKTPLAC , E*R84YO0264 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-24,NatWest Main,,31.4,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-02-24,NatWest Main,,16,"CEX ST ALBANS , ST ALBANS GB",Shopping,Expense
+2025-02-24,NatWest Main,,14.38,"AMZNMKTPLAC , E*R80VX8WM4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-24,NatWest Main,,7.75,"WATEREND BARN , ST ALBANS GB",Pubs and Bars,Expense
+2025-02-24,NatWest Main,NW General Savings,3,ROUND UP TO 5372,Transfer,Transfer
+2025-02-21,NatWest Main,,2.99,"AMAZON.CO.U , K*R823H6X04 , 353-12477661 GB",Shopping,Expense
+2025-02-21,NatWest Main,NW General Savings,0.02,ROUND UP TO 5372,Transfer,Transfer
+2025-02-20,NatWest Main,,9.95,"AMZNMKTPLAC , E*R82N890J4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-20,NatWest Main,NW General Savings,0.1,ROUND UP TO 5372,Transfer,Transfer
+2025-02-20,,NatWest Main,6.99,"AMZNMKTPLACE , AMAZON.CO.UK GB , REFUND",Refund,Income
+2025-02-19,NatWest Main,,1340.88,"NIGEL , Marrakech Balance , VIA MOBILE - PYMT",Holiday,Expense
+2025-02-19,NatWest Main,,82.16,"ADMIRAL TRAVEL , INSURA , CARDIFF GB",Admiral,Expense
+2025-02-19,NatWest Main,NW General Savings,1.68,ROUND UP TO 5372,Transfer,Transfer
+2025-02-18,NatWest Main,,342.25,"STRAND PALACE , HOTEL F , LONDON GB",Holiday,Expense
+2025-02-18,NatWest Main,NW General Savings,200,KERR PA,NW General Savings,Transfer
+2025-02-18,NatWest Main,,56,"NIGEL , Extra Leg Room , VIA MOBILE - PYMT",Holiday,Expense
+2025-02-18,NatWest Main,,22.5,"AMZNMKTPLAC , E*RT91R2YT4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-18,NatWest Main,,18.02,"AMZNMKTPLAC , E*RT8XG1RT4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-18,NatWest Main,,17.98,"AMZNMKTPLAC , E*R879W94Q4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-18,NatWest Main,NW General Savings,4.5,ROUND UP TO 5372,Transfer,Transfer
+2025-02-17,NatWest Main,,85.64,"THE BIG EASY - , COVENT , LONDON GB",Restaurant,Expense
+2025-02-17,NatWest Main,,69.58,"THE BIG TABLE , GROUP LI , LONDON GB",Restaurant,Expense
+2025-02-17,NatWest Main,,52.4,"PUNCH & JUDY , COVENT GARDEN GB",Pubs and Bars,Expense
+2025-02-17,NatWest Main,,43.88,"CINEWORLD , BRENTFORD GB",Entertainment,Expense
+2025-02-17,NatWest Main,,25.42,"BOOTS 2173 , LONDON GB",Shopping,Expense
+2025-02-17,NatWest Main,,22.6,"TSGN TL ST ALBANS , SST , ST ALBANS GB",Travel,Expense
+2025-02-17,NatWest Main,,20.8,"SE CHARING CROSS , SST , LONDON-WC2N GB",Travel,Expense
+2025-02-17,NatWest Main,,7,"GTR PARKING , CONNECT EC , UXBRIDGE GB",Parking,Expense
+2025-02-17,NatWest Main,NW General Savings,5.36,ROUND UP TO 5372,Transfer,Transfer
+2025-02-14,NatWest Main,NW Holiday Funds,100,"To A/C 23655399 , General Savings , Via Mobile Xfer",Natwest Main,Transfer
+2025-02-14,NatWest Main,,19.8,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-02-14,NatWest Main,,2.99,"AD FREE FOR , PRIMEVIDEO , 353-12477661 GB",Prime Video,Expense
+2025-02-14,NatWest Main,NW General Savings,0.42,ROUND UP TO 5372,Transfer,Transfer
+2025-02-14,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 14/02/25 1035 , 417541335301412001",Transfer,Transfer
+2025-02-13,NatWest Main,NW General Savings,16306.77,"To A/C 23655372 , KERR PA , Via Mobile Xfer , Starling Closure",NW General Savings,Transfer
+2025-02-13,First Direct,NatWest Main,16306.77,"KERR PA&JH , 4751290105540447 , FP 13/02/25 1023 , 807097753201312001",Transfer,Transfer
+2025-02-12,NatWest Main,,29.04,"AMZNMKTPLAC , E*RT2SG8454 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-12,NatWest Main,NW General Savings,1.92,ROUND UP TO 5372,Transfer,Transfer
+2025-02-11,NatWest Main,,94.5,"AMZNMKTPLAC , E*TK9TU0IL4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-11,NatWest Main,,26.2,"AMAZON.CO.U , K*TK9685914 , 866-216-1072 GB",Shopping,Expense
+2025-02-11,NatWest Main,NW General Savings,2.6,ROUND UP TO 5372,Transfer,Transfer
+2025-02-10,NatWest Main,,212.25,"COSTCO WHOLESALE , #129 , STEVENAGE GB",Pubs and Bars,Expense
+2025-02-10,NatWest Main,,24.9,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-02-10,NatWest Main,,18.26,"AMZNMKTPLAC , E*TK5CM8BH4 , AMAZON.CO.UK GB",Shopping,Expense
+2025-02-10,NatWest Main,,13.5,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-02-10,NatWest Main,NW General Savings,4.18,ROUND UP TO 5372,Transfer,Transfer
+2025-02-10,,NatWest Main,12.5,"JAMES ROCKS , FP 07/02/25 1956 , PTNKHG99UTY49A1E30",James Rocks,Income
+2025-02-10,First Direct,NatWest Main,2000,"KERR PA&JH , 4751290105540447 , FP 08/02/25 0956 , 699961156590802001",Transfer,Transfer
+2025-02-07,NatWest Main,,10,"TFL BUSINESS BOPS , WEB , 0343 222 2222 GB",Travel,Expense
+2025-02-06,NatWest Main,,178.26,"SALA THAI KITCHEN , ST ALBANS GB",Restaurant,Expense
+2025-02-06,NatWest Main,,30,"BET365 , STOKE GB",Gambling,Expense
+2025-02-06,NatWest Main,NW General Savings,1.48,ROUND UP TO 5372,Transfer,Transfer
+2025-02-04,NatWest Main,,40.02,"MORR ST ALBANS , ST ALBANS GB",Groceries,Expense
+2025-02-04,NatWest Main,,8,"NYX*MFG , STALBANS GB",Shopping,Expense
+2025-02-04,NatWest Main,NW General Savings,1.96,ROUND UP TO 5372,Transfer,Transfer
+2025-02-04,First Direct,NatWest Main,1000,"KERR PA&JH , 4751290105540447 , FP 04/02/25 0957 , 491928427590402001",Transfer,Transfer
+2025-02-03,NatWest Main,,62.03,"HOPPERS KINGS , CROSS , LONDON GB",Pubs and Bars,Expense
+2025-02-03,NatWest Main,,25.5,"ZETTLE_*FADE TO , BLACK , ST ALBANS GB",Pubs and Bars,Expense
+2025-02-03,NatWest Main,,22.6,"TSGN TL ST ALBANS , CITY , ST ALBANS GB",Travel,Expense
+2025-02-03,NatWest Main,,20,"FORMULA 1 , EXHIBITION , LONDON GB",Entertainment,Expense
+2025-02-03,NatWest Main,,19,"ZETTLE_*FADE TO , BLACK , ST ALBANS GB",Pubs and Bars,Expense
+2025-02-03,NatWest Main,,16.24,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-02-03,NatWest Main,,13.7,"THE GREEN MAN , ST. ALBANS GB",Pubs and Bars,Expense
+2025-02-03,NatWest Main,,7.94,"UBER *TRIP , HELP.UBER.C , LONDON GB",Travel,Expense
+2025-02-03,NatWest Main,NW General Savings,5.98,ROUND UP TO 5372,Transfer,Transfer
+2025-02-03,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-02-03,NatWest Main,,2,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-02-03,,NW Holiday Funds,0.8,31JAN GRS 23655399,Interest,Income
+2025-02-03,,NW General Savings,2.44,31JAN GRS 23655372,Natwest Main,Income
+2025-01-31,NatWest Main,,18.4,"CRESCENT PHARMACY , JER , ST. ALBANS GB",Healthcare,Expense
+2025-01-31,NatWest Main,NW General Savings,1.2,ROUND UP TO 5372,Transfer,Transfer
+2025-01-29,NatWest Main,,10.35,"BLACKSMITH ARMS ST, ST ALBANS GB",Pubs and Bars,Expense
+2025-01-29,NatWest Main,,8.96,"UBER *TRIP , HELP.UBER.COM GB",Travel,Expense
+2025-01-29,NatWest Main,,6.9,"BLACKSMITH ARMS ST, ST ALBANS GB",Pubs and Bars,Expense
+2025-01-29,NatWest Main,,5.46,"BYPHONE RE , NORTH HE , HATFIELD GB",Parking,Expense
+2025-01-29,NatWest Main,,2,"UBER* TRIP , LONDON GB",Travel,Expense
+2025-01-29,NatWest Main,NW General Savings,1.58,ROUND UP TO 5372,Transfer,Transfer
+2025-01-29,NatWest Main,NW General Savings,1.08,ROUND UP TO 5372,Transfer,Transfer
+2025-01-28,NatWest Main,,44.2,"SAINSBURYS SUPERMA, MARSHALSWICK GB",Groceries,Expense
+2025-01-28,NatWest Main,NW General Savings,1.6,ROUND UP TO 5372,Transfer,Transfer
+2025-01-27,NatWest Main,,140,"Club Membership , VIA MOBILE - PYMT , FP 25/01/25 10 , 17054453375899000N",Sports,Expense
+2025-01-27,NatWest Main,,123.92,"TK MAXX , ST ALBANS GB",Shopping,Expense
+2025-01-27,NatWest Main,,59.99,"PAYPAL *EBAY UK , 35314369001 GB",Shopping,Expense
+2025-01-27,NatWest Main,,22.5,"MARKS&SPENCER PLC , LONDON COLNEY GB",Groceries,Expense
+2025-01-27,NatWest Main,,6,"BOOTS - 6576 , LONDON - COLN GB",Shopping,Expense
+2025-01-27,NatWest Main,,3.99,"QUADRANT PHARMACY , ST ALBANS GB",Healthcare,Expense
+2025-01-27,NatWest Main,NW General Savings,1.2,ROUND UP TO 5372,Transfer,Transfer

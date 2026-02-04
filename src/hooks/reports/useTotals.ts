@@ -1,23 +1,10 @@
-// src/hooks/useTotals.ts
+// NOTE: Reporting model locked. See: REPORTING_MODEL_LOCK.md
+// src/hooks/reports/useTotals.ts
 import { useMemo } from 'react';
 import type { Transaction } from '../../state/AppContext';
+import { computeTotals } from '../../utils/reporting';
 
+/** Income/expense/net and count (transfers excluded from count and net). Delegates to reporting.computeTotals. */
 export function useTotals(filteredTxs: Transaction[]) {
-  return useMemo(() => {
-    let income = 0;
-    let expense = 0;
-
-    for (const t of filteredTxs) {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'income') income += amt;
-      else if (t.type === 'expense') expense += amt;
-    }
-
-    return {
-      income,
-      expense,
-      net: income - expense,
-      count: filteredTxs.length,
-    };
-  }, [filteredTxs]);
+  return useMemo(() => computeTotals(filteredTxs), [filteredTxs]);
 }

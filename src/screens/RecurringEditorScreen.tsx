@@ -1,4 +1,7 @@
 // src/screens/RecurringEditorScreen.tsx
+// When implementing the recurring editor form:
+// - If user selects type "Transfer": require both fromAccountId and toAccountId before Save.
+// - If they clear one side: clear both (or block Save) so incomplete transfers are never created.
 import React from 'react';
 import {
   View,
@@ -37,7 +40,8 @@ const RecurringEditorScreen: React.FC = () => {
             • Create and edit recurring payments (e.g. rent, subscriptions).{'\n'}
             • Optionally set up recurring transfers between accounts.{'\n'}
             • Control frequency (monthly, weekly, etc.) and next due date.{'\n'}
-            • Toggle items between active and paused.
+            • Toggle items between active and paused.{'\n\n'}
+            Transfer validation: when type is Transfer, require both From and To accounts before Save; if user clears one side, clear both or block Save.
           </Text>
         </View>
 

@@ -1,22 +1,51 @@
+// NOTE: Reporting model locked. See: REPORTING_MODEL_LOCK.md
 // src/utils/reporting.ts
 import type { Transaction } from '../state/AppContext';
 
 export type ReportPeriod = 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
 
 export function computeTotals(txs: Transaction[]) {
+  if (__DEV__) {
+    const hasTransfer = txs.some((t) => t.type === 'transfer');
+    if (hasTransfer) {
+      console.warn(
+        '[Reporting] Transfers passed into computeTotals; totals will ignore them. Check filters.'
+      );
+    }
+  }
   let income = 0;
   let expense = 0;
+  let count = 0;
   for (const t of txs) {
     const amt = Number(t.amount) || 0;
-    if (t.type === 'income') income += amt;
-    else if (t.type === 'expense') expense += amt;
+    if (t.type === 'income') {
+      income += amt;
+      count++;
+    } else if (t.type === 'expense') {
+      expense += amt;
+      count++;
+    }
+    // transfers excluded from count and net
   }
   return {
     income,
     expense,
     net: income - expense,
-    count: txs.length,
+    count,
   };
+}
+
+/** Totals for transfers only (reported separately; do not add to net). */
+export function computeTransferTotals(txs: Transaction[]) {
+  let amount = 0;
+  let count = 0;
+  for (const t of txs) {
+    if (t.type === 'transfer') {
+      amount += Number(t.amount) || 0;
+      count++;
+    }
+  }
+  return { amount, count };
 }
 
 export function monthKeyFromDate(d: Date) {
@@ -42,6 +71,7 @@ export function formatMonthLabel(monthKey: string) {
   return d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
 }
 
+/** Returns { start, end } for the given month. End is exclusive; filters must use date < end. */
 export function rangeForMonthKey(monthKey: string) {
   const [yStr, mStr] = monthKey.split('-');
   const y = Number(yStr);

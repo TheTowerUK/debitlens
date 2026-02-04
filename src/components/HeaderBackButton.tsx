@@ -14,15 +14,18 @@ type Props = {
 export default function HeaderBackButton({ label = 'Back', onPress }: Props) {
   const navigation = useNavigation<any>();
 
+  const canGoBack = typeof navigation?.canGoBack === 'function' ? navigation.canGoBack() : false;
+
+  // If the caller provided an override handler, always show the button.
+  // Otherwise, hide it when there's nowhere to go back to.
+  if (!onPress && !canGoBack) return null;
+
   const handlePress = () => {
     if (onPress) {
       onPress();
       return;
     }
-
-    if (navigation?.canGoBack?.() && navigation.canGoBack()) {
-      navigation.goBack();
-    }
+    navigation.goBack();
   };
 
   return (
@@ -34,7 +37,7 @@ export default function HeaderBackButton({ label = 'Back', onPress }: Props) {
         pressed && { opacity: Platform.OS === 'ios' ? 0.6 : 0.8 },
       ]}
       accessibilityRole="button"
-      accessibilityLabel="Back"
+      accessibilityLabel={label}
     >
       <Text style={styles.buttonText}>{label}</Text>
     </Pressable>

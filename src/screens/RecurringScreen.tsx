@@ -1,8 +1,10 @@
 // src/screens/RecurringScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { RootStackParamList } from '../navigations/types';
@@ -82,6 +84,41 @@ function cap(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Simple clamp
+function clamp01(n: number) {
+  return Math.max(0, Math.min(1, n));
+}
+
+// Safe amount parser (handles £ and commas)
+function parseAmount(value: unknown): number {
+  const s = String(value ?? '').trim();
+  if (!s) return 0;
+  const cleaned = s.replace(/£/g, '').replace(/,/g, '');
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ---------------- Suggestions persistence ----------------
+const DISMISSED_KEY = 'debitlens.recurringSuggestions.dismissed.v1';
+
+async function loadDismissedKeys(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(DISMISSED_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveDismissedKeys(keys: string[]) {
+  try {
+    await AsyncStorage.setItem(DISMISSED_KEY, JSON.stringify(keys));
+  } catch {
+    // ignore
+  }
+}
+
 // ---------------- Screen ----------------
 export default function RecurringScreen({ navigation }: Props) {
   const { state, actions } = useApp();
@@ -89,188 +126,254 @@ export default function RecurringScreen({ navigation }: Props) {
   const txs = state.transactions || [];
   const [showDetect, setShowDetect] = useState(false);
 
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
+
+  useEffect(() => {
+    loadDismissedKeys().then(setDismissedKeys);
+  }, []);
+
+  const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
+
   /**
    * Detection expects transactions shaped like:
    * { date, accountId, amount, description, category }
-   * But it is defensive about date formats (ISO or DD/MM/YYYY).
+   * Defensive about date formats (ISO or DD/MM/YYYY).
+   *
+   * IMPORTANT:
+   * - We only detect expenses here (amt < 0)
+   * - Returned suggestions include accountId so creation is correctly linked
    */
-const detectCandidates = useMemo(() => {
-  let debugExpensesCount = 0;
-  let debugGroupsCount = 0;
+  const detectCandidates = useMemo(() => {
+    let debugExpensesCount = 0;
+    let debugGroupsCount = 0;
 
-  // ---- Merchant helpers ----
-  const STOPWORDS = new Set([
-    'ltd', 'limited', 'plc', 'co', 'company', 'uk', 'the', 'and', 'of', 'to',
-    'payment', 'card', 'visa', 'mastercard', 'debit', 'credit', 'direct', 'debit',
-    'dd', 'pos', 'contactless', 'online',
-    'store', 'stores', 'superstore', 'market', 'supermarket',
-  ]);
+    // ---- Merchant helpers ----
+    const STOPWORDS = new Set([
+      'ltd',
+      'limited',
+      'plc',
+      'co',
+      'company',
+      'uk',
+      'the',
+      'and',
+      'of',
+      'to',
+      'payment',
+      'card',
+      'visa',
+      'mastercard',
+      'debit',
+      'credit',
+      'direct',
+      'dd',
+      'pos',
+      'contactless',
+      'online',
+      'store',
+      'stores',
+      'superstore',
+      'market',
+      'supermarket',
+    ]);
 
-  // Merchants we usually DON'T want recurring detection for (too noisy/variable)
-  const NOISY_MERCHANT_PATTERNS: RegExp[] = [
-    /^amzn/i,
-    /^amazon/i,
-    /amznmktplace/i,
-    /amzn/i,
-    /marks\s*&\s*spencer/i,
-    /morrison/i,
-    /tesco/i,
-    /sainsbury/i,
-    /asda/i,
-    /aldi/i,
-    /paypal/i, // often mixed
-  ];
+    // Merchants we usually DON'T want recurring detection for (too noisy/variable)
+    const NOISY_MERCHANT_PATTERNS: RegExp[] = [
+      /^amzn/i,
+      /^amazon/i,
+      /amznmktplace/i,
+      /amzn/i,
+      /marks\s*&\s*spencer/i,
+      /morrison/i,
+      /tesco/i,
+      /sainsbury/i,
+      /asda/i,
+      /aldi/i,
+      /paypal/i, // often mixed
+    ];
 
-  function merchantKeyFromTxn(t: any) {
-    const nameRaw = String(t?.name || '').replace(/\u00A0/g, ' ').trim();
-    const descRaw = String(t?.description || '').replace(/\u00A0/g, ' ').trim();
-    let s = (nameRaw || descRaw || '').trim();
-    if (!s) return null;
+    function merchantKeyFromTxn(t: any) {
+      const nameRaw = String(t?.name || '').replace(/\u00A0/g, ' ').trim();
+      const descRaw = String(t?.description || '').replace(/\u00A0/g, ' ').trim();
+      let s = (nameRaw || descRaw || '').trim();
+      if (!s) return null;
 
-    // Lowercase
-    s = s.toLowerCase();
+      s = s.toLowerCase();
 
-    // Strip common reference noise
-    s = s
-      .replace(/\*[a-z0-9]{3,}/g, ' ')         // *32993 / *2o4pz etc
-      .replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ')   // 353-12477661
-      .replace(/\b\d{6,}\b/g, ' ')             // long digit sequences
-      .replace(/[\(\)\[\]\{\}]/g, ' ')
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
+      // Strip common reference noise
+      s = s
+        .replace(/\*[a-z0-9]{3,}/g, ' ') // *32993 / *2o4pz etc
+        .replace(/\b\d{3,}[-/]\d{2,}\b/g, ' ') // 353-12477661
+        .replace(/\b\d{6,}\b/g, ' ') // long digit sequences
+        .replace(/[\(\)\[\]\{\}]/g, ' ')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-    // Remove trailing locations like "london", "st albans" etc (basic)
-    // (optional; keep simple)
-    s = s.replace(/\b(london|st albans|hatfield|bedford|stevenage|uxbridge)\b/g, ' ').replace(/\s+/g, ' ').trim();
+      // Remove trailing locations (basic)
+      s = s
+        .replace(/\b(london|st albans|hatfield|bedford|stevenage|uxbridge)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 
-    // Token filter
-    const tokens = s
-      .split(' ')
-      .filter(Boolean)
-      .filter((tok) => tok.length >= 2 && !STOPWORDS.has(tok));
+      const tokens = s
+        .split(' ')
+        .filter(Boolean)
+        .filter((tok) => tok.length >= 2 && !STOPWORDS.has(tok));
 
-    if (tokens.length === 0) return null;
+      if (tokens.length === 0) return null;
 
-    const key = tokens.slice(0, 5).join(' '); // stable merchant core
-    return key;
-  }
-
-  function isNoisyMerchant(key: string) {
-    return NOISY_MERCHANT_PATTERNS.some((re) => re.test(key));
-  }
-
-  function amountBucketKey(amountAbs: number) {
-    // For recurring, amounts can drift slightly (e.g., insurance/utilities)
-    // We'll group by rounded £ value first (coarse) then enforce tolerance in group step.
-    return String(Math.round(amountAbs)); // e.g., 277
-  }
-
-  // ---- Expenses only, must have date + merchant ----
-  const expenses = txs.filter((t: any) => {
-    const amt = Number(t?.amount) || 0;
-    const d = parseTxnDate(t?.date);
-    const key = merchantKeyFromTxn(t);
-    const ok = amt < 0 && !!d && !!key;
-    if (ok) debugExpensesCount += 1;
-    return ok;
-  });
-
-  // Group structure
-  type Group = {
-    merchantKey: string;
-    displayTitle: string;
-    category?: string;
-    dates: Date[];
-    amounts: number[];
-    sumAmount: number;
-    count: number;
-  };
-
-  // 1st pass group: merchantKey + rough amount bucket
-  const groups: Record<string, Group> = {};
-
-  for (const t of expenses) {
-    const merchantKey = merchantKeyFromTxn(t);
-    if (!merchantKey) continue;
-    if (isNoisyMerchant(merchantKey)) continue;
-
-    const amtAbs = Math.abs(Number(t?.amount) || 0);
-    if (!(amtAbs > 0)) continue;
-
-    const d = parseTxnDate(t?.date);
-    if (!d) continue;
-
-    const bucket = amountBucketKey(amtAbs);
-    const key = `${merchantKey}__${bucket}`;
-
-    if (!groups[key]) {
-      debugGroupsCount += 1;
-      const displayTitle =
-        String(t?.description || '').trim() ||
-        'Transaction';
-        String(t?.description || '').trim() ||
-        merchantKey;
-
-      groups[key] = {
-        merchantKey,
-        displayTitle,
-        category: String(t?.category || '').trim() || undefined,
-        dates: [],
-        amounts: [],
-        sumAmount: 0,
-        count: 0,
-      };
+      const key = tokens.slice(0, 5).join(' ');
+      return key;
     }
 
-    groups[key].dates.push(d);
-    groups[key].amounts.push(amtAbs);
-    groups[key].sumAmount += amtAbs;
-    groups[key].count += 1;
-  }
+    function isNoisyMerchant(key: string) {
+      return NOISY_MERCHANT_PATTERNS.some((re) => re.test(key));
+    }
 
-  // 2nd pass: enforce amount consistency within each group (tolerance)
-  // (prevents grouping random purchases that happen to share merchant key)
-  const TOLERANCE_PCT = 0.03; // ±3%
-  const candidates = Object.values(groups)
-    .map((g) => {
-      const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
-      if (dates.length < 2) return null;
+    function amountBucketKey(amountAbs: number) {
+      return String(Math.round(amountAbs)); // coarse bucket (e.g., 277)
+    }
 
-      const avgAmount = g.count ? g.sumAmount / g.count : 0;
-      if (!(avgAmount > 0)) return null;
+    // ---- Expenses only, must have date + merchant ----
+    function parseAmount(value: unknown): number {
+      const s = String(value ?? '').trim();
+      if (!s) return 0;
+      const cleaned = s.replace(/£/g, '').replace(/,/g, '');
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    
+    // ---- Expenses only, must have date + merchant ----
+    const expenses = txs.filter((t: any) => {
+      const amt = parseAmount(t?.amount);
+      const isExpense = String(t?.type || '').toLowerCase() === 'expense';
+      const d = parseTxnDate(t?.date);
+      const key = merchantKeyFromTxn(t);
+    
+      const ok = (amt < 0 || isExpense) && !!d && !!key;
+      if (ok) debugExpensesCount += 1;
+      return ok;
+    });
+    
 
-      // Amount consistency check
-      const maxAllowedDiff = avgAmount * TOLERANCE_PCT;
-      const withinTol = g.amounts.every((a) => Math.abs(a - avgAmount) <= Math.max(0.75, maxAllowedDiff));
-      if (!withinTol) return null;
+    type Group = {
+      merchantKey: string;
+      displayTitle: string;
+      category?: string;
+      dates: Date[];
+      amounts: number[];
+      sumAmount: number;
+      count: number;
+      suggestionKey: string; // stable key for dismissal
+      accountId: string;
+    };
 
-      // Interval inference
-      const intervals: number[] = [];
-      for (let i = 1; i < dates.length; i++) {
-        const diffMs = dates[i].getTime() - dates[i - 1].getTime();
-        const diffDays = diffMs / (1000 * 60 * 60 * 24);
-        if (diffDays > 0) intervals.push(diffDays);
+    const groups: Record<string, Group> = {};
+
+    for (const t of expenses) {
+      const merchantKey = merchantKeyFromTxn(t);
+      if (!merchantKey) continue;
+      if (isNoisyMerchant(merchantKey)) continue;
+
+      const amtAbs = Math.abs(parseAmount(t?.amount));
+      if (!(amtAbs > 0)) continue;
+
+      const d = parseTxnDate(t?.date);
+      if (!d) continue;
+
+      const accountId = String(t?.accountId || '').trim();
+      if (!accountId) continue;
+
+      const bucket = amountBucketKey(amtAbs);
+
+      // Stable suggestion key used for Dismiss + also for "already created" filtering
+      const suggestionKey = `${accountId}__${merchantKey}__${bucket}`;
+
+      const key = `${merchantKey}__${bucket}__${accountId}`;
+
+      if (!groups[key]) {
+        debugGroupsCount += 1;
+
+        const displayTitle = String(t?.description || '').trim() || merchantKey;
+
+        groups[key] = {
+          merchantKey,
+          displayTitle,
+          category: String(t?.category || '').trim() || undefined,
+          dates: [],
+          amounts: [],
+          sumAmount: 0,
+          count: 0,
+          suggestionKey,
+          accountId,
+        };
       }
-      if (intervals.length < 1) return null;
 
-      const frequency = inferFrequencyFromIntervals(intervals);
-      const last = dates[dates.length - 1];
-      const nextDueDate = nextDueDateFromLast(last, frequency);
+      groups[key].dates.push(d);
+      groups[key].amounts.push(amtAbs);
+      groups[key].sumAmount += amtAbs;
+      groups[key].count += 1;
+    }
 
-      return {
-        title: g.displayTitle,          // show merchant-ish title
-        merchantKey: g.merchantKey,     // internal
-        amount: avgAmount,
-        category: g.category,
-        count: dates.length,
-        frequency,
-        lastDate: last.toISOString().slice(0, 10),
-        nextDueDate,
-      };
-    })
-    .filter(Boolean)
-    .sort((a: any, b: any) => (b.count ?? 0) - (a.count ?? 0)) as Array<{
+    const TOLERANCE_PCT = 0.03; // ±3%
+
+    const candidates = Object.values(groups)
+      .map((g) => {
+        const dates = g.dates.sort((a, b) => a.getTime() - b.getTime());
+        if (dates.length < 2) return null;
+
+        const avgAmount = g.count ? g.sumAmount / g.count : 0;
+        if (!(avgAmount > 0)) return null;
+
+        const maxAllowedDiff = avgAmount * TOLERANCE_PCT;
+        const withinTol = g.amounts.every((a) => Math.abs(a - avgAmount) <= Math.max(0.75, maxAllowedDiff));
+        if (!withinTol) return null;
+
+        const intervals: number[] = [];
+        for (let i = 1; i < dates.length; i++) {
+          const diffMs = dates[i].getTime() - dates[i - 1].getTime();
+          const diffDays = diffMs / (1000 * 60 * 60 * 24);
+          if (diffDays > 0) intervals.push(diffDays);
+        }
+        if (intervals.length < 1) return null;
+
+        const frequency = inferFrequencyFromIntervals(intervals);
+        const last = dates[dates.length - 1];
+        const nextDueDate = nextDueDateFromLast(last, frequency);
+
+        // Confidence:
+        // - more repeats = better
+        // - tighter interval variance = better
+        const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+        const variance =
+          intervals.reduce((sum, x) => sum + Math.abs(x - avgInterval), 0) / intervals.length;
+
+        const repeatsScore = clamp01((dates.length - 2) / 6); // 2->0, 8->1
+        const varianceScore = clamp01(1 - variance / Math.max(1, avgInterval)); // 1 best
+        const confidence = clamp01(0.55 * varianceScore + 0.45 * repeatsScore);
+
+        return {
+          suggestionKey: g.suggestionKey,
+          accountId: g.accountId,
+          title: g.displayTitle,
+          merchantKey: g.merchantKey,
+          amount: avgAmount,
+          category: g.category,
+          count: dates.length,
+          frequency,
+          lastDate: last.toISOString().slice(0, 10),
+          nextDueDate,
+          confidence,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        if ((b.confidence ?? 0) !== (a.confidence ?? 0)) return (b.confidence ?? 0) - (a.confidence ?? 0);
+        return (b.count ?? 0) - (a.count ?? 0);
+      }) as Array<{
+      suggestionKey: string;
+      accountId: string;
       title: string;
       merchantKey: string;
       amount: number;
@@ -279,12 +382,34 @@ const detectCandidates = useMemo(() => {
       frequency: string;
       lastDate: string;
       nextDueDate: string;
+      confidence: number;
     }>;
 
-  (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
-  return candidates;
-}, [txs]);
+    (candidates as any)._debug = { expenses: debugExpensesCount, groups: debugGroupsCount };
+    return candidates;
+  }, [txs]);
 
+  // Filter out dismissed + filter out already-existing recurring by title+amount(+accountId)
+  const suggestions = useMemo(() => {
+    const existing = recurring
+      .map((r) => ({
+        t: normalizeTitle((r as any).title || ''),
+        amt: Math.round(Math.abs(Number((r as any).amount || 0)) * 100) / 100,
+        acc: String((r as any).accountId || ''),
+      }))
+      .filter((x) => x.t);
+
+    const isAlreadyRecurring = (title: string, amount: number, accountId: string) => {
+      const t = normalizeTitle(title);
+      const a = Math.round(Math.abs(amount) * 100) / 100;
+      return existing.some((e) => e.t === t && e.acc === accountId && Math.abs(e.amt - a) <= 0.5);
+    };
+
+    return detectCandidates
+      .filter((c) => !dismissedSet.has(c.suggestionKey))
+      .filter((c) => !isAlreadyRecurring(c.title, c.amount, c.accountId))
+      .filter((c) => (c.confidence ?? 0) >= 0.55);
+  }, [detectCandidates, dismissedSet, recurring]);
 
   const list = useMemo(() => {
     return [...recurring].sort((a, b) => {
@@ -310,7 +435,7 @@ const detectCandidates = useMemo(() => {
       if (r.active === false) continue;
       activeCount++;
 
-      const amt = Number((r as any).amount) || 0;
+      const amt = parseAmount((r as any).amount);
       const freq = String((r as any).frequency || 'monthly').toLowerCase().trim();
       const mult = multipliers[freq] ?? 1;
 
@@ -344,7 +469,49 @@ const detectCandidates = useMemo(() => {
     Alert.alert('Edit recurring', 'Hook this to your RecurringEditor when ready.');
   };
 
+  const dismissSuggestion = async (suggestionKey: string) => {
+    const next = Array.from(new Set([...dismissedKeys, suggestionKey]));
+    setDismissedKeys(next);
+    await saveDismissedKeys(next);
+  };
 
+  const createFromSuggestion = (c: any) => {
+    const addFn = (actions as any)?.addRecurring;
+
+    if (typeof addFn !== 'function') {
+      Alert.alert('Not wired yet', 'addRecurring action is not available yet.');
+      return;
+    }
+
+    Alert.alert(
+      'Create recurring item?',
+      `Create "${c.title}" as ${cap(String(c.frequency))} for ${formatMoney(c.amount)}?\n\nNext due: ${c.nextDueDate}`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Create',
+          style: 'default',
+          onPress: async () => {
+            // IMPORTANT: RecurringItem requires type + (optional but recommended) accountId
+            addFn({
+              title: c.title,
+              active: true,
+              nextDueDate: c.nextDueDate,
+              frequency: c.frequency,
+              amount: Math.abs(parseAmount(c.amount)),
+              type: 'expense', // detector is expenses-only
+              accountId: c.accountId,
+              category: c.category,
+              description: c.title,
+            });
+
+            // Hide this suggestion going forward
+            await dismissSuggestion(c.suggestionKey);
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeWrap}>
@@ -366,7 +533,7 @@ const detectCandidates = useMemo(() => {
             hitSlop={8}
           >
             <Text style={[styles.headerPillText, styles.detectPillText]}>
-              {showDetect ? 'Hide detect' : 'Detect'}
+              {showDetect ? 'Hide suggestions' : 'Suggestions'}
             </Text>
           </Pressable>
         </View>
@@ -390,11 +557,11 @@ const detectCandidates = useMemo(() => {
           </View>
         </View>
 
-        {/* Detect panel */}
+        {/* Suggestions panel */}
         {showDetect ? (
           <View style={styles.card}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardTitle}>Detect recurring candidates</Text>
+              <Text style={styles.cardTitle}>Recurring suggestions</Text>
             </View>
 
             {(detectCandidates as any)._debug ? (
@@ -404,52 +571,39 @@ const detectCandidates = useMemo(() => {
               </Text>
             ) : null}
 
-            {detectCandidates.length === 0 ? (
+            {suggestions.length === 0 ? (
               <Text style={styles.subtle}>
-                No strong recurring patterns found yet (need ~2+ repeats with a consistent interval).
+                No strong patterns found (or they've already been dismissed / created). Import more history or wait for
+                repeats.
               </Text>
             ) : (
               <View style={{ marginTop: 8 }}>
-                {detectCandidates.slice(0, 12).map((c, idx) => (
-                  <View key={`${c.title}-${c.amount}-${idx}`} style={styles.detectRow}>
+                {suggestions.slice(0, 12).map((c, idx) => (
+                  <View key={`${c.suggestionKey}-${idx}`} style={styles.detectRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.detectTitle}>{c.title}</Text>
                       <Text style={styles.detectSub}>
                         {c.count} repeats • {String(c.frequency).toUpperCase()} • Last: {c.lastDate}
                       </Text>
                       <Text style={styles.detectSubDim}>
-                        Next due: {c.nextDueDate} • {formatMoney(c.amount)}
+                        Next due: {c.nextDueDate} • {formatMoney(c.amount)} • Confidence:{' '}
+                        {Math.round((c.confidence || 0) * 100)}%
                       </Text>
                     </View>
 
-                    <Pressable
-                      style={styles.actionBtn}
-                      onPress={() => {
-                        const addFn = (actions as any)?.addRecurring;
-                        if (typeof addFn !== 'function') {
-                          Alert.alert(
-                            'Not wired yet',
-                            'addRecurring action is not available yet. Tell me your AppContext actions and I’ll wire it.'
-                          );
-                          return;
-                        }
+                    <View style={{ flexDirection: 'row', columnGap: 8 }}>
+                      <Pressable style={styles.actionBtn} onPress={() => createFromSuggestion(c)} hitSlop={8}>
+                        <Text style={styles.actionBtnText}>Create</Text>
+                      </Pressable>
 
-                        addFn({
-                          title: c.title,
-                          amount: c.amount,
-                          frequency: c.frequency,
-                          nextDueDate: c.nextDueDate,
-                          active: true,
-                          category: c.category,
-                          merchantKey: (c as any).merchantKey,
-                        });
-
-                        Alert.alert('Added', 'Recurring item created from detected pattern.');
-                      }}
-                      hitSlop={8}
-                    >
-                      <Text style={styles.actionBtnText}>Add</Text>
-                    </Pressable>
+                      <Pressable
+                        style={[styles.actionBtn, styles.dismissBtn]}
+                        onPress={() => dismissSuggestion(c.suggestionKey)}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.actionBtnText}>Dismiss</Text>
+                      </Pressable>
+                    </View>
                   </View>
                 ))}
               </View>
@@ -469,9 +623,11 @@ const detectCandidates = useMemo(() => {
             <View style={{ marginTop: 6 }}>
               {list.map((item) => {
                 const isPaused = item.active === false;
+                const hasBoth = !!(item.fromAccountId && item.toAccountId);
+                const hasOne = !!(item.fromAccountId || item.toAccountId) && !hasBoth;
                 const title =
-                  (item as any).title ||
-                  ((item as any).isTransfer ? 'Recurring transfer' : 'Recurring item');
+                  item.title ||
+                  (hasBoth ? 'Recurring transfer' : hasOne ? 'Recurring transfer (incomplete)' : 'Recurring item');
 
                 return (
                   <Pressable
@@ -528,23 +684,13 @@ const styles = StyleSheet.create({
   wrap: { flex: 1 },
   content: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 32 },
 
-  subtitleRow: {
-    marginBottom: 12,
-  },
+  subtitleRow: { marginBottom: 12 },
   subtle: { color: theme.textDim, marginTop: 4, flexShrink: 1 },
-  
+
   actionRow: {
     flexDirection: 'row',
     columnGap: 8,
     marginBottom: 16,
-  },
-
-  pillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    columnGap: 10,
-    rowGap: 8,
   },
 
   headerPill: {
@@ -557,7 +703,6 @@ const styles = StyleSheet.create({
   },
   addPill: { borderColor: theme.link },
 
-  // Detect pill matches the DataExportImport “light blue” feel
   detectPill: {
     backgroundColor: theme.cardAlt,
     borderColor: theme.link,
@@ -616,6 +761,7 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
   },
   deleteBtn: { borderColor: '#B91C1C' },
+  dismissBtn: { borderColor: theme.textDim },
   actionBtnText: { color: '#E5E7EB', fontWeight: '800', fontSize: 12 },
 
   detectRow: {

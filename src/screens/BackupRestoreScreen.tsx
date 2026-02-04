@@ -1,6 +1,7 @@
 // src/screens/BackupRestoreScreen.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Switch } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -32,6 +33,19 @@ export default function BackupRestoreScreen() {
   const [preview, setPreview] = useState<BackupLatest | null>(null);
   const [status, setStatus] = useState<string>('');
   const [replaceMode, setReplaceMode] = useState(true);
+
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setShowPreview(false);
+        setPreviewText(null);
+        setPreview(null);
+      };
+    }, [])
+  );
 
   const [reminderMode, setReminderModeState] =
     useState<BackupReminderMode>('off');
@@ -111,6 +125,8 @@ export default function BackupRestoreScreen() {
       } else {
         setStatus(`Backup saved to: ${uri}`);
       }
+      setShowPreview(false);
+      setPreviewText(null);
     } catch (e: any) {
       setStatus(e?.message || 'Export failed.');
     }
@@ -161,7 +177,8 @@ export default function BackupRestoreScreen() {
       budgets: preview.app.budgets ?? budgets, // if backup has budgets use them, else keep current
     });
 
-
+    setShowPreview(false);
+    setPreviewText(null);
     setPreview(null);
     setStatus('Restore applied (data replaced).');
   };
@@ -231,6 +248,21 @@ export default function BackupRestoreScreen() {
         </View>
 
         {preview ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.btnSecondary,
+              { marginTop: 10 },
+              pressed ? { opacity: 0.8 } : null,
+            ]}
+            onPress={() => setShowPreview((v) => !v)}
+          >
+            <Text style={styles.btnSecondaryText}>
+              {showPreview ? 'Hide preview' : 'Show preview'}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {showPreview && preview ? (
           <View style={styles.previewBox}>
             <Text style={styles.previewTitle}>Preview</Text>
             <Text style={styles.previewLine}>Version: {preview.version}</Text>

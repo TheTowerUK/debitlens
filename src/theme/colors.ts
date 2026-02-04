@@ -16,6 +16,7 @@ export const colors = {
   // Accents
   link: '#93C5FD',        // links, chevrons
   pillText: '#BFDBFE',    // pill text
+  primary: '#2563EB',     // primary CTA (e.g. Where to start Add account)
 
   // Status
   positive: '#22C55E',    // income / positive

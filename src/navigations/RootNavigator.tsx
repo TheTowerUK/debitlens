@@ -8,6 +8,7 @@ import AccountScreen from '../screens/AccountScreen';
 import AddAccountScreen from '../screens/AddAccountScreen';
 import TransferScreen from '../screens/TransferScreen';
 import RecentActivityScreen from '../screens/RecentActivityScreen';
+import HistoryScreen from '../screens/HistoryScreen';
 import TxnEditorScreen from '../screens/TxnEditorScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
 import RecurringScreen from '../screens/RecurringScreen';
@@ -21,46 +22,11 @@ import ImportCsvScreen from '../screens/ImportCsvScreen';
 import SplashAuthScreen from '../screens/SplashAuthScreen';
 import BudgetEditorScreen from '../screens/BudgetEditorScreen';
 import ReportDetailScreen from '../screens/ReportDetailScreen';
+import HelpScreen from '../screens/HelpScreen';
+import AboutScreen from '../screens/AboutScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import { brandHeaderOptions } from './headerOptions';
-
-export type RootStackParamList = {
-  Login: undefined;
-  Dashboard: undefined;
-
-  Account: { accountId?: string } | undefined;
-  AddAccount: undefined;
-  Transfer: { fromAccountId?: string } | undefined;
-  RecentActivity: undefined;
-
-  ReportDetail: {
-    categoryKey: string;
-    period: 'thisMonth' | 'lastMonth' | 'allTime' | 'month';
-    monthKey?: string; // 'YYYY-MM' when period === 'month'
-  };
-
-  TxnEditor:
-    | {
-        id?: string;
-        accountId?: string;
-        type?: 'income' | 'expense';
-      }
-    | undefined;
-
-  Payments: undefined;
-  Recurring: undefined;
-
-  Budgets: undefined;
-  BudgetEditor: { id?: string; mode?: 'create' } | undefined;
-
-  Notifications: undefined;
-  RecurringEditor: { id?: string } | undefined;
-
-  Settings: undefined;
-  Reports: undefined;
-
-  DataExportImport: undefined;
-  ImportCSV: undefined;
-};
+import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -83,13 +49,12 @@ export default function RootNavigator() {
       />
       
       {/* Dashboard - no back button needed (root screen after login) */}
-      <Stack.Screen 
-        name="Dashboard" 
+      <Stack.Screen
+        name="Dashboard"
         component={DashboardScreen}
         options={{
-          ...brandHeaderOptions,
           title: 'Dashboard',
-          headerRight: undefined, // No back button on Dashboard
+          headerRight: undefined,
         }}
       />
 
@@ -113,6 +78,11 @@ export default function RootNavigator() {
         name="RecentActivity" 
         component={RecentActivityScreen}
         options={{ title: 'Recent Activity' }}
+      />
+      <Stack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{ title: 'History' }}
       />
 
       {/* TxnEditor can override headerRight for Delete button */}
@@ -164,6 +134,21 @@ export default function RootNavigator() {
         name="Reports" 
         component={ReportsScreen}
         options={{ title: 'Reports' }}
+      />
+      <Stack.Screen
+        name="Help"
+        component={HelpScreen}
+        options={{ title: 'Help & Guide' }}
+      />
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={{ title: 'About' }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{ title: 'Privacy Policy' }}
       />
 
       <Stack.Screen

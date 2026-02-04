@@ -11,7 +11,9 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
+import type { Account } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+import { accountNameById, getSignedAmountForAccount, isTransfer } from '../utils/txDisplay';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'History'>;
 
@@ -26,13 +28,13 @@ export default function HistoryScreen({ navigation }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [accountFilter, setAccountFilter] = useState<AccountFilter>('all');
 
-  const accountNameById: Record<string, string> = useMemo(() => {
-    const map: Record<string, string> = {};
-    accounts.forEach(a => {
-      map[a.id] = a.name || 'Account';
+  const accountsById = useMemo(() => {
+    const map: Record<string, Account> = {};
+    (state.accounts ?? []).forEach((a) => {
+      map[a.id] = a;
     });
     return map;
-  }, [accounts]);
+  }, [state.accounts]);
 
   const filteredTxs = useMemo(() => {
     return [...txs]
@@ -166,17 +168,19 @@ export default function HistoryScreen({ navigation }: Props) {
           <Text style={styles.empty}>No transactions match the filters.</Text>
         }
         renderItem={({ item }) => {
-          const isIncome = item.type === 'income';
-          const sign = isIncome ? '+' : '-';
-          const amt = Number(item.amount || 0);
+          const accountIdForSign = accountFilter !== 'all' ? accountFilter : undefined;
+          const signed = getSignedAmountForAccount(item, accountIdForSign);
+          const isTransferTx = isTransfer(item);
+          const signChar = isTransferTx && !accountIdForSign ? '→' : (signed > 0 ? '+' : signed < 0 ? '-' : '');
+          const amtDisplay = `${signChar}£${Math.abs(Number(item.amount) || 0).toFixed(2)}`;
           const d = item.date ? new Date(`${item.date}T00:00:00`) : null;
-          const accName = accountNameById[item.accountId] || 'Account';
+          const accName = accountNameById(accountsById, item.accountId) || 'Account';
 
           return (
             <View style={styles.row}>
               <View style={styles.rowLeft}>
                 <Text style={styles.rowTitle}>
-                  {item.description || (isIncome ? 'Income' : 'Expense')}
+                  {item.description || (item.type === 'income' ? 'Income' : item.type === 'transfer' ? 'Transfer' : 'Expense')}
                 </Text>
                 <Text style={styles.rowSub}>
                   {accName}
@@ -186,10 +190,10 @@ export default function HistoryScreen({ navigation }: Props) {
               <Text
                 style={[
                   styles.rowAmount,
-                  isIncome ? styles.rowAmountIncome : styles.rowAmountExpense,
+                  isTransferTx && !accountIdForSign ? undefined : signed > 0 ? styles.rowAmountIncome : styles.rowAmountExpense,
                 ]}
               >
-                {sign}£{amt.toFixed(2)}
+                {amtDisplay}
               </Text>
             </View>
           );

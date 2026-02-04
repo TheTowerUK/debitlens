@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
 import type { RootStackParamList } from '../navigations/types';
 import { colors as theme } from '../theme/colors';
@@ -36,12 +37,11 @@ const Sharing: any = (() => {
   }
 })();
 
-function buildCsvTemplate(): string {
+function buildTemplate(delim: ',' | '\t' | ';'): string {
   const header = ['Date', 'Account', 'Amount', 'Description', 'Category', 'Type'];
 
-  // Instruction row – users replace or delete this
   const instructionRow = [
-    'YYYY-MM-DD',
+    'YYYY-MM-DD or DD/MM/YYYY',
     'Account name',
     '-12.34',
     'Merchant or Payee',
@@ -51,76 +51,105 @@ function buildCsvTemplate(): string {
 
   const esc = (v: string) => {
     const s = String(v ?? '');
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    // TSV doesn't need quoting for commas, but still quote tabs/newlines/quotes
+    if (delim === '\t') {
+      if (/["\t\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+      return s;
+    }
+    if (/[",\n;]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
     return s;
   };
 
-  const lines = [
-    header.map(esc).join(','),
-    instructionRow.map(esc).join(','),
-  ];
-
+  const lines = [header.map(esc).join(delim), instructionRow.map(esc).join(delim)];
   return lines.join('\n') + '\n';
 }
 
 
 export default function ImportCsvScreen({ navigation }: Props) {
-  const [showTemplate, setShowTemplate] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
+  const [templateType, setTemplateType] = useState<'csv' | 'tsv'>('csv');
 
-  const templateCsv = useMemo(() => buildCsvTemplate(), []);
+  const templateCsv = useMemo(() => buildTemplate(','), []);
+  const templateTsv = useMemo(() => buildTemplate('\t'), []);
 
-  const handleDownloadTemplate = useCallback(async () => {
-    try {
-      if (!FileSystem || typeof FileSystem.writeAsStringAsync !== 'function') {
-        Alert.alert(
-          'Not available',
-          'expo-file-system is not available at runtime. Ensure it is installed and restart Expo with cache clear.'
-        );
-        return;
-      }
+  const currentTemplate = templateType === 'csv' ? templateCsv : templateTsv;
 
-      const fileName = 'DebitLens-CSV-Template.csv';
-      const baseDir =
-        FileSystem.documentDirectory ||
-        FileSystem.cacheDirectory ||
-        FileSystem.temporaryDirectory ||
-        null;
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setShowPreview(false);
+        setPreviewText(null);
+      };
+    }, [])
+  );
 
-      if (!baseDir) {
-        Alert.alert('Not available', 'File storage is not available on this platform.');
-        return;
-      }
-
-      const uri = baseDir + fileName;
-
-      const encoding =
-        FileSystem?.EncodingType?.UTF8 ||
-        FileSystem?.EncodingType?.utf8 ||
-        undefined;
-
-      if (encoding) {
-        await FileSystem.writeAsStringAsync(uri, templateCsv, { encoding });
-      } else {
-        await FileSystem.writeAsStringAsync(uri, templateCsv);
-      }
-
-      if (Sharing && typeof Sharing.isAvailableAsync === 'function') {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare && typeof Sharing.shareAsync === 'function') {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Share DebitLens CSV Template',
-            UTI: 'public.comma-separated-values-text',
-          });
+  const handleDownloadTemplate = useCallback(
+    async (type: 'csv' | 'tsv') => {
+      try {
+        if (!FileSystem || typeof FileSystem.writeAsStringAsync !== 'function') {
+          Alert.alert(
+            'Not available',
+            'expo-file-system is not available at runtime. Ensure it is installed and restart Expo with cache clear.'
+          );
           return;
         }
-      }
 
-      Alert.alert('Template saved', `Saved CSV template here:\n\n${uri}`);
-    } catch (e: any) {
-      Alert.alert('Download failed', e?.message ?? 'Unknown error');
-    }
-  }, [templateCsv]);
+        const isTsv = type === 'tsv';
+        const fileName = isTsv ? 'DebitLens-Excel-Template.txt' : 'DebitLens-CSV-Template.csv';
+        const templateText = isTsv ? templateTsv : templateCsv;
+        const baseDir =
+          FileSystem.documentDirectory ||
+          FileSystem.cacheDirectory ||
+          FileSystem.temporaryDirectory ||
+          null;
+
+        if (!baseDir) {
+          Alert.alert('Not available', 'File storage is not available on this platform.');
+          return;
+        }
+
+        const uri = baseDir + fileName;
+
+        const encoding =
+          FileSystem?.EncodingType?.UTF8 ||
+          FileSystem?.EncodingType?.utf8 ||
+          undefined;
+
+        // Add UTF-8 BOM for Excel compatibility
+        const withBom = '\uFEFF' + templateText;
+
+        if (encoding) {
+          await FileSystem.writeAsStringAsync(uri, withBom, { encoding });
+        } else {
+          await FileSystem.writeAsStringAsync(uri, withBom);
+        }
+
+        // Update preview to show the downloaded template type
+        setTemplateType(type);
+        if (showPreview) {
+          setPreviewText(templateText);
+        }
+
+        if (Sharing && typeof Sharing.isAvailableAsync === 'function') {
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare && typeof Sharing.shareAsync === 'function') {
+            await Sharing.shareAsync(uri, {
+              mimeType: isTsv ? 'text/tab-separated-values' : 'text/csv',
+              dialogTitle: isTsv ? 'Share DebitLens Excel Template' : 'Share DebitLens CSV Template',
+              UTI: isTsv ? 'public.tab-separated-values-text' : 'public.comma-separated-values-text',
+            });
+            return;
+          }
+        }
+
+        Alert.alert('Template saved', `Saved template here:\n\n${uri}`);
+      } catch (e: any) {
+        Alert.alert('Download failed', e?.message ?? 'Unknown error');
+      }
+    },
+    [templateCsv, templateTsv, showPreview]
+  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -142,41 +171,66 @@ export default function ImportCsvScreen({ navigation }: Props) {
           <Text style={styles.cardTitle}>DebitLens CSV Template</Text>
 
           <Text style={styles.body}>
-            Headers (capitalised) must match exactly:
-            {'\n'}
-            <Text style={styles.mono}>Date, Account, Amount, Description, Category, Type</Text>
+            Headers are case-insensitive{'\n'}
+            Delimiters accepted: comma, semicolon, tab{'\n'}
+            Extra columns allowed (e.g. Merchant){'\n'}
+            Date accepted: YYYY-MM-DD or DD/MM/YYYY
           </Text>
 
           <View style={styles.actionsRow}>
-            <Pressable style={styles.btnPrimary} onPress={handleDownloadTemplate} hitSlop={8}>
-              <Text style={styles.btnPrimaryText}>Download CSV Template</Text>
+            <Pressable
+              style={styles.btnPrimary}
+              onPress={() => handleDownloadTemplate('csv')}
+              hitSlop={8}
+            >
+              <Text style={styles.btnPrimaryText}>Download CSV Template (comma)</Text>
             </Pressable>
 
             <Pressable
-              style={[styles.btnSecondary, showTemplate && styles.btnSecondaryOn]}
-              onPress={() => setShowTemplate((v) => !v)}
+              style={styles.btnPrimary}
+              onPress={() => handleDownloadTemplate('tsv')}
+              hitSlop={8}
+            >
+              <Text style={styles.btnPrimaryText}>Download Excel Template (tab-delimited)</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.btnSecondary,
+                showPreview && styles.btnSecondaryOn,
+                pressed ? { opacity: 0.8 } : null,
+              ]}
+              onPress={() => {
+                const next = !showPreview;
+                setShowPreview(next);
+                if (next) {
+                  setPreviewText(currentTemplate);
+                  setTemplateType('csv');
+                }
+              }}
               hitSlop={8}
             >
               <Text style={styles.btnSecondaryText}>
-                {showTemplate ? 'Hide preview' : 'Preview'}
+                {showPreview ? 'Hide preview' : 'Show preview'}
               </Text>
             </Pressable>
           </View>
 
-          {showTemplate ? (
+          {showPreview && previewText ? (
             <View style={styles.previewBox}>
               <Text style={styles.previewTitle}>Template preview</Text>
               <ScrollView horizontal style={{ maxHeight: 220 }}>
-                <Text style={styles.previewText}>{templateCsv}</Text>
+                <Text style={styles.previewText}>{previewText}</Text>
               </ScrollView>
             </View>
           ) : null}
 
           <Text style={styles.hint}>
-            • Date must be <Text style={styles.mono}>YYYY-MM-DD</Text>
-            {'\n'}• Type must be <Text style={styles.mono}>Expense</Text>,{' '}
-            <Text style={styles.mono}>Income</Text>, or <Text style={styles.mono}>Transfer</Text>
-            {'\n'}• Amount negative for Expense, positive for Income
+            • Date format: <Text style={styles.mono}>YYYY-MM-DD</Text> or{' '}
+            <Text style={styles.mono}>DD/MM/YYYY</Text>
+            {'\n'}• Type: <Text style={styles.mono}>Expense</Text>, <Text style={styles.mono}>Income</Text>, or{' '}
+            <Text style={styles.mono}>Transfer</Text>
+            {'\n'}• Amount: negative for Expense, positive for Income
           </Text>
 
           {Platform.OS === 'web' ? (
