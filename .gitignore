@@ -44,3 +44,6 @@ if (-not (Select-String -Path .gitignore -Pattern '^\.expo/?' -Quiet)) {
 # VS Code workspace files
 *.code-workspace
 
+
+# Website assets (handled in site repo)
+assets/images/*.png\nassets/images/*.jpg\nassets/images/favicon*\nassets/images/apple-touch-icon.png\nassets/images/site.webmanifest\nassets/images/web-app-manifest-*.png\n
