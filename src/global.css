@@ -1,0 +1,60 @@
+/* 1) Stackable header layout */
+header,
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* 2) Mobile breakpoint for iPhone portrait */
+@media (max-width: 600px) {
+  header,
+  .header-inner {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  header nav {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+/* 3) Prevent headline from forcing horizontal overflow */
+header h1,
+header .title {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Optional: one line on desktop, wrap on mobile */
+header h1 {
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  header h1 {
+    white-space: normal;
+  }
+}
+
+/* 4) Avoid fixed widths - use responsive container */
+.container {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 0 16px;
+}

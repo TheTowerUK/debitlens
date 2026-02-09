@@ -1,6 +1,16 @@
 // src/screens/RecurringScreen.tsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Pressable, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Pressable,
+  Alert,
+  Modal,
+  TextInput,
+  FlatList,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -98,6 +108,26 @@ function parseAmount(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function toYMD(d: Date) {
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+function safeString(v: unknown) {
+  return String(v ?? '').replace(/\u00A0/g, ' ').trim();
+}
+
+function txTitle(t: any) {
+  return safeString(t?.description) || safeString(t?.name) || 'Transaction';
+}
+
+function txTypeFromTx(t: any) {
+  const type = String(t?.type || '').toLowerCase().trim();
+  if (type === 'income' || type === 'expense') return type;
+  const amt = parseAmount(t?.amount);
+  return amt >= 0 ? 'income' : 'expense';
+}
+
 // ---------------- Suggestions persistence ----------------
 const DISMISSED_KEY = 'debitlens.recurringSuggestions.dismissed.v1';
 
@@ -128,9 +158,31 @@ export default function RecurringScreen({ navigation }: Props) {
 
   const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
 
+  // ----- Add from transaction -----
+  const [pickOpen, setPickOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [pickQuery, setPickQuery] = useState('');
+  const [pickedTx, setPickedTx] = useState<any | null>(null);
+
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftAmount, setDraftAmount] = useState('');
+  const [draftFreq, setDraftFreq] = useState<'weekly' | 'fortnightly' | 'monthly' | 'yearly'>('monthly');
+  const [draftNextDue, setDraftNextDue] = useState('');
+  const [draftCategory, setDraftCategory] = useState('');
+  const [nextDueManuallyEdited, setNextDueManuallyEdited] = useState(false);
+
   useEffect(() => {
     loadDismissedKeys().then(setDismissedKeys);
   }, []);
+
+  useEffect(() => {
+    if (!editOpen || !pickedTx) return;
+    if (nextDueManuallyEdited) return;
+
+    const d = parseTxnDate(pickedTx?.date) || new Date();
+    const next = nextDueDateFromLast(d, draftFreq);
+    setDraftNextDue(next);
+  }, [draftFreq, editOpen, pickedTx, nextDueManuallyEdited]);
 
   const dismissedSet = useMemo(() => new Set(dismissedKeys), [dismissedKeys]);
 
@@ -445,6 +497,32 @@ export default function RecurringScreen({ navigation }: Props) {
     return { activeCount, monthlyApprox };
   }, [recurring]);
 
+  const pickableTxs = useMemo(() => {
+    const q = normalizeTitle(pickQuery);
+
+    const base = (txs as any[])
+      .filter((t) => String(t?.type || '').toLowerCase() !== 'transfer')
+      .filter((t) => {
+        const d = parseTxnDate(t?.date);
+        return !!d;
+      })
+      .sort((a, b) => {
+        const da = parseTxnDate(a?.date)?.getTime() || 0;
+        const db = parseTxnDate(b?.date)?.getTime() || 0;
+        return db - da;
+      });
+
+    if (!q) return base.slice(0, 200);
+
+    return base
+      .filter((t) => {
+        const title = normalizeTitle(txTitle(t));
+        const cat = normalizeTitle(String(t?.category || ''));
+        return title.includes(q) || cat.includes(q);
+      })
+      .slice(0, 200);
+  }, [txs, pickQuery]);
+
   const toggleActive = (item: RecurringItem) => {
     const fn = (actions as any)?.updateRecurring;
     if (typeof fn !== 'function') return;
@@ -462,7 +540,84 @@ export default function RecurringScreen({ navigation }: Props) {
   };
 
   const goAdd = () => {
-    Alert.alert('Add recurring', 'Hook this to your RecurringEditor when ready.');
+    setPickQuery('');
+    setPickedTx(null);
+    setPickOpen(true);
+  };
+
+  const openEditorFromTx = (t: any) => {
+    const title = txTitle(t);
+    const amtAbs = Math.abs(parseAmount(t?.amount));
+    const d = parseTxnDate(t?.date) || new Date();
+    const inferredType = txTypeFromTx(t);
+
+    const freq: 'weekly' | 'fortnightly' | 'monthly' | 'yearly' = 'monthly';
+    const next = nextDueDateFromLast(d, freq);
+
+    setPickedTx(t);
+    setDraftTitle(title);
+    setDraftAmount(String(amtAbs.toFixed(2)));
+    setDraftFreq(freq);
+    setDraftNextDue(next);
+    setDraftCategory(String(t?.category || '').trim());
+    setNextDueManuallyEdited(false);
+
+    setPickOpen(false);
+    setEditOpen(true);
+  };
+
+  const saveRecurringFromDraft = () => {
+    const addFn = (actions as any)?.addRecurring;
+    if (typeof addFn !== 'function') {
+      Alert.alert('Not wired yet', 'addRecurring action is not available yet.');
+      return;
+    }
+
+    if (!pickedTx) {
+      Alert.alert('No transaction selected', 'Pick a transaction first.');
+      return;
+    }
+
+    const title = safeString(draftTitle);
+    if (!title) {
+      Alert.alert('Missing name', 'Please enter a name/title for the recurring item.');
+      return;
+    }
+
+    const amt = parseAmount(draftAmount);
+    if (!(Math.abs(amt) > 0)) {
+      Alert.alert('Invalid amount', 'Please enter a valid amount (e.g. 12.34).');
+      return;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(draftNextDue)) {
+      Alert.alert('Invalid date', 'Next due date must be in YYYY-MM-DD format.');
+      return;
+    }
+
+    const accountId = String(pickedTx?.accountId || '').trim();
+    if (!accountId) {
+      Alert.alert('Missing account', 'This transaction has no accountId.');
+      return;
+    }
+
+    const type = txTypeFromTx(pickedTx);
+
+    addFn({
+      title,
+      active: true,
+      nextDueDate: draftNextDue,
+      frequency: draftFreq,
+      amount: Math.abs(amt),
+      type,
+      accountId,
+      category: safeString(draftCategory) || undefined,
+      description: title,
+    });
+
+    setEditOpen(false);
+    setPickedTx(null);
+    setNextDueManuallyEdited(false);
   };
 
   const goEdit = (item: RecurringItem) => {
@@ -537,6 +692,162 @@ export default function RecurringScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         </View>
+
+        {/* -------- Add from transaction: Picker modal -------- */}
+        <Modal visible={pickOpen} animationType="slide" transparent onRequestClose={() => setPickOpen(false)}>
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Create recurring from a transaction</Text>
+              <Text style={styles.modalSub}>Search and pick a transaction to base it on.</Text>
+
+              <TextInput
+                value={pickQuery}
+                onChangeText={setPickQuery}
+                placeholder="Search (payee, description, category)"
+                placeholderTextColor={theme.textDim}
+                style={styles.modalInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <FlatList
+                data={pickableTxs}
+                keyExtractor={(item, idx) => String(item?.id ?? `${idx}`)}
+                style={{ marginTop: 10, maxHeight: 420 }}
+                renderItem={({ item }) => {
+                  const d = parseTxnDate(item?.date);
+                  const amt = Math.abs(parseAmount(item?.amount));
+                  const title = txTitle(item);
+                  const cat = String(item?.category || '').trim();
+
+                  return (
+                    <Pressable style={styles.pickRow} onPress={() => openEditorFromTx(item)}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pickTitle} numberOfLines={1}>{title}</Text>
+                        <Text style={styles.pickSub} numberOfLines={1}>
+                          {d ? d.toLocaleDateString() : '—'}{cat ? ` • ${cat}` : ''}
+                        </Text>
+                      </View>
+                      <Text style={styles.pickAmt}>{formatMoney(amt)}</Text>
+                    </Pressable>
+                  );
+                }}
+                ListEmptyComponent={<Text style={styles.subtle}>No transactions found.</Text>}
+              />
+
+              <View style={styles.modalActions}>
+                <Pressable style={[styles.actionBtn, styles.dismissBtn]} onPress={() => setPickOpen(false)}>
+                  <Text style={styles.actionBtnText}>Close</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* -------- Add from transaction: Editor modal -------- */}
+        <Modal
+          visible={editOpen}
+          animationType="slide"
+          transparent
+          onRequestClose={() => {
+            setNextDueManuallyEdited(false);
+            setEditOpen(false);
+          }}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Confirm recurring details</Text>
+              <Text style={styles.modalSub}>
+                Based on: {pickedTx ? txTitle(pickedTx) : '—'}
+              </Text>
+
+              <Text style={styles.modalLabel}>Name</Text>
+              <TextInput
+                value={draftTitle}
+                onChangeText={setDraftTitle}
+                placeholder="e.g. Netflix"
+                placeholderTextColor={theme.textDim}
+                style={styles.modalInput}
+              />
+
+              <Text style={styles.modalLabel}>Amount</Text>
+              <TextInput
+                value={draftAmount}
+                onChangeText={setDraftAmount}
+                placeholder="12.34"
+                placeholderTextColor={theme.textDim}
+                style={styles.modalInput}
+                keyboardType="decimal-pad"
+              />
+
+              <Text style={styles.modalLabel}>Frequency</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                {(['weekly', 'fortnightly', 'monthly', 'yearly'] as const).map((f) => {
+                  const selected = draftFreq === f;
+                  return (
+                    <Pressable
+                      key={f}
+                      style={[styles.freqPill, selected && styles.freqPillOn]}
+                      onPress={() => setDraftFreq(f)}
+                    >
+                      <Text style={[styles.freqPillText, selected && styles.freqPillTextOn]}>
+                        {cap(f)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.modalLabel}>Next due date (YYYY-MM-DD)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TextInput
+                  value={draftNextDue}
+                  onChangeText={(v) => {
+                    setDraftNextDue(v);
+                    setNextDueManuallyEdited(true);
+                  }}
+                  placeholder="2026-02-28"
+                  placeholderTextColor={theme.textDim}
+                  style={[styles.modalInput, { flex: 1 }]}
+                />
+                <Pressable
+                  style={[styles.resetDatePill, !nextDueManuallyEdited && styles.resetDatePillDim]}
+                  onPress={() => setNextDueManuallyEdited(false)}
+                  disabled={!nextDueManuallyEdited}
+                >
+                  <Text style={[styles.resetDatePillText, !nextDueManuallyEdited && styles.resetDatePillTextDim]}>
+                    Reset date
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.modalLabel}>Category (optional)</Text>
+              <TextInput
+                value={draftCategory}
+                onChangeText={setDraftCategory}
+                placeholder="Uncategorised"
+                placeholderTextColor={theme.textDim}
+                style={styles.modalInput}
+              />
+
+              <View style={styles.modalActions}>
+                <Pressable
+                  style={[styles.actionBtn, styles.dismissBtn]}
+                  onPress={() => {
+                    setNextDueManuallyEdited(false);
+                    setEditOpen(false);
+                  }}
+                >
+                  <Text style={styles.actionBtnText}>Cancel</Text>
+                </Pressable>
+
+                <Pressable style={styles.actionBtn} onPress={saveRecurringFromDraft}>
+                  <Text style={styles.actionBtnText}>Create</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* Summary */}
         <View style={styles.summaryCard}>
@@ -775,4 +1086,73 @@ const styles = StyleSheet.create({
   detectTitle: { color: theme.text, fontWeight: '900' },
   detectSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
   detectSubDim: { color: theme.textDim, fontSize: 12, marginTop: 4, opacity: 0.8 },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    padding: 16,
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: theme.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.border,
+    padding: 14,
+  },
+  modalTitle: { color: theme.text, fontSize: 16, fontWeight: '900' },
+  modalSub: { color: theme.textDim, marginTop: 6, marginBottom: 12 },
+  modalLabel: { color: theme.textDim, fontSize: 12, marginBottom: 6, marginTop: 8 },
+
+  modalInput: {
+    backgroundColor: theme.cardAlt,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: theme.text,
+  },
+
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    columnGap: 10,
+    marginTop: 14,
+  },
+
+  pickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: theme.border,
+  },
+  pickTitle: { color: theme.text, fontWeight: '900' },
+  pickSub: { color: theme.textDim, fontSize: 12, marginTop: 4 },
+  pickAmt: { color: '#E5E7EB', fontWeight: '900', marginLeft: 10 },
+
+  freqPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
+  },
+  freqPillOn: { borderColor: theme.link },
+  freqPillText: { color: theme.textDim, fontWeight: '800', fontSize: 12 },
+  freqPillTextOn: { color: theme.link },
+
+  resetDatePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
+  },
+  resetDatePillDim: { opacity: 0.5 },
+  resetDatePillText: { color: theme.textDim, fontWeight: '700', fontSize: 12 },
+  resetDatePillTextDim: { color: theme.textDim, opacity: 0.8 },
 });

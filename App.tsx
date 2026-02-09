@@ -1,6 +1,7 @@
 // App.tsx
+import './src/global.css';
 import React, { useCallback, useEffect, useRef } from 'react';
-import { AppState, AppStateStatus, View } from 'react-native';
+import { AppState, AppStateStatus, Platform, View } from 'react-native';
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -8,6 +9,7 @@ import {
 
 import { AppProvider } from './src/state/AppContext';
 import RootNavigator, { RootStackParamList } from './src/navigations/RootNavigator';
+import WebHeader from './src/components/WebHeader';
 
 const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -78,7 +80,12 @@ export default function App() {
     <AppProvider>
       <SessionWatcher>
         <NavigationContainer ref={navigationRef}>
-          <RootNavigator />
+          <View style={{ flex: 1 }}>
+            {Platform.OS === 'web' && <WebHeader />}
+            <View style={{ flex: 1 }}>
+              <RootNavigator />
+            </View>
+          </View>
         </NavigationContainer>
       </SessionWatcher>
     </AppProvider>

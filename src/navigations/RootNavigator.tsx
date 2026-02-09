@@ -1,5 +1,6 @@
 // src/navigations/RootNavigator.tsx
 import React from 'react';
+import { Platform } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Screens
@@ -38,7 +39,7 @@ export default function RootNavigator() {
       initialRouteName="Login"
       screenOptions={{
         ...brandHeaderOptions,
-        headerShown: true,
+        headerShown: Platform.OS !== 'web',
       }}
     >
       {/* Login screen - no header */}
