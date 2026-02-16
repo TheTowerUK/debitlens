@@ -1,6 +1,19 @@
 // src/screens/AccountScreen.tsx
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, Switch, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  Switch,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
@@ -62,6 +75,15 @@ export default function AccountScreen({ navigation, route }: Props) {
   }, [accountTxs, account]);
 
   const [showRunningBalance, setShowRunningBalance] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<Account['type']>('bank');
+  const [editBalance, setEditBalance] = useState('0');
+  const [editColor, setEditColor] = useState<string>('#3b82f6');
+  const [editIcon, setEditIcon] = useState<string>('🏦');
+
+  const COLOR_CHOICES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#64748b'];
+  const ICON_CHOICES = ['🏦', '💳', '💰', '🏠', '🚗', '🧾', '🎯', '🧳'];
 
   // Treat account.balance as OPENING balance for the account
   const openingBalance = useMemo(() => {
@@ -135,6 +157,86 @@ export default function AccountScreen({ navigation, route }: Props) {
     navigation.navigate('TxnEditor', { id });
   };
 
+  const openEdit = (acc: Account) => {
+    if (acc.archived) {
+      Alert.alert('Archived account', 'Unarchive the account before editing.');
+      return;
+    }
+    setEditingAccount(acc);
+    setEditName(acc.name ?? '');
+    setEditType(acc.type ?? 'bank');
+
+    const b = Number((acc as any)?.balance);
+    setEditBalance(Number.isFinite(b) ? String(b) : '0');
+
+    setEditColor(acc.color ?? '#3b82f6');
+    setEditIcon(acc.icon ?? '🏦');
+  };
+
+  const saveEdit = async () => {
+    if (!editingAccount) return;
+
+    const trimmed = editName.trim();
+    if (trimmed.length < 2) {
+      Alert.alert('Invalid name', 'Account name must be at least 2 characters.');
+      return;
+    }
+
+    const duplicate = accounts.some(
+      (a) => a.name.toLowerCase() === trimmed.toLowerCase() && a.id !== editingAccount.id
+    );
+    if (duplicate) {
+      Alert.alert('Duplicate name', 'An account with this name already exists.');
+      return;
+    }
+
+    const parsed = Number(String(editBalance).replace(/,/g, '').trim());
+    if (!Number.isFinite(parsed)) {
+      Alert.alert('Invalid balance', 'Opening balance must be a number.');
+      return;
+    }
+
+    actions.updateAccount(editingAccount.id, {
+      name: trimmed,
+      type: editType,
+      balance: parsed,
+      color: editColor,
+      icon: editIcon,
+    });
+
+    navigation.setOptions({ title: `${editIcon ? `${editIcon} ` : ''}${trimmed}` });
+    setEditingAccount(null);
+    setEditName('');
+    setEditBalance('0');
+    setEditType('bank');
+    setEditColor('#3b82f6');
+    setEditIcon('🏦');
+  };
+
+  const toggleArchive = () => {
+    if (!account) return;
+
+    const next = !account.archived;
+    const label = next ? 'Archive' : 'Unarchive';
+
+    Alert.alert(
+      `${label} "${account.name}"?`,
+      next
+        ? 'Archived accounts are hidden from lists but still included in totals.'
+        : 'This account will appear again in lists.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: label,
+          style: 'default',
+          onPress: () => {
+            actions.updateAccount(account.id, { archived: next });
+          },
+        },
+      ]
+    );
+  };
+
   const onDeleteAccount = () => {
     if (!account) return;
 
@@ -168,8 +270,132 @@ export default function AccountScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>{account.name || 'Account'}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.h1}>
+              {(account.icon ? `${account.icon} ` : '') + (account.name || 'Account')}
+            </Text>
+        <Pressable
+          style={styles.editButton}
+          onPress={() => openEdit(account)}
+        >
+          <Text style={styles.editButtonText}>Edit</Text>
+        </Pressable>
+      </View>
       <Text style={styles.subtle}>Overview for this account.</Text>
+
+      {/* Edit account modal */}
+      <Modal
+        visible={!!editingAccount}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingAccount(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable
+            style={{ flex: 1 }}
+            onPress={() => setEditingAccount(null)}
+          >
+            <Pressable
+              style={styles.modalContent}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalTitle}>Account settings</Text>
+            <Text style={styles.modalLabel}>Name</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editName}
+              onChangeText={setEditName}
+              placeholder="Account name"
+              placeholderTextColor="#7b7b7b"
+              autoFocus
+              autoCorrect={false}
+              returnKeyType="done"
+              onSubmitEditing={saveEdit}
+            />
+            <Text style={styles.modalLabel}>Opening balance</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editBalance}
+              onChangeText={setEditBalance}
+              placeholder="0"
+              placeholderTextColor="#7b7b7b"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={saveEdit}
+            />
+            <Text style={styles.modalLabel}>Account type</Text>
+            <View style={styles.typeRow}>
+              {(['bank', 'credit', 'cash', 'other'] as const).map((t) => (
+                <Pressable
+                  key={t}
+                  style={[styles.typePill, editType === t && styles.typePillActive]}
+                  onPress={() => setEditType(t)}
+                >
+                  <Text style={[styles.typePillText, editType === t && styles.typePillTextActive]}>
+                    {t.toUpperCase()}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.modalLabel}>Icon</Text>
+            <View style={styles.choiceRow}>
+              {ICON_CHOICES.map((ic) => (
+                <Pressable
+                  key={ic}
+                  style={[styles.choicePill, editIcon === ic && styles.choicePillActive]}
+                  onPress={() => setEditIcon(ic)}
+                >
+                  <Text style={styles.choiceText}>{ic}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.modalLabel}>Color</Text>
+            <View style={styles.choiceRow}>
+              {COLOR_CHOICES.map((c) => (
+                <Pressable
+                  key={c}
+                  style={[
+                    styles.colorDot,
+                    { backgroundColor: c },
+                    editColor === c && styles.colorDotActive,
+                  ]}
+                  onPress={() => setEditColor(c)}
+                />
+              ))}
+            </View>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => {
+                  setEditingAccount(null);
+                  setEditName('');
+                  setEditBalance('0');
+                  setEditType('bank');
+                  setEditColor('#3b82f6');
+                  setEditIcon('🏦');
+                }}
+              >
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnSave]}
+                onPress={saveEdit}
+              >
+                <Text style={styles.modalBtnSaveText}>Save</Text>
+              </Pressable>
+            </View>
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Summary */}
       <View style={styles.summaryRow}>
@@ -298,11 +524,13 @@ export default function AccountScreen({ navigation, route }: Props) {
         />
       )}
 
-      {/* Delete Account */}
-      <Pressable
-        onPress={onDeleteAccount}
-        style={styles.deleteButton}
-      >
+      <Pressable onPress={toggleArchive} style={styles.archiveButton}>
+        <Text style={styles.archiveButtonText}>
+          {account.archived ? 'Unarchive account' : 'Archive account'}
+        </Text>
+      </Pressable>
+
+      <Pressable onPress={onDeleteAccount} style={styles.deleteButton}>
         <Text style={styles.deleteButtonText}>Delete account</Text>
       </Pressable>
     </View>
@@ -315,11 +543,158 @@ const styles = StyleSheet.create({
     padding: 35,
     backgroundColor: theme.card,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   h1: {
     fontSize: 26,
     fontWeight: '800',
-    marginBottom: 6,
     color: '#fff',
+    flex: 1,
+  },
+  editButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginLeft: 8,
+  },
+  editButtonText: {
+    color: theme.link,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 360,
+    alignSelf: 'center',
+    backgroundColor: theme.cardAlt,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+    marginBottom: 12,
+  },
+  modalLabel: {
+    color: '#fff',
+    fontWeight: '800',
+    marginBottom: 8,
+    marginTop: 6,
+    opacity: 0.9,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: theme.text,
+    marginBottom: 16,
+    fontSize: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  modalBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+  },
+  modalBtnCancel: {
+    backgroundColor: 'transparent',
+  },
+  modalBtnCancelText: {
+    color: theme.textDim,
+    fontWeight: '800',
+  },
+  modalBtnSave: {
+    backgroundColor: theme.link,
+  },
+  modalBtnSaveText: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  typePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+  },
+  typePillActive: {
+    borderColor: theme.link,
+  },
+  typePillText: {
+    color: theme.textDim,
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  typePillTextActive: {
+    color: '#fff',
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  choicePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+  },
+  choicePillActive: {
+    borderColor: theme.link,
+  },
+  choiceText: {
+    fontSize: 16,
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorDotActive: {
+    borderColor: '#fff',
+  },
+  archiveButton: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#60a5fa',
+  },
+  archiveButtonText: {
+    color: '#60a5fa',
+    fontWeight: '800',
   },
   subtle: {
     opacity: 0.8,

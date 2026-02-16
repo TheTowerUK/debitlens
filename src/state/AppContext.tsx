@@ -20,6 +20,9 @@ export type Account = {
   type: 'cash' | 'bank' | 'credit' | 'other';
   balance: number; // opening balance
   archived?: boolean;
+
+  color?: string; // e.g. '#3b82f6'
+  icon?: string;  // e.g. '🏦'
 };
 
 export type TransactionType = 'income' | 'expense' | 'transfer';
@@ -235,286 +238,290 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const saveStateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savePinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const actions = useMemo<AppActions>(
-    () => ({
-      /* Accounts */
-      addAccount: (input) => {
-        const account: Account = { ...input, id: uuid() };
-        setAccounts((prev) => [...prev, account]);
-        return account;
-      },
-      updateAccount: (id, patch) => {
-        setAccounts((prev) =>
-          prev.map((a) => (a.id === id ? { ...a, ...patch } : a))
-        );
-      },
-      deleteAccount: (id) => {
-        setAccounts((prev) => prev.filter((a) => a.id !== id));
-        setTransactions((prev) => prev.filter((t) => t.accountId !== id));
-        setRecurring((prev) =>
-          prev.filter(
-            (r) =>
-              r.accountId !== id && r.fromAccountId !== id && r.toAccountId !== id
-          )
-        );
-      },
-
-      /* Transactions */
-      addTransaction: (input) => {
-        const txn: Transaction = { ...input, id: uuid() };
-        setTransactions((prev) => [...prev, txn]);
-
-        // Auto-advance recurring items when transaction matches
-        setRecurring((prevRecurring) => {
-          // Only consider income/expense transactions (ignore transfer)
-          if (txn.type === 'transfer') {
-            return prevRecurring;
+  const actions: AppActions = {
+    /* Accounts */
+    addAccount: (input) => {
+      const account: Account = { ...input, id: uuid() };
+      setAccounts((prev) => [...prev, account]);
+      return account;
+    },
+    updateAccount: (id, patch) => {
+      setAccounts((prev) =>
+        prev.map((a) => (a.id === id ? { ...a, ...patch } : a))
+      );
+    },
+    deleteAccount: (id) => {
+      setAccounts((prev) => prev.filter((a) => a.id !== id));
+      setTransactions((prev) =>
+        prev.filter((t) => {
+          if (t.type === 'transfer') {
+            return t.fromAccountId !== id && t.toAccountId !== id && t.accountId !== id;
           }
+          return t.accountId !== id;
+        })
+      );
+      setRecurring((prev) =>
+        prev.filter(
+          (r) =>
+            r.accountId !== id && r.fromAccountId !== id && r.toAccountId !== id
+        )
+      );
+    },
 
-          const txnDate = parseYMDLocal(txn.date);
-          if (!txnDate) {
-            return prevRecurring;
-          }
+    /* Transactions */
+    addTransaction: (input) => {
+      const txn: Transaction = { ...input, id: uuid() };
+      setTransactions((prev) => [...prev, txn]);
 
-          const txnAmount = Math.abs(Number(txn.amount) || 0);
-          if (txnAmount === 0) {
-            return prevRecurring;
-          }
+      // Auto-advance recurring items when transaction matches
+      setRecurring((prevRecurring) => {
+        // Only consider income/expense transactions (ignore transfer)
+        if (txn.type === 'transfer') {
+          return prevRecurring;
+        }
 
-          // Find matching recurring items
-          const candidates: Array<{
-            item: RecurringItem;
-            amountDiff: number;
-            dateDiff: number;
-          }> = [];
+        const txnDate = parseYMDLocal(txn.date);
+        if (!txnDate) {
+          return prevRecurring;
+        }
 
-          for (const item of prevRecurring) {
-            // Only consider active items
-            if (item.active === false) continue;
+        const txnAmount = Math.abs(Number(txn.amount) || 0);
+        if (txnAmount === 0) {
+          return prevRecurring;
+        }
 
-            // Only consider income/expense (ignore transfer)
-            if (item.type !== 'income' && item.type !== 'expense') continue;
+        // Find matching recurring items
+        const candidates: Array<{
+          item: RecurringItem;
+          amountDiff: number;
+          dateDiff: number;
+        }> = [];
 
-            // Type must match
-            if (item.type !== txn.type) continue;
+        for (const item of prevRecurring) {
+          // Only consider active items
+          if (item.active === false) continue;
 
-            // AccountId must match if present on recurring item
-            if (item.accountId && item.accountId !== txn.accountId) continue;
+          // Only consider income/expense (ignore transfer)
+          if (item.type !== 'income' && item.type !== 'expense') continue;
 
-            // Amount must match within tolerance
-            const itemAmount = Math.abs(Number(item.amount) || 0);
-            if (itemAmount === 0) continue;
+          // Type must match
+          if (item.type !== txn.type) continue;
 
-            const amountDiff = Math.abs(txnAmount - itemAmount);
-            const tolerance = Math.max(0.75, itemAmount * 0.03);
-            if (amountDiff > tolerance) continue;
+          // AccountId must match if present on recurring item
+          if (item.accountId && item.accountId !== txn.accountId) continue;
 
-            // Date must be within ±3 days window
-            const itemDueDate = parseYMDLocal(item.nextDueDate);
-            if (!itemDueDate) continue;
+          // Amount must match within tolerance
+          const itemAmount = Math.abs(Number(item.amount) || 0);
+          if (itemAmount === 0) continue;
 
-            const dateDiffMs = Math.abs(txnDate.getTime() - itemDueDate.getTime());
-            const dateDiffDays = dateDiffMs / (1000 * 60 * 60 * 24);
-            if (dateDiffDays > 3) continue;
+          const amountDiff = Math.abs(txnAmount - itemAmount);
+          const tolerance = Math.max(0.75, itemAmount * 0.03);
+          if (amountDiff > tolerance) continue;
 
-            candidates.push({
-              item,
-              amountDiff,
-              dateDiff: dateDiffDays,
-            });
-          }
+          // Date must be within ±3 days window
+          const itemDueDate = parseYMDLocal(item.nextDueDate);
+          if (!itemDueDate) continue;
 
-          // If no matches, return unchanged
-          if (candidates.length === 0) {
-            return prevRecurring;
-          }
+          const dateDiffMs = Math.abs(txnDate.getTime() - itemDueDate.getTime());
+          const dateDiffDays = dateDiffMs / (1000 * 60 * 60 * 24);
+          if (dateDiffDays > 3) continue;
 
-          // Choose best match: smallest amount difference, then smallest date difference
-          candidates.sort((a, b) => {
-            if (a.amountDiff !== b.amountDiff) {
-              return a.amountDiff - b.amountDiff;
-            }
-            return a.dateDiff - b.dateDiff;
+          candidates.push({
+            item,
+            amountDiff,
+            dateDiff: dateDiffDays,
           });
-
-          const bestMatch = candidates[0].item;
-          const frequency = bestMatch.frequency || 'monthly';
-
-          // Advance nextDueDate forward by frequency until it's after the transaction date
-          let nextDue = parseYMDLocal(bestMatch.nextDueDate);
-          if (!nextDue) {
-            return prevRecurring;
-          }
-
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-
-          // Advance until it's after the transaction date (or at least >= today)
-          while (nextDue <= txnDate || nextDue < today) {
-            nextDue = advanceDateByFrequency(nextDue, frequency);
-          }
-
-          const newNextDueDate = formatYMD(nextDue);
-
-          // Update the recurring item
-          return prevRecurring.map((r) =>
-            r.id === bestMatch.id ? { ...r, nextDueDate: newNextDueDate } : r
-          );
-        });
-
-        return txn;
-      },
-      updateTransaction: (id, patch) => {
-        setTransactions((prev) =>
-          prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
-        );
-      },
-      deleteTransaction: (id) => {
-        setTransactions((prev) => prev.filter((t) => t.id !== id));
-      },
-
-      /* Recurring */
-      addRecurring: (input) => {
-        const item: RecurringItem = { ...input, id: uuid() };
-        setRecurring((prev) => [...prev, item]);
-        return item;
-      },
-      updateRecurring: (id, patch) => {
-        setRecurring((prev) =>
-          prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
-        );
-      },
-      deleteRecurring: (id) => {
-        setRecurring((prev) => prev.filter((r) => r.id !== id));
-      },
-
-      /* Budgets */
-      addBudget: (input) => {
-        const budget: Budget = { ...input, id: uuid() };
-        setBudgets((prev) => [...prev, budget]);
-        return budget;
-      },
-      updateBudget: (id, patch) => {
-        setBudgets((prev) =>
-          prev.map((b) => (b.id === id ? { ...b, ...patch } : b))
-        );
-      },
-      deleteBudget: (id) => {
-        setBudgets((prev) => prev.filter((b) => b.id !== id));
-      },
-
-      /* Full restore (Replace) */
-      replaceAllData: (next) => {
-        setAccounts(next.accounts || []);
-        setTransactions(next.transactions || []);
-        setRecurring(next.recurring || []);
-        setBudgets(next.budgets || []);
-      },
-
-      /* Merge restore (Merge) */
-      mergeBackup: (input) => {
-        const incomingAccounts = isArray<Account>(input.accounts) ? input.accounts : [];
-        const incomingTxs = isArray<Transaction>(input.transactions) ? input.transactions : [];
-        const incomingRecurring = isArray<RecurringItem>(input.recurring) ? input.recurring : [];
-
-        let accountsAdded = 0;
-        let accountsUpdated = 0;
-        let transactionsAdded = 0;
-        let transactionsUpdated = 0;
-        let recurringAdded = 0;
-        let recurringUpdated = 0;
-
-        setAccounts((prev) => {
-          const map = new Map(prev.map((a) => [a.id, a] as const));
-
-          for (const a of incomingAccounts) {
-            if (!a?.id) continue;
-            const existing = map.get(a.id);
-            if (!existing) {
-              map.set(a.id, a);
-              accountsAdded++;
-            } else {
-              map.set(a.id, { ...existing, ...a });
-              accountsUpdated++;
-            }
-          }
-
-          return Array.from(map.values());
-        });
-
-        setTransactions((prev) => {
-          const map = new Map(prev.map((t) => [t.id, t] as const));
-
-          for (const t of incomingTxs) {
-            if (!t?.id) continue;
-            const existing = map.get(t.id);
-            if (!existing) {
-              map.set(t.id, t);
-              transactionsAdded++;
-            } else {
-              map.set(t.id, { ...existing, ...t });
-              transactionsUpdated++;
-            }
-          }
-
-          return Array.from(map.values());
-        });
-
-        setRecurring((prev) => {
-          const map = new Map(prev.map((r) => [r.id, r] as const));
-
-          for (const r of incomingRecurring) {
-            if (!r?.id) continue;
-            const existing = map.get(r.id);
-            if (!existing) {
-              map.set(r.id, r);
-              recurringAdded++;
-            } else {
-              map.set(r.id, { ...existing, ...r });
-              recurringUpdated++;
-            }
-          }
-
-          return Array.from(map.values());
-        });
-
-        // Budgets: keep current unless explicitly supplied
-        if (isArray<Budget>(input.budgets)) {
-          setBudgets(input.budgets);
         }
 
-        return {
-          accountsAdded,
-          accountsUpdated,
-          transactionsAdded,
-          transactionsUpdated,
-          recurringAdded,
-          recurringUpdated,
-        };
-      },
-
-      /* Dangerous */
-      resetApp: async () => {
-        // Clear in-memory state
-        setAccounts([]);
-        setTransactions([]);
-        setRecurring([]);
-        setBudgets([]);
-        setPinState(null);
-
-        // Clear persisted storage
-        try {
-          await Promise.all([
-            AsyncStorage.removeItem(STORAGE_KEY_APP_STATE),
-            AsyncStorage.removeItem(STORAGE_KEY_PIN),
-          ]);
-        } catch {
-          // ignore storage errors
+        // If no matches, return unchanged
+        if (candidates.length === 0) {
+          return prevRecurring;
         }
-      },
-    }),
-    []
-  );
+
+        // Choose best match: smallest amount difference, then smallest date difference
+        candidates.sort((a, b) => {
+          if (a.amountDiff !== b.amountDiff) {
+            return a.amountDiff - b.amountDiff;
+          }
+          return a.dateDiff - b.dateDiff;
+        });
+
+        const bestMatch = candidates[0].item;
+        const frequency = bestMatch.frequency || 'monthly';
+
+        // Advance nextDueDate forward by frequency until it's after the transaction date
+        let nextDue = parseYMDLocal(bestMatch.nextDueDate);
+        if (!nextDue) {
+          return prevRecurring;
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Advance until it's after the transaction date (or at least >= today)
+        while (nextDue <= txnDate || nextDue < today) {
+          nextDue = advanceDateByFrequency(nextDue, frequency);
+        }
+
+        const newNextDueDate = formatYMD(nextDue);
+
+        // Update the recurring item
+        return prevRecurring.map((r) =>
+          r.id === bestMatch.id ? { ...r, nextDueDate: newNextDueDate } : r
+        );
+      });
+
+      return txn;
+    },
+    updateTransaction: (id, patch) => {
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
+      );
+    },
+    deleteTransaction: (id) => {
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    },
+
+    /* Recurring */
+    addRecurring: (input) => {
+      const item: RecurringItem = { ...input, id: uuid() };
+      setRecurring((prev) => [...prev, item]);
+      return item;
+    },
+    updateRecurring: (id, patch) => {
+      setRecurring((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      );
+    },
+    deleteRecurring: (id) => {
+      setRecurring((prev) => prev.filter((r) => r.id !== id));
+    },
+
+    /* Budgets */
+    addBudget: (input) => {
+      const budget: Budget = { ...input, id: uuid() };
+      setBudgets((prev) => [...prev, budget]);
+      return budget;
+    },
+    updateBudget: (id, patch) => {
+      setBudgets((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, ...patch } : b))
+      );
+    },
+    deleteBudget: (id) => {
+      setBudgets((prev) => prev.filter((b) => b.id !== id));
+    },
+
+    /* Full restore (Replace) */
+    replaceAllData: (next) => {
+      setAccounts(next.accounts || []);
+      setTransactions(next.transactions || []);
+      setRecurring(next.recurring || []);
+      setBudgets(next.budgets || []);
+    },
+
+    /* Merge restore (Merge) */
+    mergeBackup: (input) => {
+      const incomingAccounts = isArray<Account>(input.accounts) ? input.accounts : [];
+      const incomingTxs = isArray<Transaction>(input.transactions) ? input.transactions : [];
+      const incomingRecurring = isArray<RecurringItem>(input.recurring) ? input.recurring : [];
+
+      let accountsAdded = 0;
+      let accountsUpdated = 0;
+      let transactionsAdded = 0;
+      let transactionsUpdated = 0;
+      let recurringAdded = 0;
+      let recurringUpdated = 0;
+
+      setAccounts((prev) => {
+        const map = new Map(prev.map((a) => [a.id, a] as const));
+
+        for (const a of incomingAccounts) {
+          if (!a?.id) continue;
+          const existing = map.get(a.id);
+          if (!existing) {
+            map.set(a.id, a);
+            accountsAdded++;
+          } else {
+            map.set(a.id, { ...existing, ...a });
+            accountsUpdated++;
+          }
+        }
+
+        return Array.from(map.values());
+      });
+
+      setTransactions((prev) => {
+        const map = new Map(prev.map((t) => [t.id, t] as const));
+
+        for (const t of incomingTxs) {
+          if (!t?.id) continue;
+          const existing = map.get(t.id);
+          if (!existing) {
+            map.set(t.id, t);
+            transactionsAdded++;
+          } else {
+            map.set(t.id, { ...existing, ...t });
+            transactionsUpdated++;
+          }
+        }
+
+        return Array.from(map.values());
+      });
+
+      setRecurring((prev) => {
+        const map = new Map(prev.map((r) => [r.id, r] as const));
+
+        for (const r of incomingRecurring) {
+          if (!r?.id) continue;
+          const existing = map.get(r.id);
+          if (!existing) {
+            map.set(r.id, r);
+            recurringAdded++;
+          } else {
+            map.set(r.id, { ...existing, ...r });
+            recurringUpdated++;
+          }
+        }
+
+        return Array.from(map.values());
+      });
+
+      // Budgets: keep current unless explicitly supplied
+      if (isArray<Budget>(input.budgets)) {
+        setBudgets(input.budgets);
+      }
+
+      return {
+        accountsAdded,
+        accountsUpdated,
+        transactionsAdded,
+        transactionsUpdated,
+        recurringAdded,
+        recurringUpdated,
+      };
+    },
+
+    /* Dangerous */
+    resetApp: async () => {
+      // Clear in-memory state
+      setAccounts([]);
+      setTransactions([]);
+      setRecurring([]);
+      setBudgets([]);
+      setPinState(null);
+
+      // Clear persisted storage
+      try {
+        await Promise.all([
+          AsyncStorage.removeItem(STORAGE_KEY_APP_STATE),
+          AsyncStorage.removeItem(STORAGE_KEY_PIN),
+        ]);
+      } catch {
+        // ignore storage errors
+      }
+    },
+  };
 
   const state = useMemo<AppState>(
     () => ({ accounts, transactions, recurring, budgets }),

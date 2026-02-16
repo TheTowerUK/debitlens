@@ -1,5 +1,5 @@
 // src/screens/DashboardScreen.tsx
-import React, { useMemo, useLayoutEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Pressable,
   Animated,
   AccessibilityInfo,
+  Switch,
 } from 'react-native';
 import { useApp, type RecurringItem } from '../state/AppContext';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -29,7 +30,9 @@ export default function DashboardScreen({ navigation }: Props) {
   const noAccounts = accounts.length === 0;
 
   const STORAGE_KEY_WHERE_TO_START = '@debitlens/whereToStartSeen:v1';
+  const STORAGE_KEY_SHOW_ARCHIVED = '@debitlens/showArchivedAccounts:v1';
   const [showWhereToStart, setShowWhereToStart] = React.useState(false);
+  const [showArchived, setShowArchived] = React.useState(false);
   const [reducedMotion, setReducedMotion] = React.useState(true); // assume enabled until we know
   const pulse = useRef(new Animated.Value(0)).current;
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
@@ -59,7 +62,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const formatDate = useCallback((d: Date) => d.toLocaleDateString('en-GB'), []);
 
   // ---- Account balances (include opening balance + tx deltas) ----
-  const { totalBalance, accountCount, balanceById } = useMemo(() => {
+  const { totalBalance, accountCount, balanceById, visibleAccountCount } = useMemo(() => {
     const map: Record<string, number> = {};
 
     // Start with opening balances
@@ -88,10 +91,13 @@ export default function DashboardScreen({ navigation }: Props) {
 
     const total = Object.values(map).reduce((sum, v) => sum + (Number(v) || 0), 0);
 
+    const activeCount = accounts.filter((a) => !a.archived).length;
+
     return {
       balanceById: map,
       totalBalance: total,
       accountCount: accounts.length,
+      visibleAccountCount: activeCount,
     };
   }, [accounts, txs]);
 
@@ -326,45 +332,17 @@ export default function DashboardScreen({ navigation }: Props) {
   const upcomingTop = useMemo(() => upcomingOccurrences.slice(0, 5), [upcomingOccurrences]);
   const hasMoreUpcoming = upcomingOccurrences.length > 5;
 
-  // ---- Logout handler: back to Login (PIN) ----
-  const handleLogout = useCallback(() => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: 'Login' }],
-    });
-  }, [navigation]);
-
-  // Set header with Settings and Logout buttons
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={{ flexDirection: 'row', columnGap: 8 }}>
-          <Pressable
-            onPress={() => navigation.navigate('Settings')}
-            hitSlop={8}
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-          >
-            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>Settings</Text>
-          </Pressable>
-          <Pressable
-            onPress={handleLogout}
-            hitSlop={8}
-            style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-          >
-            <Text style={{ color: theme.negative, fontSize: 16, fontWeight: '700' }}>Logout</Text>
-          </Pressable>
-        </View>
-      ),
-    });
-  }, [navigation, handleLogout]);
-
   React.useEffect(() => {
     let mounted = true;
 
     (async () => {
       try {
-        const seen = await AsyncStorage.getItem(STORAGE_KEY_WHERE_TO_START);
+        const [seen, raw] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEY_WHERE_TO_START),
+          AsyncStorage.getItem(STORAGE_KEY_SHOW_ARCHIVED),
+        ]);
         if (mounted && !seen) setShowWhereToStart(true);
+        if (mounted && raw != null) setShowArchived(raw === 'true');
       } catch {
         if (mounted) setShowWhereToStart(true);
       }
@@ -493,7 +471,7 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.summaryLabel}>Total balance</Text>
               <Text style={styles.summaryValue}>{formatMoney(totalBalance)}</Text>
               <Text style={styles.summarySub}>
-                Across {accountCount} account{accountCount === 1 ? '' : 's'}
+                Across {visibleAccountCount} account{visibleAccountCount === 1 ? '' : 's'}
               </Text>
             </View>
 
@@ -671,7 +649,6 @@ export default function DashboardScreen({ navigation }: Props) {
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardTitle}>Your accounts</Text>
-
             <Pressable
               style={[styles.smallBtn, noAccounts && styles.firstActionHighlight]}
               onPress={() => navigation.navigate('AddAccount')}
@@ -680,6 +657,23 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.smallBtnText}>Add</Text>
             </Pressable>
           </View>
+
+          {accounts.some((a) => a.archived) && (
+            <View style={styles.showArchivedRow}>
+              <Text style={styles.showArchivedLabel}>Show archived</Text>
+              <Switch
+                value={showArchived}
+                onValueChange={(v) => {
+                  setShowArchived(v);
+                  AsyncStorage.setItem(STORAGE_KEY_SHOW_ARCHIVED, v ? 'true' : 'false').catch(
+                    () => {}
+                  );
+                }}
+                trackColor={{ false: '#222', true: '#3ddc84' }}
+                thumbColor="#fff"
+              />
+            </View>
+          )}
 
           {accounts.length === 0 ? (
             <View style={{ marginTop: 6 }}>
@@ -717,29 +711,40 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           ) : (
             <View style={{ marginTop: 10 }}>
-              {accounts.map((a) => (
+              {(showArchived ? accounts : accounts.filter((a) => !a.archived)).map((a) => (
                 <Pressable
                   key={a.id}
-                  style={styles.accountRow}
+                  style={[styles.accountRow, a.archived && styles.accountRowArchived]}
                   onPress={() => navigation.navigate('Account', { accountId: a.id })}
                   hitSlop={6}
                 >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.accountName}>{a.name || 'Account'}</Text>
+                  <View style={styles.accountRowLeft}>
+                    {a.color ? (
+                      <View style={[styles.accountColorDot, { backgroundColor: a.color }]} />
+                    ) : null}
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.accountNameRow}>
+                        <Text style={styles.accountName}>
+                          {(a.icon ? `${a.icon} ` : '') + (a.name || 'Account')}
+                        </Text>
+                        {a.archived && (
+                          <View style={styles.archivedPill}>
+                            <Text style={styles.archivedPillText}>Archived</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.accountMeta}>
+                        {String(a.type || 'account').toUpperCase()}
+                        <Text style={styles.accountMetaDim}> · Opening: {formatMoney(Number(a.balance || 0))}</Text>
+                      </Text>
+                    </View>
+                  </View>
 
-            <Text style={styles.accountMeta}>
-              {String(a.type || 'account').toUpperCase()}
-              <Text style={styles.accountMetaDim}> · Opening: {formatMoney(Number(a.balance || 0))}</Text>
-            </Text>
+                  <Text style={styles.accountBalance}>
+                    {formatMoney(balanceById[a.id] ?? 0)}
+                  </Text>
 
-            </View>
-
-            <Text style={styles.accountBalance}>
-              {formatMoney(balanceById[a.id] ?? 0)}
-            </Text>
-
-            <Text style={styles.accountChevron}>›</Text>
-
+                  <Text style={styles.accountChevron}>›</Text>
                 </Pressable>
               ))}
             </View>
@@ -1020,12 +1025,41 @@ const styles = StyleSheet.create({
     color: theme.textDim,
     marginTop: 10,
   },
+  showArchivedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  showArchivedLabel: {
+    color: theme.textDim,
+    fontSize: 12,
+  },
   accountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: theme.border,
+  },
+  accountRowArchived: {
+    opacity: 0.65,
+  },
+  accountRowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  accountColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  accountNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   accountName: {
     color: theme.text,
@@ -1037,6 +1071,19 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   accountMetaDim: { opacity: 0.8 },
+  archivedPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: theme.cardAlt,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  archivedPillText: {
+    color: theme.textDim,
+    fontSize: 10,
+    fontWeight: '700',
+  },
 
   accountBalance: {
     color: '#E5E7EB',

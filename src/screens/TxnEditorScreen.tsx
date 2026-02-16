@@ -1,5 +1,5 @@
 // src/screens/TxnEditorScreen.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -70,6 +70,24 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     editingTxn?.description ?? ''
   );
 
+  // Context account (only for NEW txns)
+  // When user came from a specific account (e.g. PayPal), keep that as the "context"
+  const contextAccountId = !isEditing ? presetAccountId : undefined;
+
+  const contextAccountName = useMemo(() => {
+    if (!contextAccountId) return '';
+    return accounts.find(a => a.id === contextAccountId)?.name ?? '';
+  }, [accounts, contextAccountId]);
+
+  const hasOriginContext = !!contextAccountId && !!contextAccountName;
+
+  const primaryCtaText = useMemo(() => {
+    if (isEditing) return 'Save';
+    if (type === 'expense') return 'Add expense';
+    if (type === 'income') return 'Add income';
+    return 'Add transaction';
+  }, [isEditing, type]);
+
   // ---- Load best default account for NEW txns ----
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +121,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     };
   }, [accounts, accountId, isEditing, presetAccountId]);
 
-    const handleDelete = () => {
+  const handleDelete = useCallback(() => {
     if (!isEditing || !editingTxn?.id) return;
 
     Alert.alert(
@@ -116,7 +134,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
           style: 'destructive',
           onPress: () => {
             try {
-              
               actions.deleteTransaction(editingTxn.id);
               navigation.goBack();
             } catch (e: any) {
@@ -127,7 +144,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
       ],
       { cancelable: true }
     );
-  };
+  }, [isEditing, editingTxn, actions, navigation]);
 
   // ---- Keep screen title sensible ----
   useLayoutEffect(() => {
@@ -156,8 +173,15 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
   const validation = useMemo(() => {
     const trimmedName = name.trim();
-    if (!trimmedName) return { ok: false, reason: 'Please enter a name to enable Save' };
-
+    const actionVerb = isEditing
+      ? 'save'
+      : type === 'expense'
+      ? 'add expense'
+      : type === 'income'
+      ? 'add income'
+      : 'add transaction';
+    if (!trimmedName)
+      return { ok: false, reason: `Enter a name to ${actionVerb}.` };
 
     if (!accountId) return { ok: false, reason: 'Choose an account' };
 
@@ -173,7 +197,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
     }
 
     return { ok: true as const };
-  }, [name, accountId, date, amount]);
+  }, [name, accountId, date, amount, isEditing, type]);
 
   const canSave = validation.ok;
 
@@ -187,7 +211,15 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
 
   const handleSave = async () => {
     if (!canSave) {
-      Alert.alert('Can’t save yet', validation.reason);
+      const verb = isEditing
+        ? 'save'
+        : type === 'expense'
+        ? 'add expense'
+        : type === 'income'
+        ? 'add income'
+        : 'add transaction';
+
+      Alert.alert(`Can\u2019t ${verb} yet`, validation.reason);
       return;
     }
 
@@ -218,8 +250,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
       } else {
         navigation.navigate('Payments');
       }
-
-      navigation.goBack();
     } catch (e: any) {
       Alert.alert('Save failed', e?.message ?? 'Please try again.');
     }
@@ -229,6 +259,9 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
   const accountName = useMemo(() => {
     return accounts.find(a => a.id === accountId)?.name ?? '';
   }, [accounts, accountId]);
+
+  const changedAwayFromOrigin =
+    hasOriginContext && !!accountId && accountId !== contextAccountId && !!accountName;
 
   const cycleAccount = () => {
     if (accounts.length === 0) return;
@@ -267,6 +300,26 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
 
+      <View style={styles.accountSection}>
+        <Text style={styles.label}>Account</Text>
+        {hasOriginContext && (
+          <Text style={styles.accountMeta}>From: {contextAccountName}</Text>
+        )}
+        {changedAwayFromOrigin && (
+          <Text style={styles.accountMeta}>To: {accountName}</Text>
+        )}
+        <Pressable style={[styles.accountPick]} onPress={cycleAccount}>
+          <Text style={styles.accountPickText}>
+            {accountName || (accounts.length ? 'Tap to pick account' : 'No accounts yet')}
+          </Text>
+          {!!accounts.length && (
+            <Text style={styles.accountPickHint}>
+              {hasOriginContext ? 'Tap to change account' : 'Tap to cycle'}
+            </Text>
+          )}
+        </Pressable>
+      </View>
+
       {/* Name */}
       <Text style={styles.label}>Name</Text>
       <TextInput
@@ -302,17 +355,6 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         autoCorrect={false}
       />
 
-      {/* Account (lightweight cycle) */}
-      <Text style={styles.label}>Account</Text>
-      <Pressable style={styles.accountPick} onPress={cycleAccount}>
-        <Text style={styles.accountPickText}>
-          {accountName || (accounts.length ? 'Tap to pick account' : 'No accounts yet')}
-        </Text>
-        {!!accounts.length && (
-          <Text style={styles.accountPickHint}>Tap to cycle</Text>
-        )}
-      </Pressable>
-
       {/* Category */}
       <Text style={styles.label}>Category (optional)</Text>
       <TextInput
@@ -345,9 +387,7 @@ export default function TxnEditorScreen({ navigation, route }: Props) {
         style={[styles.primaryBtn, !canSave && styles.primaryBtnDisabled]}
         disabled={!canSave}
       >
-        <Text style={styles.primaryBtnText}>
-          {isEditing ? 'Save changes' : 'Save transaction'}
-        </Text>
+        <Text style={styles.primaryBtnText}>{primaryCtaText}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -398,6 +438,14 @@ const styles = StyleSheet.create({
   inputMultiline: { minHeight: 90, textAlignVertical: 'top' },
 
   // --- Account picker (looks like a card/input) ---
+  accountSection: {
+    marginBottom: 6,
+  },
+  accountMeta: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginBottom: 4,
+  },
   accountPick: {
     borderWidth: 1,
     borderColor: theme.border,

@@ -1,6 +1,6 @@
 // src/navigations/RootNavigator.tsx
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, Pressable, Text } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 // Screens
@@ -49,14 +49,29 @@ export default function RootNavigator() {
         options={{ headerShown: false }}
       />
       
-      {/* Dashboard - no back button needed (root screen after login) */}
+      {/* Dashboard - Settings on left, centered title */}
       <Stack.Screen
         name="Dashboard"
         component={DashboardScreen}
-        options={{
+        options={({ navigation }) => ({
           title: 'Dashboard',
-          headerRight: undefined,
-        }}
+          headerTitleAlign: 'center',
+
+          headerLeft: () => (
+            <Pressable
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={10}
+              style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+            >
+              <Text style={{ color: '#93C5FD', fontWeight: '700' }}>Settings</Text>
+            </Pressable>
+          ),
+
+          headerLeftContainerStyle: { width: 90 },
+          headerRightContainerStyle: { width: 90 },
+
+          headerRight: () => null,
+        })}
       />
 
       {/* All other screens get consistent headers with Back button on right */}

@@ -17,6 +17,7 @@ import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
 
 const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
+const STORAGE_KEY_LAST_UNLOCKED_AT = '@debitlens/lastUnlockedAt:v1';
 
 // Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
@@ -31,6 +32,14 @@ export default function SplashAuthScreen({ navigation }: Props) {
   const [pinError, setPinError] = useState('');
   const [biometricsUnavailableHint, setBiometricsUnavailableHint] = useState<string | null>(null);
   const biometricAttempted = useRef(false);
+
+  const markUnlocked = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_LAST_UNLOCKED_AT, String(Date.now()));
+    } catch {
+      // non-fatal
+    }
+  };
 
   // Authoritative: compute once at render
   const storedPin = (getPin() ?? '').trim();
@@ -77,6 +86,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
         });
 
         if (mounted && result.success) {
+          await markUnlocked();
           navigation.replace('Dashboard');
         }
         // If fail/cancel, stay on PIN entry screen (no crash)
@@ -93,6 +103,7 @@ export default function SplashAuthScreen({ navigation }: Props) {
     const entered = pin.trim();
     if (storedPin && entered === storedPin) {
       setPinError('');
+      void markUnlocked();
       navigation.replace('Dashboard');
     } else {
       setPinError('Incorrect PIN. Please try again.');
@@ -114,7 +125,75 @@ export default function SplashAuthScreen({ navigation }: Props) {
     biometricAttempted.current = false; // Clear when PIN changes (e.g. before navigate)
     setPin(p1);
     setPinError('');
+    void markUnlocked();
     navigation.replace('Dashboard');
+  };
+
+  const performPinReset = () => {
+    biometricAttempted.current = false;
+
+    // Clear stored PIN (AppContext -> AsyncStorage remove via effect)
+    setPin(null);
+
+    // Also disable biometrics if PIN is removed/reset
+    void AsyncStorage.removeItem(STORAGE_KEY_BIOMETRICS).catch(() => {});
+
+    // Clear local UI state
+    setPinInput('');
+    setConfirm('');
+    setPinError('');
+    setBiometricsUnavailableHint(null);
+  };
+
+  const onForgotPin = () => {
+    Alert.alert(
+      'Reset PIN',
+      'This will remove your PIN on this device. You will need to set a new PIN to continue.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const biometricsEnabledRaw = await AsyncStorage.getItem(STORAGE_KEY_BIOMETRICS);
+              const biometricsEnabled = biometricsEnabledRaw === 'true';
+
+              if (!biometricsEnabled) {
+                performPinReset();
+                return;
+              }
+
+              const [hasHardware, isEnrolled] = await Promise.all([
+                LocalAuthentication.hasHardwareAsync(),
+                LocalAuthentication.isEnrolledAsync(),
+              ]);
+
+              if (!hasHardware || !isEnrolled) {
+                Alert.alert(
+                  'Biometrics unavailable',
+                  'Face ID / Touch ID is enabled but not available on this device. You can still reset your PIN.'
+                );
+                performPinReset();
+                return;
+              }
+
+              const result = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Confirm to reset PIN',
+                fallbackLabel: 'Use device passcode',
+              });
+
+              if (result.success) {
+                performPinReset();
+              }
+            } catch (e) {
+              console.warn('[SplashAuth] forgot pin auth error', e);
+              Alert.alert('Unable to reset', 'Authentication failed. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (mode === 'loading') {
@@ -162,6 +241,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
           {biometricsUnavailableHint ? (
             <Text style={styles.hint}>{biometricsUnavailableHint}</Text>
           ) : null}
+
+          <Pressable onPress={onForgotPin} hitSlop={10} style={styles.linkWrap}>
+            <Text style={styles.linkText}>Forgot PIN?</Text>
+          </Pressable>
 
           <Pressable
             style={[styles.primary, !isValidPin && { opacity: 0.5 }]}
@@ -269,5 +352,13 @@ const styles = StyleSheet.create({
     color: '#FEE2E2',
     fontSize: 13,
     fontWeight: '500',
+  },
+  linkWrap: {
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  linkText: {
+    color: '#93C5FD',
+    fontWeight: '700',
   },
 });

@@ -122,6 +122,24 @@ function normalizeHeader(h: unknown): string {
     .toLowerCase();
 }
 
+function toIsoDateOnly(value: string | number | Date | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  if (typeof value === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    const [dd, mm, yyyy] = value.split('/');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  const d = new Date(value as string | number);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toISOString().slice(0, 10);
+}
+
+function normalizeStoredAmount(amount: unknown): number {
+  const n = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(n)) return 0;
+  return Math.abs(n);
+}
+
 function csvEscape(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
   const s = String(value);
@@ -564,10 +582,11 @@ export default function DataExportImportScreen(_props: Props) {
     for (const t of txs) {
       const accountCell = csvIncludeAccountName ? accountNameById[t.accountId] ?? '' : t.accountId ?? '';
 
-      const amountSigned =
-        String(t.type).toLowerCase() === 'expense'
-          ? -Math.abs(Number(t.amount ?? 0))
-          : Number(t.amount ?? 0);
+      const amountStored = normalizeStoredAmount(t.amount);
+      const amountOut =
+        t.type === 'expense'
+          ? -amountStored
+          : amountStored;
 
       const typeCell =
         String(t.type).toLowerCase() === 'income'
@@ -577,9 +596,9 @@ export default function DataExportImportScreen(_props: Props) {
             : 'Expense';
 
       const row: (string | number)[] = [
-        t.date ?? '',
+        toIsoDateOnly(t.date),
         accountCell,
-        amountSigned,
+        amountOut,
         csvIncludeDescription ? ((t as any).description ?? (t as any).name ?? '') : '',
         (t as any).merchant ?? '',
         (t as any).category ?? '',
@@ -1251,7 +1270,8 @@ export default function DataExportImportScreen(_props: Props) {
           const date = toIsoDate(getCell(r, 'date'));
           const accountA = getCell(r, 'accountA');
           const accountB = getCell(r, 'accountB');
-          const amount = parseAmount(getCell(r, 'amount'));
+          const amountNum = parseAmount(getCell(r, 'amount'));
+          const amount = normalizeStoredAmount(amountNum);
           const description = getCell(r, 'description');
           const category = getCell(r, 'category');
           const type = normType(getCell(r, 'type'));
@@ -1460,7 +1480,7 @@ export default function DataExportImportScreen(_props: Props) {
 
                 // Transfer: fromAccountId = Account A, toAccountId = Account B, amount always positive
                 if (isTransfer) {
-                  const amountAbs = Math.abs(amountNum);
+                  const amountAbs = normalizeStoredAmount(amountNum);
 
                   const getOrCreateAccount = (name: string): Account | null => {
                     const list = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
@@ -1540,15 +1560,13 @@ export default function DataExportImportScreen(_props: Props) {
                   finalType = 'income';
                 } else if (p.type === 'expense') {
                   finalType = 'expense';
-                } else if (amountNum < 0) {
-                  finalType = 'expense';
-                } else if (amountNum > 0) {
-                  finalType = 'income';
                 } else {
+                  // Should not happen because we skip invalid types earlier,
+                  // but keep a safe default.
                   finalType = 'expense';
                 }
 
-                const amountAbs = Math.abs(amountNum);
+                const amountAbs = normalizeStoredAmount(amountNum);
                 const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
                 const descClean = cleanDescription(descFinal);
 
@@ -2027,7 +2045,7 @@ export default function DataExportImportScreen(_props: Props) {
         continue;
       }
 
-      const amount = Math.abs(amountNum);
+      const amount = normalizeStoredAmount(amountNum);
       const isoDate = normalizeDateToISODate(p.date);
       if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
         skippedBadAmountOrDate++;

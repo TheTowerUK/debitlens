@@ -14,11 +14,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
+const STORAGE_KEY_SESSION_TIMEOUT_MIN = '@debitlens/sessionTimeoutMinutes:v1';
+const STORAGE_KEY_LAST_UNLOCKED_AT = '@debitlens/lastUnlockedAt:v1';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -26,6 +29,8 @@ export default function SettingsScreen({ navigation }: Props) {
   const { getPin, setPin, actions } = useApp();
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState<boolean | null>(null);
+  const [timeoutMinutes, setTimeoutMinutes] = useState<5 | 10 | 15>(5);
+  const [lastUnlockedAt, setLastUnlockedAt] = useState<number | null>(null);
 
   const pinTrimmed = (getPin() ?? '').trim();
   const hasPin = pinTrimmed.length > 0;
@@ -39,9 +44,38 @@ export default function SettingsScreen({ navigation }: Props) {
     }
   }, []);
 
+  const loadSessionTimeout = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_SESSION_TIMEOUT_MIN);
+      const m = Number(raw);
+      const safe = (m === 10 || m === 15 || m === 5) ? (m as 5 | 10 | 15) : 5;
+      setTimeoutMinutes(safe);
+    } catch {
+      setTimeoutMinutes(5);
+    }
+  }, []);
+
+  const loadLastUnlocked = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_LAST_UNLOCKED_AT);
+      const v = Number(raw);
+      setLastUnlockedAt(Number.isFinite(v) && v > 0 ? v : null);
+    } catch {
+      setLastUnlockedAt(null);
+    }
+  }, []);
+
   useEffect(() => {
     void loadBiometricsPref();
-  }, [loadBiometricsPref]);
+    void loadSessionTimeout();
+    void loadLastUnlocked();
+  }, [loadBiometricsPref, loadSessionTimeout, loadLastUnlocked]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadLastUnlocked();
+    }, [loadLastUnlocked])
+  );
 
   useEffect(() => {
     if (!hasPin) {
@@ -109,6 +143,47 @@ export default function SettingsScreen({ navigation }: Props) {
         ? 'Biometrics not available'
         : null;
 
+  const setSessionTimeout = async (m: 5 | 10 | 15) => {
+    setTimeoutMinutes(m);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_SESSION_TIMEOUT_MIN, String(m));
+    } catch (e) {
+      console.warn('[settings] session timeout save failed', e);
+      setTimeoutMinutes(5);
+    }
+  };
+
+  const onLockNow = useCallback(() => {
+    if (!hasPin) {
+      return Alert.alert('PIN not set', 'Set a PIN first to enable locking.');
+    }
+    Alert.alert('Lock now', 'Return to the PIN screen?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Lock',
+        onPress: () => {
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+        },
+      },
+    ]);
+  }, [navigation, hasPin]);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert('Log out', 'Return to the PIN screen?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: () => {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+        },
+      },
+    ]);
+  }, [navigation]);
+
   const onResetApp = () => {
     Alert.alert(
       'Reset DebitLens?',
@@ -137,8 +212,6 @@ export default function SettingsScreen({ navigation }: Props) {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.h1}>Settings</Text>
-
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Security & Access</Text>
 
@@ -178,12 +251,56 @@ export default function SettingsScreen({ navigation }: Props) {
             <Switch
               value={biometricsEnabled}
               onValueChange={onBiometricsToggle}
-              disabled={biometricsDisabled || biometricsAvailable === false}
+              disabled={biometricsDisabled || (!biometricsEnabled && biometricsAvailable === false)}
             />
           </View>
           {biometricsHelper ? (
             <Text style={styles.helper}>{biometricsHelper}</Text>
           ) : null}
+
+          {/* Session timeout */}
+          <View style={{ marginTop: 16 }}>
+            <Text style={styles.optionLabel}>Auto-lock when returning after</Text>
+            <View style={styles.segmentRow}>
+              {[5, 10, 15].map((m) => {
+                const selected = timeoutMinutes === m;
+                return (
+                  <Pressable
+                    key={m}
+                    onPress={() => void setSessionTimeout(m as 5 | 10 | 15)}
+                    style={[styles.segmentBtn, selected && styles.segmentBtnSelected]}
+                  >
+                    <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                      {m}m
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.helper}>
+              Applies when you leave the app and return. If biometrics is enabled, you may be asked to re-auth sooner.
+            </Text>
+          </View>
+
+          {/* Last unlocked */}
+          <View style={{ marginTop: 14 }}>
+            <View style={styles.row}>
+              <Text style={styles.label}>Last unlocked</Text>
+              <Text style={styles.value}>
+                {lastUnlockedAt
+                  ? new Date(lastUnlockedAt).toLocaleString('en-GB')
+                  : '—'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Lock now */}
+          <Pressable
+            style={[styles.btn, styles.btnGhost, { marginTop: 10 }]}
+            onPress={onLockNow}
+          >
+            <Text style={styles.btnText}>Lock now</Text>
+          </Pressable>
         </View>
 
         <View style={styles.card}>
@@ -225,6 +342,29 @@ export default function SettingsScreen({ navigation }: Props) {
             onPress={() => navigation.navigate('PrivacyPolicy')}
           >
             <Text style={styles.btnText}>Privacy Policy</Text>
+          </Pressable>
+        </View>
+
+        {/* Security / Log out */}
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.sectionTitle}>Security</Text>
+          <Pressable
+            onPress={handleLogout}
+            style={{
+              paddingVertical: 12,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.negative,
+              backgroundColor: theme.card,
+            }}
+          >
+            <Text style={{ color: theme.negative, fontWeight: '800', fontSize: 16 }}>
+              Log out
+            </Text>
+            <Text style={{ color: theme.textDim, marginTop: 4, fontSize: 12 }}>
+              Return to the PIN screen.
+            </Text>
           </Pressable>
         </View>
 
@@ -289,6 +429,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionLabel: { color: '#E5E7EB', flex: 1, marginRight: 12 },
+  segmentRow: {
+    flexDirection: 'row',
+    columnGap: 8,
+    marginTop: 8,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.card,
+    alignItems: 'center',
+  },
+  segmentBtnSelected: {
+    borderColor: theme.link,
+  },
+  segmentText: {
+    color: theme.textDim,
+    fontWeight: '800',
+  },
+  segmentTextSelected: {
+    color: theme.text,
+  },
   helper: {
     color: theme.textDim,
     fontSize: 12,
@@ -297,6 +461,9 @@ const styles = StyleSheet.create({
 
   dangerZone: {
     marginTop: 32,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
   },
   dangerZoneTitle: {
     color: '#fff',
