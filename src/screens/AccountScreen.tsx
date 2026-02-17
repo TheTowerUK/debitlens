@@ -33,6 +33,7 @@ export default function AccountScreen({ navigation, route }: Props) {
   const accountId = route.params?.accountId;
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
+  const recurring = state.recurring || [];
 
   const account =
     accounts.find((a: any) => a.id === accountId) || accounts[0];
@@ -50,9 +51,9 @@ export default function AccountScreen({ navigation, route }: Props) {
     const id = account.id;
     return (txs ?? []).filter((t) => {
       if (t.type === 'transfer') {
-        const fromId = t.fromAccountId ?? t.accountId;
-        const toId = t.toAccountId;
-        return fromId === id || toId === id;
+        return (
+          t.fromAccountId === id || t.toAccountId === id || t.accountId === id
+        );
       }
       return t.accountId === id;
     });
@@ -79,8 +80,10 @@ export default function AccountScreen({ navigation, route }: Props) {
   const [editName, setEditName] = useState('');
   const [editType, setEditType] = useState<Account['type']>('bank');
   const [editBalance, setEditBalance] = useState('0');
+  const [editLimit, setEditLimit] = useState('');
   const [editColor, setEditColor] = useState<string>('#3b82f6');
   const [editIcon, setEditIcon] = useState<string>('🏦');
+  const [justArchived, setJustArchived] = useState(false);
 
   const COLOR_CHOICES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#64748b'];
   const ICON_CHOICES = ['🏦', '💳', '💰', '🏠', '🚗', '🧾', '🎯', '🧳'];
@@ -96,6 +99,36 @@ export default function AccountScreen({ navigation, route }: Props) {
     return openingBalance + netFromTxs;
   }, [openingBalance, netFromTxs]);
 
+  const limitValue = Number((account as any)?.limit);
+  const hasLimit = Number.isFinite(limitValue) && limitValue > 0;
+
+  type BalanceStatus = 'normal' | 'amber' | 'red';
+
+  function getStatus(balance: number, limit?: number): BalanceStatus {
+    const lim = Number(limit);
+    const has = Number.isFinite(lim) && lim > 0;
+
+    if (balance > 0) return 'normal';
+    if (!has) return 'amber';
+    if (balance < -lim) return 'red';
+    return 'amber';
+  }
+
+  const statusNow: BalanceStatus = getStatus(currentBalanceNow, hasLimit ? limitValue : undefined);
+
+  const statusTextStyle =
+    statusNow === 'red'
+      ? styles.statusRed
+      : statusNow === 'amber'
+        ? styles.statusAmber
+        : styles.statusNormal;
+
+  const statusLabel =
+    statusNow === 'red'
+      ? `Over agreed ${account?.type === 'credit' ? 'credit limit' : 'overdraft'}`
+      : statusNow === 'amber' && currentBalanceNow < 0
+        ? `Within agreed ${account?.type === 'credit' ? 'credit limit' : 'overdraft'}`
+        : 'In credit';
 
   /**
    * Forward-running balance (chronological, safe for imports)
@@ -169,6 +202,9 @@ export default function AccountScreen({ navigation, route }: Props) {
     const b = Number((acc as any)?.balance);
     setEditBalance(Number.isFinite(b) ? String(b) : '0');
 
+    const lim = Number((acc as any)?.limit);
+    setEditLimit(Number.isFinite(lim) && lim > 0 ? String(lim) : '');
+
     setEditColor(acc.color ?? '#3b82f6');
     setEditIcon(acc.icon ?? '🏦');
   };
@@ -196,18 +232,32 @@ export default function AccountScreen({ navigation, route }: Props) {
       return;
     }
 
+    const limitRaw = String(editLimit ?? '').replace(/,/g, '').trim();
+    let parsedLimit: number | undefined = undefined;
+
+    if (limitRaw !== '') {
+      const n = Number(limitRaw);
+      if (!Number.isFinite(n) || n < 0) {
+        Alert.alert('Invalid limit', 'Limit must be a positive number (or left blank).');
+        return;
+      }
+      parsedLimit = n === 0 ? undefined : n;
+    }
+
     actions.updateAccount(editingAccount.id, {
       name: trimmed,
       type: editType,
       balance: parsed,
       color: editColor,
       icon: editIcon,
+      limit: parsedLimit,
     });
 
     navigation.setOptions({ title: `${editIcon ? `${editIcon} ` : ''}${trimmed}` });
     setEditingAccount(null);
     setEditName('');
     setEditBalance('0');
+    setEditLimit('');
     setEditType('bank');
     setEditColor('#3b82f6');
     setEditIcon('🏦');
@@ -240,16 +290,59 @@ export default function AccountScreen({ navigation, route }: Props) {
   const onDeleteAccount = () => {
     if (!account) return;
 
+    if (Math.round(currentBalanceNow * 100) !== 0) {
+      Alert.alert(
+        "Can't delete",
+        "You can't delete an account with a non-zero balance. Clear it first (transfer out or add an adjustment)."
+      );
+      return;
+    }
+
+    const linkedRecurring = recurring.filter(
+      (r) =>
+        r.accountId === account.id ||
+        r.fromAccountId === account.id ||
+        r.toAccountId === account.id
+    );
+    const hasLinkedHistory = accountTxs.length > 0 || linkedRecurring.length > 0;
+
+    if (hasLinkedHistory) {
+      Alert.alert(
+        `Delete "${account.name}"?`,
+        'This account has history (transactions and/or recurring items). Archive it instead?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Archive',
+            style: 'default',
+            onPress: () => {
+              actions.updateAccount(account.id, { archived: true });
+              setJustArchived(true);
+            },
+          },
+          {
+            text: 'Delete account + all linked transactions',
+            style: 'destructive',
+            onPress: () => {
+              actions.deleteAccount(account.id);
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       `Delete "${account.name}"?`,
-      'This will delete the account and all linked transactions and recurring items (including transfers). This cannot be undone.',
+      'This will delete the account. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            actions.deleteAccount(accountId);
+            actions.deleteAccount(account.id);
             navigation.goBack();
           },
         },
@@ -270,6 +363,17 @@ export default function AccountScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.wrap}>
+      {justArchived && account?.archived && (
+        <View style={styles.archivedBanner}>
+          <Text style={styles.archivedBannerText}>Account archived</Text>
+          <Pressable
+            style={styles.archivedBannerBtn}
+            onPress={() => navigation.navigate('Dashboard')}
+          >
+            <Text style={styles.archivedBannerBtnText}>Back to Dashboard</Text>
+          </Pressable>
+        </View>
+      )}
       <View style={styles.headerRow}>
         <Text style={styles.h1}>
               {(account.icon ? `${account.icon} ` : '') + (account.name || 'Account')}
@@ -330,6 +434,22 @@ export default function AccountScreen({ navigation, route }: Props) {
               returnKeyType="done"
               onSubmitEditing={saveEdit}
             />
+            <Text style={styles.modalLabel}>
+              {editType === 'credit' ? 'Credit limit (optional)' : 'Overdraft limit (optional)'}
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={editLimit}
+              onChangeText={setEditLimit}
+              placeholder={editType === 'credit' ? 'e.g. 2500' : 'e.g. 500'}
+              placeholderTextColor="#7b7b7b"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={saveEdit}
+            />
+            <Text style={styles.modalHint}>
+              Used for warnings when a transfer takes the account beyond the agreed limit.
+            </Text>
             <Text style={styles.modalLabel}>Account type</Text>
             <View style={styles.typeRow}>
               {(['bank', 'credit', 'cash', 'other'] as const).map((t) => (
@@ -377,6 +497,7 @@ export default function AccountScreen({ navigation, route }: Props) {
                   setEditingAccount(null);
                   setEditName('');
                   setEditBalance('0');
+                  setEditLimit('');
                   setEditType('bank');
                   setEditColor('#3b82f6');
                   setEditIcon('🏦');
@@ -401,8 +522,21 @@ export default function AccountScreen({ navigation, route }: Props) {
       <View style={styles.summaryRow}>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Current balance</Text>
-          <Text style={styles.summaryValue}>
+
+          <Text style={[styles.summaryValue, statusTextStyle]}>
             £{currentBalanceNow.toFixed(2)}
+          </Text>
+
+          {hasLimit ? (
+            <Text style={styles.summaryMeta}>
+              {account.type === 'credit'
+                ? `Credit limit: £${limitValue.toFixed(2)}`
+                : `Agreed overdraft: £${limitValue.toFixed(2)}`}
+            </Text>
+          ) : null}
+
+          <Text style={[styles.summaryMeta, statusTextStyle]}>
+            Status: {statusLabel}
           </Text>
         </View>
 
@@ -605,6 +739,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
+  modalHint: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginTop: -10,
+    marginBottom: 16,
+  },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
@@ -696,6 +836,32 @@ const styles = StyleSheet.create({
     color: '#60a5fa',
     fontWeight: '800',
   },
+  archivedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    backgroundColor: theme.cardAlt,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.link,
+  },
+  archivedBannerText: {
+    color: theme.text,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  archivedBannerBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  archivedBannerBtnText: {
+    color: theme.link,
+    fontWeight: '800',
+    fontSize: 14,
+  },
   subtle: {
     opacity: 0.8,
     marginBottom: 14,
@@ -725,6 +891,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#fff',
   },
+  summaryMeta: {
+    marginTop: 6,
+    color: theme.textDim,
+    fontSize: 12,
+    fontWeight: '700',
+    opacity: 0.9,
+  },
+  statusNormal: { color: theme.text },
+  statusAmber: { color: '#F59E0B' },
+  statusRed: { color: theme.negative },
 
   incomeText: {
     color: '#3ddc84',

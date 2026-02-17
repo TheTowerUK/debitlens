@@ -33,26 +33,28 @@ export default function HeaderBackButton({ label = 'Back', onPress }: Props) {
       onPress={handlePress}
       hitSlop={8}
       style={({ pressed }) => [
-        styles.button,
+        styles.backButton,
         pressed && { opacity: Platform.OS === 'ios' ? 0.6 : 0.8 },
       ]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Text style={styles.buttonText}>{label}</Text>
+      <Text style={styles.backText}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
+  backButton: {
+    minWidth: 80,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  buttonText: {
+  backText: {
     color: theme.link,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

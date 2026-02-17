@@ -38,5 +38,8 @@ export type RootStackParamList = {
   PrivacyPolicy: undefined;
 
   DataExportImport: undefined;
+  DataTransfer: undefined;
+  DataExport: undefined;
+  DataImport: undefined;
   ImportCSV: undefined;
 };

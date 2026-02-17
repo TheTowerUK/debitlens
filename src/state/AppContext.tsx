@@ -21,6 +21,9 @@ export type Account = {
   balance: number; // opening balance
   archived?: boolean;
 
+  /** Credit limit or overdraft limit; balance may go down to -limit. */
+  limit?: number;
+
   color?: string; // e.g. '#3b82f6'
   icon?: string;  // e.g. '🏦'
 };
@@ -253,12 +256,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteAccount: (id) => {
       setAccounts((prev) => prev.filter((a) => a.id !== id));
       setTransactions((prev) =>
-        prev.filter((t) => {
-          if (t.type === 'transfer') {
-            return t.fromAccountId !== id && t.toAccountId !== id && t.accountId !== id;
-          }
-          return t.accountId !== id;
-        })
+        prev.filter(
+          (t) =>
+            t.accountId !== id && t.fromAccountId !== id && t.toAccountId !== id
+        )
       );
       setRecurring((prev) =>
         prev.filter(

@@ -1,5 +1,5 @@
 // src/screens/TransferScreen.tsx
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
@@ -19,7 +21,17 @@ import { colors as theme } from '../theme/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Transfer'>;
 
-type TxType = 'income' | 'expense';
+type BalanceStatus = 'normal' | 'amber' | 'red';
+
+function getStatus(balance: number, limitValue?: number): BalanceStatus {
+  const limVal = Number(limitValue);
+  const has = Number.isFinite(limVal) && limVal > 0;
+
+  if (balance > 0) return 'normal';
+  if (!has) return 'amber';
+  if (balance < -limVal) return 'red';
+  return 'amber';
+}
 
 // Parse DD/MM/YYYY into a Date (or null if invalid)
 function parseDDMMYYYY(input: string): Date | null {
@@ -55,6 +67,28 @@ function parseDDMMYYYY(input: string): Date | null {
 const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
   const { state, actions } = useApp();
   const accounts = state.accounts || [];
+  const txs = state.transactions ?? [];
+
+  const balanceForAccountId = (id: string | undefined) => {
+    if (!id) return 0;
+    const acc = accounts.find((a) => a.id === id);
+    const opening = Number(acc?.balance) || 0;
+
+    let net = 0;
+    for (const t of txs) {
+      const amt = Number(t.amount) || 0;
+
+      if (t.type === 'income' && t.accountId === id) net += amt;
+      else if (t.type === 'expense' && t.accountId === id) net -= amt;
+      else if (t.type === 'transfer') {
+        if (t.fromAccountId === id) net -= amt;
+        else if (t.toAccountId === id) net += amt;
+        else if (t.accountId === id && !t.fromAccountId && !t.toAccountId) net -= amt;
+      }
+    }
+
+    return opening + net;
+  };
 
   const params = route.params ?? {};
   const initialFromId = params.fromAccountId;
@@ -76,6 +110,85 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
   );
 
   const [note, setNote] = useState<string>('');
+
+  const fromBalance = useMemo(
+    () => balanceForAccountId(fromAccountId),
+    [fromAccountId, accounts, txs]
+  );
+
+  const toBalance = useMemo(
+    () => balanceForAccountId(toAccountId),
+    [toAccountId, accounts, txs]
+  );
+
+  const amountNum = Number(amount);
+  const amountValid = Number.isFinite(amountNum) && amountNum > 0;
+
+  const fromAfter = amountValid ? fromBalance - amountNum : fromBalance;
+  const toAfter = amountValid ? toBalance + amountNum : toBalance;
+
+  const fromAcc = accounts.find((a) => a.id === fromAccountId);
+  const limit = Number(fromAcc?.limit);
+  const hasLimit = Number.isFinite(limit) && limit > 0;
+  const lim = hasLimit ? limit : 0;
+
+  const usedNow = Math.max(0, -fromBalance);
+  const usedAfter = Math.max(0, -fromAfter);
+  const remainingNow = hasLimit ? Math.max(0, lim - usedNow) : null;
+  const remainingAfter = hasLimit ? Math.max(0, lim - usedAfter) : null;
+  const creditUsedPctNow =
+    fromAcc?.type === 'credit' && hasLimit ? Math.min(100, (usedNow / lim) * 100) : null;
+  const creditUsedPctAfter =
+    fromAcc?.type === 'credit' && hasLimit ? Math.min(100, (usedAfter / lim) * 100) : null;
+
+  const statusAfter: BalanceStatus = amountValid
+    ? getStatus(fromAfter, fromAcc?.limit)
+    : getStatus(fromBalance, fromAcc?.limit);
+
+  const statusTextStyle =
+    statusAfter === 'red'
+      ? styles.statusRed
+      : statusAfter === 'amber'
+        ? styles.statusAmber
+        : styles.statusNormal;
+
+  const statusBorderStyle =
+    statusAfter === 'red'
+      ? styles.statusBorderRed
+      : statusAfter === 'amber'
+        ? styles.statusBorderAmber
+        : styles.statusBorderNormal;
+
+  const previewOpacity = useRef(new Animated.Value(0)).current;
+  const previewScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(previewOpacity, {
+      toValue: amountValid ? 1 : 0,
+      duration: 160,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [amountValid, previewOpacity]);
+
+  useEffect(() => {
+    if (!amountValid) return;
+    previewScale.setValue(1);
+    Animated.sequence([
+      Animated.timing(previewScale, {
+        toValue: 1.015,
+        duration: 90,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(previewScale, {
+        toValue: 1,
+        duration: 140,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [amount, amountValid, previewScale]);
 
   const canTransfer = useMemo(() => accounts.length >= 2, [accounts.length]);
 
@@ -115,37 +228,23 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
       );
       return;
     }
-    const isoDate = parsedDate.toISOString();
+    const dateISO =
+      `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, '0')}-${String(parsedDate.getDate()).padStart(2, '0')}`;
 
-    const fromAcc = accounts.find((a: any) => a.id === fromAccountId);
     const toAcc = accounts.find((a: any) => a.id === toAccountId);
+    const desc = note.trim() || `Transfer to ${toAcc?.name ?? 'account'}`;
 
-    const defaultNoteOut = `Transfer to ${toAcc?.name ?? 'account'}`;
-    const defaultNoteIn = `Transfer from ${fromAcc?.name ?? 'account'}`;
-
-    const commonNoteOut = note.trim() || defaultNoteOut;
-    const commonNoteIn = note.trim() || defaultNoteIn;
-
-    // Outgoing transaction (expense)
     actions.addTransaction({
-      name: 'Transfer out',
+      type: 'transfer',
       accountId: fromAccountId,
+      fromAccountId,
+      toAccountId,
       amount: numericAmount,
-      type: 'expense',
-      date: isoDate,
+      date: dateISO,
+      name: 'Transfer',
+      description: desc,
       category: 'Transfer',
-      description: commonNoteOut,
-    });
-
-    // Incoming transaction (income)
-    actions.addTransaction({
-      name: 'Transfer in',
-      accountId: toAccountId,
-      amount: numericAmount,
-      type: 'income',
-      date: isoDate,
-      category: 'Transfer',
-      description: commonNoteIn,
+      merchant: toAcc?.name,
     });
 
     navigation.goBack();
@@ -199,6 +298,27 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
               </Pressable>
             ))}
           </View>
+          <Text style={[styles.balanceHint, statusTextStyle]}>
+            Available: £{fromBalance.toFixed(2)}
+          </Text>
+
+          {hasLimit ? (
+            <View style={styles.limitRow}>
+              <Text style={[styles.limitText, statusTextStyle]}>
+                {fromAcc?.type === 'credit'
+                  ? `Credit used: ${creditUsedPctNow?.toFixed(0)}%`
+                  : `Overdraft remaining: £${Number(remainingNow ?? 0).toFixed(2)}`}
+              </Text>
+
+              {amountValid ? (
+                <Text style={[styles.limitTextDim, statusTextStyle]}>
+                  After: {fromAcc?.type === 'credit'
+                    ? `${creditUsedPctAfter?.toFixed(0)}%`
+                    : `£${Number(remainingAfter ?? 0).toFixed(2)}`}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {/* To Account */}
@@ -225,6 +345,9 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
               </Pressable>
             ))}
           </View>
+          <Text style={styles.balanceHint}>
+            Current: £{toBalance.toFixed(2)}
+          </Text>
         </View>
 
         {/* Amount */}
@@ -238,6 +361,37 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
             placeholder="0.00"
             placeholderTextColor="#6b7280"
           />
+          <Animated.View
+            style={[
+              styles.previewBox,
+              statusBorderStyle,
+              { opacity: previewOpacity, transform: [{ scale: previewScale }] },
+            ]}
+          >
+            {amountValid ? (
+              <>
+                <Text style={styles.previewTitle}>After transfer</Text>
+
+                <Text style={[styles.previewLine, statusTextStyle]}>
+                  From: £{fromBalance.toFixed(2)} → £{fromAfter.toFixed(2)}
+                </Text>
+
+                <Text style={styles.previewLine}>
+                  To: £{toBalance.toFixed(2)} → £{toAfter.toFixed(2)}
+                </Text>
+
+                {statusAfter === 'red' ? (
+                  <Text style={styles.previewMsgRed}>
+                    Over agreed {fromAcc?.type === 'credit' ? 'credit limit' : 'overdraft'}.
+                  </Text>
+                ) : statusAfter === 'amber' && fromAfter < 0 ? (
+                  <Text style={styles.previewMsgAmber}>
+                    This will take the account negative.
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+          </Animated.View>
         </View>
 
         {/* Date (DD/MM/YYYY) */}
@@ -270,11 +424,7 @@ const TransferScreen: React.FC<Props> = ({ navigation, route }) => {
           <Pressable style={styles.cancelBtn} onPress={onCancel}>
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
-          <Pressable
-            style={[styles.saveBtn, !canTransfer && { opacity: 0.5 }]}
-            onPress={onSave}
-            disabled={!canTransfer}
-          >
+          <Pressable style={styles.saveBtn} onPress={onSave}>
             <Text style={styles.saveText}>Transfer</Text>
           </Pressable>
         </View>
@@ -301,11 +451,71 @@ const styles = StyleSheet.create({
     color: theme.textDim,
     marginBottom: 16,
   },
+  balanceHint: {
+    marginTop: 8,
+    fontSize: 13,
+    color: theme.textDim,
+  },
+  statusNormal: { color: theme.text },
+  statusAmber: { color: '#F59E0B' },
+  statusRed: { color: theme.negative },
+  statusBorderNormal: { borderColor: theme.border },
+  statusBorderAmber: { borderColor: '#F59E0B' },
+  statusBorderRed: { borderColor: theme.negative },
+  limitRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  limitText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textDim,
+  },
+  limitTextDim: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: theme.textDim,
+    opacity: 0.85,
+  },
+  previewBox: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: theme.cardAlt,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  previewTitle: {
+    color: theme.text,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  previewLine: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  previewMsgAmber: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  previewMsgRed: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '800',
+    color: theme.negative,
+  },
   warningBox: {
     backgroundColor: '#451a03',
     borderRadius: 8,
     padding: 10,
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 0,
   },
   warningText: {
     color: '#fed7aa',

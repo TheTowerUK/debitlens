@@ -19,6 +19,9 @@ import RecurringEditorScreen from '../screens/RecurringEditorScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ReportsScreen from '../screens/ReportsScreen';
 import DataExportImportScreen from '../screens/DataExportImportScreen';
+import DataTransferScreen from '../screens/DataTransferScreen';
+import DataExportScreen from '../screens/DataExportScreen';
+import DataImportScreen from '../screens/DataImportScreen';
 import ImportCsvScreen from '../screens/ImportCsvScreen';
 import SplashAuthScreen from '../screens/SplashAuthScreen';
 import BudgetEditorScreen from '../screens/BudgetEditorScreen';
@@ -171,6 +174,21 @@ export default function RootNavigator() {
         name="DataExportImport"
         component={DataExportImportScreen}
         options={{ title: 'Data' }}
+      />
+      <Stack.Screen
+        name="DataTransfer"
+        component={DataTransferScreen}
+        options={{ title: 'Import / Export' }}
+      />
+      <Stack.Screen
+        name="DataExport"
+        component={DataExportScreen}
+        options={{ title: 'Export' }}
+      />
+      <Stack.Screen
+        name="DataImport"
+        component={DataImportScreen}
+        options={{ title: 'Import' }}
       />
       <Stack.Screen 
         name="ImportCSV" 
