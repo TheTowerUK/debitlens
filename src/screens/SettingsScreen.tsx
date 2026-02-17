@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../state/AppContext';
+import { useDataExportImport } from '../hooks/useDataExportImport';
 import { colors as theme } from '../theme/colors';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -27,6 +28,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const { getPin, setPin, actions } = useApp();
+  const { endCsvImportSession, setLastStatus } = useDataExportImport();
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
   const [biometricsAvailable, setBiometricsAvailable] = useState<boolean | null>(null);
   const [timeoutMinutes, setTimeoutMinutes] = useState<5 | 10 | 15>(5);
@@ -195,6 +197,8 @@ export default function SettingsScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             await actions.resetApp();
+            await endCsvImportSession();
+            setLastStatus('App reset complete.');
             try {
               await AsyncStorage.removeItem('@debitlens/whereToStartSeen:v1');
             } catch {}

@@ -900,6 +900,51 @@ export function useDataExportImport() {
     }
   }, []);
 
+  /** Clears all CSV import session state and persisted pending data. Call after Commit when no more batches, or on app reset. */
+  const clearCsvImportSession = useCallback(async () => {
+    setImportCsvText('');
+    setImportLastFilename('');
+    setImportBatchOffset(0);
+    setImportTotalDataRows(0);
+    setImportSource(null);
+    setPendingTxs([]);
+    setPendingAccounts([]);
+    setPendingActive(false);
+    setImportHasMoreBatches(false);
+    setProgress({ active: false, stage: 'idle', message: '', startedAt: 0 });
+    setCsvValidationSummary(null);
+    setCsvValidationRunning(false);
+    existingKeysRef.current = null;
+    cachedParsedRowsRef.current = null;
+    cachedTotalRowsRef.current = 0;
+    cachedHeaderMapRef.current = null;
+    try {
+      await AsyncStorage.removeItem(PENDING_IMPORT_KEY);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  /** Single "end import session" helper: clears UI step triggers, pending buffers, cached parse, and persisted snapshot. Call on Commit, Discard, or App Reset. */
+  const endCsvImportSession = useCallback(async () => {
+    setImportCsvText('');
+    setImportLastFilename('');
+    setImportTotalDataRows(0);
+    setImportBatchOffset(0);
+    setImportHasMoreBatches(false);
+    setPendingTxs([]);
+    setPendingAccounts([]);
+    setPendingActive(false);
+    cachedParsedRowsRef.current = null;
+    cachedTotalRowsRef.current = 0;
+    cachedHeaderMapRef.current = null;
+    existingKeysRef.current = null;
+    await clearPending();
+    setProgress({ stage: 'idle', active: false, message: '', startedAt: 0 });
+    setCsvValidationSummary(null);
+    setCsvValidationRunning(false);
+  }, [clearPending]);
+
   const runCsvValidationSummary = useCallback(async () => {
     try {
       const cached = cachedParsedRowsRef.current;
@@ -1562,9 +1607,9 @@ export function useDataExportImport() {
         const batchRows = cached.slice(offset, end);
 
         if (!batchRows.length) {
-          Alert.alert('Nothing to import', 'No remaining rows left to import.');
-          failProgress('No remaining rows left to import.');
+          finishProgress('No remaining rows left to import.');
           setLastStatus('No remaining rows left to import.');
+          setImportHasMoreBatches(false);
           return;
         }
 
@@ -1622,9 +1667,9 @@ export function useDataExportImport() {
         const limitedParsed = parsed;
 
               if (limitedParsed.length === 0) {
-                Alert.alert('Nothing to import', 'No remaining rows left to import from this file.');
-                failProgress('No remaining rows left to import.');
+                finishProgress('No remaining rows left to import.');
                 setLastStatus('No remaining rows left to import.');
+                setImportHasMoreBatches(false);
                 return;
               }
 
@@ -2206,16 +2251,16 @@ export function useDataExportImport() {
                 budgets,
               });
 
-              setPendingTxs([]);
-              setPendingAccounts([]);
-              setPendingActive(false);
-              existingKeysRef.current = null; // Clear de-dupe keys after commit
-              await clearPending();
+              const count = currentPendingTxs.length;
+
+              // Clear ALL import session state (pending + csv text + offsets + persisted snapshot)
+              await endCsvImportSession();
 
               finishProgress('Import committed successfully.');
-              const count = currentPendingTxs.length;
-              setLastStatus(`Import complete. ${count} transaction${count === 1 ? '' : 's'} added. Recurring items unchanged.`);
-              setLastImportSummary(`✅ Import complete.\n${count} transaction${count === 1 ? '' : 's'} added.\nRecurring items unchanged.`);
+              setLastStatus(`CSV import committed. ${count} transaction${count === 1 ? '' : 's'} added. Ready for another file.`);
+              setLastImportSummary(
+                `✅ Import committed.\n${count} transaction${count === 1 ? '' : 's'} added.\nReady for another file.\nRecurring items unchanged.`
+              );
             } catch (e: any) {
               failProgress(e?.message ?? String(e));
               Alert.alert('Commit failed', e?.message ?? 'Unknown error');
@@ -2224,7 +2269,7 @@ export function useDataExportImport() {
         },
       ]
     );
-  }, [pendingActive, pendingTxs, pendingAccounts, accounts, txs, actions, budgets, startProgress, updateProgress, finishProgress, failProgress, clearPending]);
+  }, [pendingActive, pendingTxs, pendingAccounts, accounts, txs, actions, budgets, startProgress, updateProgress, finishProgress, failProgress, clearPending, endCsvImportSession]);
 
   /* ===========================
      CSV RESTORE (replace/merge) + rebuild recurring
@@ -2697,17 +2742,12 @@ export function useDataExportImport() {
         text: 'Discard',
         style: 'destructive',
         onPress: async () => {
-          setPendingTxs([]);
-          setPendingAccounts([]);
-          setPendingActive(false);
-          existingKeysRef.current = null;
-          setImportCsvText('');
-          await clearPending();
+          await endCsvImportSession();
           setLastStatus('Pending import discarded.');
         },
       },
     ]);
-  }, [clearPending]);
+  }, [endCsvImportSession]);
 
   return {
     accounts,
@@ -2715,6 +2755,7 @@ export function useDataExportImport() {
     recurring,
     budgets,
     lastStatus,
+    setLastStatus,
     jsonPreview,
     jsonRestoreMode,
     setJsonRestoreMode,
@@ -2782,5 +2823,7 @@ export function useDataExportImport() {
     onBlurCleanup,
     onBlurCleanupExport,
     onBlurCleanupImport,
+    clearCsvImportSession,
+    endCsvImportSession,
   };
 }

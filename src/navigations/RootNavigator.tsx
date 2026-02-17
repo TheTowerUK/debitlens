@@ -178,7 +178,7 @@ export default function RootNavigator() {
       <Stack.Screen
         name="DataTransfer"
         component={DataTransferScreen}
-        options={{ title: 'Import / Export' }}
+        options={{ title: 'Import & Export' }}
       />
       <Stack.Screen
         name="DataExport"

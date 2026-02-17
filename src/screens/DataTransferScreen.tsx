@@ -23,7 +23,7 @@ const MAX_CSV_IMPORT_ROWS = 200;
 export default function DataTransferScreen() {
   const d = useDataExportImport();
 
-  const [tab, setTab] = useState<Tab>('export');
+  const [tab, setTab] = useState<Tab>('import');
   const [step, setStep] = useState<ImportStep>('pick');
 
   useEffect(() => {
@@ -68,24 +68,23 @@ export default function DataTransferScreen() {
   return (
     <>
     <ScrollView style={styles.wrap} contentContainerStyle={styles.content}>
-      <Text style={styles.h1}>Import / Export</Text>
       <Text style={styles.subtle}>Manage your DebitLens data in one place.</Text>
 
       <View style={styles.segment}>
-        <Pressable
-          style={[styles.segmentBtn, tab === 'export' && styles.segmentBtnActive]}
-          onPress={() => setTab('export')}
-        >
-          <Text style={[styles.segmentText, tab === 'export' && styles.segmentTextActive]}>
-            Export
-          </Text>
-        </Pressable>
         <Pressable
           style={[styles.segmentBtn, tab === 'import' && styles.segmentBtnActive]}
           onPress={() => setTab('import')}
         >
           <Text style={[styles.segmentText, tab === 'import' && styles.segmentTextActive]}>
             Import
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.segmentBtn, tab === 'export' && styles.segmentBtnActive]}
+          onPress={() => setTab('export')}
+        >
+          <Text style={[styles.segmentText, tab === 'export' && styles.segmentTextActive]}>
+            Export
           </Text>
         </Pressable>
       </View>

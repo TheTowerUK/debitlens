@@ -20,7 +20,7 @@ export default function DataExportImportScreen({ navigation }: Props) {
           style={styles.btnPrimary}
           onPress={() => navigation.navigate('DataTransfer')}
         >
-          <Text style={styles.btnPrimaryText}>Import / Export</Text>
+          <Text style={styles.btnPrimaryText}>Import & Export</Text>
         </Pressable>
         <Text style={styles.menuHint}>
           Export JSON backup and CSV, or import/restore data. Opens a single screen with Export and Import tabs.

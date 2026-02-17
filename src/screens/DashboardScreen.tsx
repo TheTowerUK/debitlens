@@ -838,7 +838,7 @@ export default function DashboardScreen({ navigation }: Props) {
               onPress={() => navigation.navigate('DataExportImport')}
               hitSlop={6}
             >
-              <Text style={styles.gridTitle}>Data export / import</Text>
+              <Text style={styles.gridTitle}>Data Import / Export</Text>
               <Text style={styles.gridSub}>Backups, CSV import & export</Text>
             </Pressable>
           </View>
