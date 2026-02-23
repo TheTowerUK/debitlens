@@ -24,6 +24,7 @@ import {
   isTransfer,
   getTransferLabelAndNoteForAccount,
 } from '../utils/txDisplay';
+import { daysUntilYMD } from '../utils/maturity';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
 
@@ -83,6 +84,9 @@ export default function AccountScreen({ navigation, route }: Props) {
   const [editLimit, setEditLimit] = useState('');
   const [editColor, setEditColor] = useState<string>('#3b82f6');
   const [editIcon, setEditIcon] = useState<string>('🏦');
+  const [editMaturityEnabled, setEditMaturityEnabled] = useState(false);
+  const [editMaturityDate, setEditMaturityDate] = useState(''); // YYYY-MM-DD
+  const [editMaturityDays, setEditMaturityDays] = useState('60'); // string for TextInput/pills
   const [justArchived, setJustArchived] = useState(false);
 
   const COLOR_CHOICES = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#a855f7', '#64748b'];
@@ -207,6 +211,9 @@ export default function AccountScreen({ navigation, route }: Props) {
 
     setEditColor(acc.color ?? '#3b82f6');
     setEditIcon(acc.icon ?? '🏦');
+    setEditMaturityEnabled(!!(acc as any).maturityReminderEnabled);
+    setEditMaturityDate(String((acc as any).maturityDate || ''));
+    setEditMaturityDays(String((acc as any).maturityReminderDays ?? 60));
   };
 
   const saveEdit = async () => {
@@ -244,6 +251,28 @@ export default function AccountScreen({ navigation, route }: Props) {
       parsedLimit = n === 0 ? undefined : n;
     }
 
+    const maturityEnabled = !!editMaturityEnabled;
+    const maturityDate = editMaturityDate.trim();
+    const maturityDaysNum = Number(String(editMaturityDays).trim());
+
+    if (maturityEnabled) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(maturityDate)) {
+        Alert.alert('Invalid maturity date', 'Use YYYY-MM-DD (e.g. 2026-06-30).');
+        return;
+      }
+      if (!Number.isFinite(maturityDaysNum) || maturityDaysNum <= 0) {
+        Alert.alert('Invalid reminder window', 'Reminder days must be a positive number.');
+        return;
+      }
+    }
+
+    const oldEnabled = !!(editingAccount as any)?.maturityReminderEnabled;
+    const oldDate = String((editingAccount as any)?.maturityDate || '').trim();
+    const newEnabled = !!editMaturityEnabled;
+    const newDate = editMaturityDate.trim();
+    const shouldClearDismissal =
+      (newEnabled && !oldEnabled) || (newEnabled && !!newDate && newDate !== oldDate);
+
     actions.updateAccount(editingAccount.id, {
       name: trimmed,
       type: editType,
@@ -251,6 +280,16 @@ export default function AccountScreen({ navigation, route }: Props) {
       color: editColor,
       icon: editIcon,
       limit: parsedLimit,
+
+      maturityReminderEnabled: maturityEnabled,
+      maturityDate: maturityEnabled ? maturityDate : undefined,
+      maturityReminderDays: maturityEnabled
+        ? (Number.isFinite(maturityDaysNum) ? maturityDaysNum : 60)
+        : undefined,
+
+      maturityReminderDismissedFor: shouldClearDismissal
+        ? undefined
+        : (editingAccount as any).maturityReminderDismissedFor,
     });
 
     navigation.setOptions({ title: `${editIcon ? `${editIcon} ` : ''}${trimmed}` });
@@ -261,6 +300,9 @@ export default function AccountScreen({ navigation, route }: Props) {
     setEditType('bank');
     setEditColor('#3b82f6');
     setEditIcon('🏦');
+    setEditMaturityEnabled(false);
+    setEditMaturityDate('');
+    setEditMaturityDays('60');
   };
 
   const toggleArchive = () => {
@@ -350,6 +392,31 @@ export default function AccountScreen({ navigation, route }: Props) {
     );
   };
 
+  const maturityInfo = useMemo(() => {
+    const enabled = !!(account as any)?.maturityReminderEnabled;
+    const date = String((account as any)?.maturityDate || '').trim();
+    if (!enabled || !date) return null;
+
+    const d = daysUntilYMD(date);
+    if (d == null) return { line1: 'Maturity: invalid date', line2: 'Use YYYY-MM-DD' };
+
+    const lead = Number.isFinite((account as any)?.maturityReminderDays)
+      ? Number((account as any)?.maturityReminderDays)
+      : 60;
+
+    const when =
+      d < 0
+        ? `Date passed (${Math.abs(d)} day${Math.abs(d) === 1 ? '' : 's'} ago)`
+        : d === 0
+          ? 'Today'
+          : `In ${d} day${d === 1 ? '' : 's'}`;
+
+    return {
+      line1: `Maturity: ${date} (${when})`,
+      line2: `Reminder: ${lead} day${lead === 1 ? '' : 's'} before`,
+    };
+  }, [account]);
+
   if (!account) {
     return (
       <View style={styles.wrap}>
@@ -386,6 +453,13 @@ export default function AccountScreen({ navigation, route }: Props) {
         </Pressable>
       </View>
       <Text style={styles.subtle}>Overview for this account.</Text>
+
+      {maturityInfo ? (
+        <View style={styles.maturityBlock}>
+          <Text style={styles.maturityLine1}>{maturityInfo.line1}</Text>
+          <Text style={styles.maturityLine2}>{maturityInfo.line2}</Text>
+        </View>
+      ) : null}
 
       {/* Edit account modal */}
       <Modal
@@ -490,6 +564,65 @@ export default function AccountScreen({ navigation, route }: Props) {
                 />
               ))}
             </View>
+
+            <View style={{ marginTop: 6 }}>
+              <Text style={styles.modalTitle}> </Text>
+              <Text style={styles.modalLabel}>Investment reminders</Text>
+
+              <View style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>Enable maturity reminder</Text>
+                <Switch
+                  value={editMaturityEnabled}
+                  onValueChange={setEditMaturityEnabled}
+                  trackColor={{ false: '#222', true: '#3ddc84' }}
+                  thumbColor="#fff"
+                />
+              </View>
+
+              {editMaturityEnabled ? (
+                <>
+                  <Text style={styles.modalLabel}>Maturity date (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={editMaturityDate}
+                    onChangeText={setEditMaturityDate}
+                    placeholder="2026-06-30"
+                    placeholderTextColor="#7b7b7b"
+                    autoCorrect={false}
+                  />
+                  {editMaturityEnabled && editMaturityDate.trim() && !/^\d{4}-\d{2}-\d{2}$/.test(editMaturityDate.trim()) ? (
+                    <Text style={[styles.modalHint, { color: theme.negative, marginTop: 4 }]}>
+                      Use YYYY-MM-DD format
+                    </Text>
+                  ) : null}
+
+                  <Text style={styles.modalLabel}>Remind me (days before)</Text>
+                  <View style={styles.typeRow}>
+                    {['30', '45', '60', '90'].map((d) => (
+                      <Pressable
+                        key={d}
+                        style={[styles.typePill, editMaturityDays === d && styles.typePillActive]}
+                        onPress={() => setEditMaturityDays(d)}
+                      >
+                        <Text
+                          style={[
+                            styles.typePillText,
+                            editMaturityDays === d && styles.typePillTextActive,
+                          ]}
+                        >
+                          {d}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+
+                  <Text style={styles.modalHint}>
+                    You'll see a warning on the Dashboard when the account is within this window.
+                  </Text>
+                </>
+              ) : null}
+            </View>
+
             <View style={styles.modalButtons}>
               <Pressable
                 style={[styles.modalBtn, styles.modalBtnCancel]}
@@ -501,6 +634,9 @@ export default function AccountScreen({ navigation, route }: Props) {
                   setEditType('bank');
                   setEditColor('#3b82f6');
                   setEditIcon('🏦');
+                  setEditMaturityEnabled(false);
+                  setEditMaturityDate('');
+                  setEditMaturityDays('60');
                 }}
               >
                 <Text style={styles.modalBtnCancelText}>Cancel</Text>
@@ -698,6 +834,27 @@ const styles = StyleSheet.create({
     color: theme.link,
     fontWeight: '800',
     fontSize: 14,
+  },
+  maturityBlock: {
+    marginTop: -6,
+    marginBottom: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: theme.border,
+    backgroundColor: theme.cardAlt,
+  },
+  maturityLine1: {
+    color: theme.text,
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  maturityLine2: {
+    marginTop: 4,
+    color: theme.textDim,
+    fontWeight: '700',
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

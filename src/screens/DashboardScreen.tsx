@@ -10,7 +10,8 @@ import {
   AccessibilityInfo,
   Switch,
 } from 'react-native';
-import { useApp, type RecurringItem } from '../state/AppContext';
+import { useApp, type RecurringItem, type Account } from '../state/AppContext';
+import { shouldShowMaturityReminder } from '../utils/maturity';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,7 +23,7 @@ import { getOccurrenceDisplay, type AccountLite } from '../utils/occurrenceDispl
 type Props = NativeStackScreenProps<RootStackParamList, 'Dashboard'>;
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const accounts = state.accounts || [];
   const txs = state.transactions || [];
   const recurring: RecurringItem[] = state.recurring || [];
@@ -46,6 +47,20 @@ export default function DashboardScreen({ navigation }: Props) {
     const m: Record<string, AccountLite> = {};
     for (const a of accounts) m[a.id] = { id: a.id, name: a.name };
     return m;
+  }, [accounts]);
+
+  const maturityAlerts = useMemo(() => {
+    return (accounts || [])
+      .map((a) => {
+        const r = shouldShowMaturityReminder(a as any);
+        return r.show ? ({ account: a as Account, ...r } as const) : null;
+      })
+      .filter(Boolean) as Array<{
+      account: Account;
+      daysUntil: number;
+      leadDays: number;
+      overdue: boolean;
+    }>;
   }, [accounts]);
 
   // ---- Month range (used by monthSummary + budgets) ----
@@ -529,6 +544,69 @@ export default function DashboardScreen({ navigation }: Props) {
             </Text>
           )}
         </View>
+
+        {/* ---------- Upcoming actions ---------- */}
+        {maturityAlerts.length > 0 ? (
+          <View style={styles.card}>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardTitle}>Upcoming actions</Text>
+              <Pressable onPress={() => navigation.navigate('Notifications')} hitSlop={8}>
+                <Text style={styles.cardLink}>Alerts</Text>
+              </Pressable>
+            </View>
+
+            {[...maturityAlerts]
+              .sort((a, b) => {
+                if (a.overdue !== b.overdue) return a.overdue ? 1 : -1;
+                return Math.abs(a.daysUntil) - Math.abs(b.daysUntil);
+              })
+              .slice(0, 3)
+              .map(({ account, daysUntil, overdue }) => {
+              const line = overdue
+                ? `Maturity date passed (${Math.abs(daysUntil)} day${Math.abs(daysUntil) === 1 ? '' : 's'} ago)`
+                : `Matures in ${daysUntil} day${daysUntil === 1 ? '' : 's'}`;
+
+              return (
+                <View
+                  key={account.id}
+                  style={[styles.upcomingRow, { borderTopColor: theme.border }]}
+                >
+                  <Pressable
+                    style={{ flex: 1 }}
+                    onPress={() => navigation.navigate('Account', { accountId: account.id })}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.upcomingTitle}>
+                      {(account.icon ? `${account.icon} ` : '') + (account.name || 'Account')}
+                    </Text>
+                    <Text style={styles.upcomingSub}>
+                      {line}
+                      {account.maturityDate ? ` · ${account.maturityDate}` : ''}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => {
+                      const maturityDate = (account as any).maturityDate;
+                      if (!maturityDate) return;
+                      actions.updateAccount(account.id, { maturityReminderDismissedFor: maturityDate });
+                    }}
+                    hitSlop={8}
+                    style={{ paddingLeft: 10, paddingVertical: 4 }}
+                  >
+                    <Text style={[styles.cardLink, { fontSize: 12 }]}>Dismiss</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
+
+            {maturityAlerts.length > 3 ? (
+              <Text style={[styles.subtle, { marginTop: 8 }]}>
+                +{maturityAlerts.length - 3} more
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* ---------- Upcoming Recurring ---------- */}
         <View style={styles.card}>

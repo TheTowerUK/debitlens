@@ -32,6 +32,24 @@ git push -uf origin main
 - [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
 - [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
 
+## CSV import and regression test
+
+CSV import supports **expense** (Account A), **income** (Account B, or Account A as fallback for single-account CSVs), and **transfer** (requires both Account A and Account B). A lightweight regression script checks that single-account CSVs behave correctly.
+
+### Verification script: `verify:csv:single-account`
+
+- **What it checks:** A sample CSV with only one account column (mapped to Account A; no Account B). It runs the same account rules as the real import: expense uses Account A; income uses Account B with fallback to Account A when B is empty; transfer requires both A and B.
+- **PASS means:** Exactly 2 rows are treated as imported (one expense, one income) and 1 row is skipped (one transfer) with the message that transfers require Account B. So income imports with a single Account column, and transfers skip with an explicit message.
+- **Transfers require Account B:** Transfer rows must have both Account A (from) and Account B (to). If your CSV has only one account column, transfer rows will be skipped until you add an Account B column.
+
+Run the script:
+
+```bash
+npm run verify:csv:single-account
+```
+
+Or directly: `node scripts/verify-single-account-csv.mjs`. Run it after any CSV import changes to avoid re-breaking income/transfer handling.
+
 ## Test and Deploy
 
 Use the built-in continuous integration in GitLab.

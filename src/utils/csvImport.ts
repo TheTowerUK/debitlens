@@ -19,7 +19,8 @@ export type HeaderMap = {
   keysByIndex: Array<CanonicalCsvKey | null>;
 };
 
-const LABEL: Record<CanonicalCsvKey, string> = {
+/** Human-readable labels for each canonical column (for UI and errors). */
+export const CSV_HEADER_LABELS: Record<CanonicalCsvKey, string> = {
   date: 'Date',
   accountA: 'Account A',
   accountB: 'Account B',
@@ -28,6 +29,8 @@ const LABEL: Record<CanonicalCsvKey, string> = {
   category: 'Category',
   type: 'Type',
 };
+
+const LABEL = CSV_HEADER_LABELS;
 
 // Required keys for your "semantic" CSV (merchant removed)
 const REQUIRED_KEYS: CanonicalCsvKey[] = [
@@ -52,6 +55,7 @@ const HEADER_ALIASES: Record<string, CanonicalCsvKey> = {
   sourceaccount: 'accountA',
   acct: 'accountA',
   'account name': 'accountA',
+  accountname: 'accountA',
 
   'account b': 'accountB',
   accountb: 'accountB',
@@ -88,6 +92,48 @@ const HEADER_ALIASES: Record<string, CanonicalCsvKey> = {
   'transaction type': 'type',
   transactiontype: 'type',
 };
+
+/** One entry per canonical key: label and all accepted header aliases (for help text / UI). */
+export type HeaderMappingOption = {
+  key: CanonicalCsvKey;
+  label: string;
+  aliases: string[];
+};
+
+/** Returns canonical columns with their display label and accepted header aliases. Aliases include the canonical label (lowercased) and are deduped. */
+export function getHeaderMappingLabels(): HeaderMappingOption[] {
+  const byKey: Partial<Record<CanonicalCsvKey, string[]>> = {};
+  for (const [alias, key] of Object.entries(HEADER_ALIASES)) {
+    if (!byKey[key]) byKey[key] = [];
+    byKey[key]!.push(alias);
+  }
+  const order: CanonicalCsvKey[] = [
+    'date',
+    'accountA',
+    'accountB',
+    'amount',
+    'description',
+    'category',
+    'type',
+  ];
+  return order.map((key) => {
+    const label = CSV_HEADER_LABELS[key];
+    const canonicalLower = label.toLowerCase();
+    const raw = byKey[key] ?? [];
+    const seen = new Set<string>();
+    const aliases: string[] = [];
+    const add = (s: string) => {
+      const n = s.trim().toLowerCase();
+      if (n && !seen.has(n)) {
+        seen.add(n);
+        aliases.push(n);
+      }
+    };
+    add(canonicalLower);
+    raw.forEach((a) => add(a));
+    return { key, label, aliases };
+  });
+}
 
 function normalizeHeader(h: string) {
   return h.trim().toLowerCase().replace(/\s+/g, ' ');

@@ -168,12 +168,12 @@ export default function DataTransferScreen() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>CSV Template (Import Format)</Text>
+            <Text style={styles.sectionTitle}>CSV template for importing</Text>
             <Text style={styles.sectionText}>
               Use this template to format transactions for importing into DebitLens.
             </Text>
             <Text style={styles.sectionText}>
-              Required columns: Date, Amount, Description, Category, Type, and Account A or Account B (at least one).
+              For Account A/B and transfer rules, see the Import tab.
             </Text>
 
             <Pressable
@@ -384,6 +384,19 @@ export default function DataTransferScreen() {
                   File: {d.importLastFilename || 'selected CSV'} • Rows: {d.importTotalDataRows ?? '…'}
                 </Text>
 
+                <View style={styles.hintBox}>
+                  <Text style={styles.hintTitle}>How accounts are used</Text>
+                  <Text style={styles.hintText}>
+                    • Expense: uses <Text style={styles.hintEm}>Account A</Text> (the account that pays)
+                  </Text>
+                  <Text style={styles.hintText}>
+                    • Income: uses <Text style={styles.hintEm}>Account B</Text> (the account that receives). If your CSV has only {'"'}Account{'"'}, it is treated as Account B.
+                  </Text>
+                  <Text style={styles.hintText}>
+                    • Transfer: needs <Text style={styles.hintEm}>Account A + Account B</Text> (from → to)
+                  </Text>
+                </View>
+
                 <View style={styles.optionsBox}>
                   <View style={styles.optionRow}>
                     <Text style={styles.optionsTitle}>Import validation summary</Text>
@@ -400,8 +413,12 @@ export default function DataTransferScreen() {
 
                   {d.csvValidationSummary ? (
                     <>
-                      <Text style={styles.statLine}>Rows: {d.csvValidationSummary.totalRows}</Text>
-                      <Text style={styles.statLine}>Likely valid: {d.csvValidationSummary.validRows}</Text>
+                      <Text style={[styles.statLine, { fontWeight: '700', marginBottom: 6 }]}>
+                        Valid rows: {d.csvValidationSummary.validRows} / {d.csvValidationSummary.scannedRows}
+                      </Text>
+                      <Text style={styles.hint}>
+                        Rows in file: {d.csvValidationSummary.totalRows} • Invalid/skipped: {d.csvValidationSummary.invalidRows}
+                      </Text>
 
                       <Text style={styles.hint}>
                         Invalid type: {d.csvValidationSummary.invalidType} • Bad amount: {d.csvValidationSummary.badAmount} • Bad date: {d.csvValidationSummary.badDate}
@@ -415,9 +432,15 @@ export default function DataTransferScreen() {
                         Transfer missing A: {d.csvValidationSummary.missingAccountAForTransfer} • Transfer missing B: {d.csvValidationSummary.missingAccountBForTransfer}
                       </Text>
 
-                      {!d.createMissingAccounts ? (
+                      {d.csvValidationSummary.missingAccountBForTransfer > 0 ? (
+                        <Text style={[styles.hint, { marginTop: 6, color: '#93C5FD' }]}>
+                          Transfers need Account B. Add an 'Account B' column for transfer rows (e.g., NatWest).
+                        </Text>
+                      ) : null}
+
+                      {!d.createMissingAccounts && d.csvValidationSummary.unknownAccounts > 0 ? (
                         <Text style={styles.hint}>
-                          Unknown accounts (will be skipped): {d.csvValidationSummary.unknownAccounts}
+                          Unknown accounts (not found in DebitLens): {d.csvValidationSummary.unknownAccounts}
                         </Text>
                       ) : null}
 
@@ -918,6 +941,27 @@ const styles = StyleSheet.create({
   },
 
   hint: { color: theme.textDim, opacity: 0.7, marginTop: 6 },
+  hintBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#E8F1FF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#B9D3FF',
+  },
+  hintTitle: {
+    fontWeight: '700',
+    marginBottom: 6,
+    color: '#1E3A8A',
+  },
+  hintText: {
+    color: '#1E3A8A',
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  hintEm: {
+    fontWeight: '700',
+  },
   statusHint: { color: theme.textDim, fontSize: 12, marginTop: 4, marginBottom: 4, fontStyle: 'italic' },
 
   modalBackdrop: {

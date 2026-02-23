@@ -371,6 +371,8 @@ type CsvValidationSummary = {
   totalRows: number;
   scannedRows: number;
   validRows: number;
+  invalidRows: number;
+  importableRows: number;
   invalidType: number;
   missingAccountAForExpense: number;
   missingAccountBForIncome: number;
@@ -969,8 +971,8 @@ export function useDataExportImport() {
 
       const normType = (v: string): 'income' | 'expense' | 'transfer' | null => {
         const s = (v || '').trim().toLowerCase();
-        if (s === 'income') return 'income';
-        if (s === 'expense') return 'expense';
+        if (s === 'income' || s === 'credit' || s === 'in') return 'income';
+        if (s === 'expense' || s === 'debit' || s === 'out') return 'expense';
         if (s === 'transfer') return 'transfer';
         return null;
       };
@@ -1039,6 +1041,7 @@ export function useDataExportImport() {
       let badAmount = 0;
       let badDate = 0;
       let unknownAccounts = 0;
+      const unknownAccountNames = new Set<string>();
       let duplicatesEstimated = 0;
 
       const chunkEvery = 250;
@@ -1055,12 +1058,14 @@ export function useDataExportImport() {
 
         const accountA = String(getCell(row, 'accountA') ?? '').replace(/\u00A0/g, ' ').trim();
         const accountB = String(getCell(row, 'accountB') ?? '').replace(/\u00A0/g, ' ').trim();
+        // Income: single-account CSV fallback — if Account B missing but Account A exists, use A as receiving account
+        const effectiveB = type === 'income' ? (accountB || accountA) : accountB;
 
         if (type === 'expense' && !accountA) {
           missingAccountAForExpense++;
           continue;
         }
-        if (type === 'income' && !accountB) {
+        if (type === 'income' && !effectiveB) {
           missingAccountBForIncome++;
           continue;
         }
@@ -1093,13 +1098,16 @@ export function useDataExportImport() {
             const bId = resolveAccountId(accountB, accountsForLookup);
             if (!aId || !bId) {
               unknownAccounts++;
+              if (!aId && accountA) unknownAccountNames.add(accountA);
+              if (!bId && accountB) unknownAccountNames.add(accountB);
               continue;
             }
           } else {
-            const primaryName = type === 'expense' ? accountA : accountB;
+            const primaryName = type === 'expense' ? accountA : effectiveB;
             const aId = resolveAccountId(primaryName, accountsForLookup);
             if (!aId) {
               unknownAccounts++;
+              if (primaryName) unknownAccountNames.add(primaryName);
               continue;
             }
           }
@@ -1118,7 +1126,7 @@ export function useDataExportImport() {
               if (existingKeys.has(k)) duplicatesEstimated++;
             }
           } else {
-            const primaryName = type === 'expense' ? accountA : accountB;
+            const primaryName = type === 'expense' ? accountA : effectiveB;
             const accountId = resolveAccountId(primaryName, accountsForLookup) || '__unknown__';
             if (accountId !== '__unknown__') {
               const k = makeTxnKey({ accountId, dateISO: isoDate, type, amountAbs, descClean });
@@ -1134,19 +1142,30 @@ export function useDataExportImport() {
         }
       }
 
+      const invalidRows = Math.max(0, scannedRows - validRows);
+
       const warnings: string[] = [];
-      if (invalidType > 0) warnings.push('Some rows have unknown Type values. Expected: expense, income, transfer.');
-      if (missingAccountAForExpense > 0) warnings.push('Some expense rows are missing Account A.');
-      if (missingAccountBForIncome > 0) warnings.push('Some income rows are missing Account B.');
-      if (missingAccountBForTransfer > 0) warnings.push('Some transfer rows are missing Account B (to-account).');
+      if (invalidType > 0) warnings.push('Expected: expense, income, transfer (or credit/debit/in/out).');
+      if (missingAccountAForExpense > 0) warnings.push('Expense rows require Account A.');
+      if (missingAccountBForIncome > 0) warnings.push('Income rows require Account B (or Account for single-account CSVs).');
+      if (missingAccountAForTransfer > 0 || missingAccountBForTransfer > 0) warnings.push('Transfer rows require Account A and Account B.');
       if (badAmount > 0) warnings.push('Some rows have invalid Amount values.');
       if (badDate > 0) warnings.push('Some rows have invalid Date values (recommend YYYY-MM-DD).');
-      if (!createMissingAccounts && unknownAccounts > 0) warnings.push('Some rows reference accounts that don\'t exist (and will be skipped).');
+      if (!createMissingAccounts && unknownAccounts > 0) {
+        const sample = Array.from(unknownAccountNames).sort().slice(0, 3);
+        warnings.push(
+          sample.length
+            ? `Unknown accounts (not found in DebitLens): ${unknownAccounts} (e.g. ${sample.join(', ')})`
+            : `Unknown accounts (not found in DebitLens): ${unknownAccounts}`
+        );
+      }
 
       setCsvValidationSummary({
         totalRows: total,
         scannedRows,
         validRows,
+        invalidRows,
+        importableRows: validRows,
         invalidType,
         missingAccountAForExpense,
         missingAccountBForIncome,
@@ -1556,8 +1575,8 @@ export function useDataExportImport() {
       };
       const normType = (v: string): 'income' | 'expense' | 'transfer' | null => {
         const s = (v || '').trim().toLowerCase();
-        if (s === 'income') return 'income';
-        if (s === 'expense') return 'expense';
+        if (s === 'income' || s === 'credit' || s === 'in') return 'income';
+        if (s === 'expense' || s === 'debit' || s === 'out') return 'expense';
         if (s === 'transfer') return 'transfer';
         return null;
       };
@@ -1691,6 +1710,7 @@ export function useDataExportImport() {
               let skippedDuplicate = 0;
               let skippedInvalidType = 0;
               let skippedInvalidAccountForType = 0;
+              let skippedMissingAccountAForTransfer = 0;
               let skippedTransferMissingAccountB = 0;
 
               const createdAccountByName: Record<string, Account> = {};
@@ -1772,20 +1792,22 @@ export function useDataExportImport() {
                   continue;
                 }
 
-                // Row-level validation: require correct account column(s) for Type
+                // Row-level account rules: expense = Account A only; income = Account B (or A as single-account fallback); transfer = both A and B
                 const accountATrim = String(p.accountA ?? '').replace(/\u00A0/g, ' ').trim();
                 const accountBTrim = String(p.accountB ?? '').replace(/\u00A0/g, ' ').trim();
+                const effectiveAccountB = accountBTrim || accountATrim; // income single-account fallback
+
                 if (p.type === 'expense' && !accountATrim) {
                   skippedInvalidAccountForType++;
                   continue;
                 }
-                if (p.type === 'income' && !accountBTrim) {
+                if (p.type === 'income' && !effectiveAccountB) {
                   skippedInvalidAccountForType++;
                   continue;
                 }
                 if (p.type === 'transfer') {
                   if (!accountATrim) {
-                    skippedInvalidAccountForType++;
+                    skippedMissingAccountAForTransfer++;
                     continue;
                   }
                   if (!accountBTrim) {
@@ -1794,185 +1816,152 @@ export function useDataExportImport() {
                   }
                 }
 
-                // Type already normalized
-                const isTransfer = p.type === 'transfer';
-
-                // Primary account for this row: expense = Account A, income = Account B
-                const accountName = isTransfer ? accountATrim : (p.type === 'expense' ? accountATrim : accountBTrim);
-                const accountNameSafe = accountName || 'Imported Account';
-
-                if (!accountName && !isTransfer) {
-                  skippedMissingAccountName++;
-                  continue;
-                }
-
-                let accountForRow: Account | undefined = null;
-
-                if (!isTransfer) {
-                  const accountsForLookup = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
-                  const resolvedAccountId = resolveAccountId(accountName, accountsForLookup);
-                  if (resolvedAccountId) {
-                    accountForRow = accountsForLookup.find((a) => a?.id === resolvedAccountId) ?? undefined;
-                  }
-                  if (!accountForRow) {
-                    const accountKey = normName(accountName);
-                    accountForRow = createdAccountByName[accountKey];
-                    if (!accountForRow) {
-                      if (!createMissingAccounts) {
-                        skippedUnknownAccount++;
-                        continue;
-                      }
-                      const newAccountId = makeId('acct');
-                      const created: Account = {
-                        id: newAccountId,
-                        name: accountNameSafe,
-                        type: 'bank',
-                        balance: 0,
-                      };
-                      createdAccountsCount++;
-                      createdAccountByName[accountKey] = created;
-                      accountForRow = created;
-                    }
-                  }
-                }
-
-                // Amount: validate in loop
+                // Amount and date validation (shared for all types)
                 const amountNum = p.amount;
                 if (!Number.isFinite(amountNum)) {
                   skippedBadAmountOrDate++;
                   continue;
                 }
-
-                // Date: validate in loop (reject invalid or non-ISO shape)
                 const dateISO = normalizeDateToISODate(p.date);
                 if (!dateISO || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
                   skippedBadAmountOrDate++;
                   continue;
                 }
 
-                // Transfer: fromAccountId = Account A, toAccountId = Account B, amount always positive
-                if (isTransfer) {
-                  const amountAbs = normalizeStoredAmount(amountNum);
-
-                  const getOrCreateAccount = (name: string): Account | null => {
-                    const list = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
-                    const resolvedId = resolveAccountId(name, list);
-                    let acc = resolvedId ? list.find((a) => a?.id === resolvedId) : null;
-                    if (!acc) {
-                      const key = normName(name);
-                      acc = createdAccountByName[key];
+                // Branch explicitly on normalized type: transfer | income | expense
+                switch (p.type) {
+                  case 'transfer': {
+                    const amountAbs = normalizeStoredAmount(amountNum);
+                    const getOrCreateAccount = (name: string): Account | null => {
+                      const list = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
+                      const resolvedId = resolveAccountId(name, list);
+                      let acc = resolvedId ? list.find((a) => a?.id === resolvedId) : null;
+                      if (!acc) {
+                        const key = normName(name);
+                        acc = createdAccountByName[key];
+                      }
+                      if (!acc && createMissingAccounts) {
+                        const newId = makeId('acct');
+                        acc = {
+                          id: newId,
+                          name: name || 'Imported Account',
+                          type: 'bank',
+                          balance: 0,
+                        };
+                        createdAccountsCount++;
+                        createdAccountByName[normName(name)] = acc;
+                      }
+                      return acc ?? null;
+                    };
+                    const accountAObj = getOrCreateAccount(accountATrim);
+                    const accountBObj = getOrCreateAccount(accountBTrim);
+                    if (!accountAObj?.id || !accountBObj?.id) {
+                      skippedUnknownAccount++;
+                      break;
                     }
-                    if (!acc && createMissingAccounts) {
-                      const newId = makeId('acct');
-                      acc = {
-                        id: newId,
-                        name: name || 'Imported Account',
-                        type: 'bank',
-                        balance: 0,
-                      };
-                      createdAccountsCount++;
-                      createdAccountByName[normName(name)] = acc;
+                    const fromAccountId = accountAObj.id;
+                    const toAccountId = accountBObj.id;
+                    const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
+                    const descClean = cleanDescription(descFinal);
+                    const transferKey = makeTransferKey({
+                      fromAccountId,
+                      toAccountId,
+                      dateISO,
+                      amountAbs,
+                      descClean,
+                    });
+                    if (existingKeys.has(transferKey)) {
+                      skippedDuplicate++;
+                      break;
                     }
-                    return acc ?? null;
-                  };
-
-                  const accountAObj = getOrCreateAccount(accountATrim);
-                  const accountBObj = getOrCreateAccount(accountBTrim);
-                  if (!accountAObj?.id || !accountBObj?.id) {
-                    skippedUnknownAccount++;
-                    continue;
+                    existingKeys.add(transferKey);
+                    newTxs.push({
+                      id: makeId('tx'),
+                      accountId: fromAccountId,
+                      amount: amountAbs,
+                      type: 'transfer',
+                      date: dateISO,
+                      description: descFinal || undefined,
+                      category: normalizeCategory(p.category) ?? undefined,
+                      merchant: accountBObj?.name ?? undefined,
+                      fromAccountId,
+                      toAccountId,
+                    });
+                    importedCount++;
+                    break;
                   }
 
-                  const fromAccountId = accountAObj.id;
-                  const toAccountId = accountBObj.id;
-
-                  const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
-                  const descClean = cleanDescription(descFinal);
-
-                  const transferKey = makeTransferKey({
-                    fromAccountId,
-                    toAccountId,
-                    dateISO,
-                    amountAbs,
-                    descClean,
-                  });
-
-                  if (existingKeys.has(transferKey)) {
-                    skippedDuplicate++;
-                    continue;
+                  case 'income':
+                  case 'expense': {
+                    const accountName = p.type === 'expense' ? accountATrim : effectiveAccountB;
+                    const accountNameSafe = accountName || 'Imported Account';
+                    if (!accountName) {
+                      skippedMissingAccountName++;
+                      break;
+                    }
+                    let accountForRow: Account | undefined = null;
+                    const accountsForLookup = [...allAvailableAccounts, ...Object.values(createdAccountByName)];
+                    const resolvedAccountId = resolveAccountId(accountName, accountsForLookup);
+                    if (resolvedAccountId) {
+                      accountForRow = accountsForLookup.find((a) => a?.id === resolvedAccountId) ?? undefined;
+                    }
+                    if (!accountForRow) {
+                      const accountKey = normName(accountName);
+                      accountForRow = createdAccountByName[accountKey];
+                      if (!accountForRow) {
+                        if (!createMissingAccounts) {
+                          skippedUnknownAccount++;
+                          break;
+                        }
+                        const newAccountId = makeId('acct');
+                        accountForRow = {
+                          id: newAccountId,
+                          name: accountNameSafe,
+                          type: 'bank',
+                          balance: 0,
+                        };
+                        createdAccountsCount++;
+                        createdAccountByName[accountKey] = accountForRow;
+                      }
+                    }
+                    if (!accountForRow?.id) {
+                      skippedUnknownAccount++;
+                      break;
+                    }
+                    const amountAbs = normalizeStoredAmount(amountNum);
+                    const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
+                    const descClean = cleanDescription(descFinal);
+                    const key = makeTxnKey({
+                      accountId: accountForRow.id,
+                      dateISO,
+                      type: p.type,
+                      amountAbs,
+                      descClean,
+                    });
+                    if (existingKeys.has(key)) {
+                      skippedDuplicate++;
+                      break;
+                    }
+                    existingKeys.add(key);
+                    const categoryFinal = normalizeCategory(p.category);
+                    newTxs.push({
+                      id: makeId('tx'),
+                      accountId: accountForRow.id,
+                      amount: amountAbs,
+                      type: p.type,
+                      date: dateISO,
+                      name: descClean || undefined,
+                      description: descFinal || undefined,
+                      category: categoryFinal,
+                    });
+                    importedCount++;
+                    break;
                   }
-                  existingKeys.add(transferKey);
 
-                  const newTxn: Transaction = {
-                    id: makeId('tx'),
-                    accountId: fromAccountId, // primary display account = Account A (from)
-                    amount: amountAbs,
-                    type: 'transfer',
-                    date: dateISO,
-                    description: descFinal || undefined,
-                    category: normalizeCategory(p.category) ?? undefined,
-                    merchant: accountBObj?.name ?? undefined, // UI display: other-side account name
-                    fromAccountId,
-                    toAccountId,
-                  };
-
-                  newTxs.push(newTxn);
-                  importedCount++;
-                  continue;
+                  default:
+                    skippedInvalidType++;
+                    break;
                 }
-
-                // Non-transfer: Income or Expense — require resolved account
-                if (!accountForRow?.id) {
-                  skippedUnknownAccount++;
-                  continue;
-                }
-
-                let finalType: 'income' | 'expense';
-                if (p.type === 'income') {
-                  finalType = 'income';
-                } else if (p.type === 'expense') {
-                  finalType = 'expense';
-                } else {
-                  // Should not happen because we skip invalid types earlier,
-                  // but keep a safe default.
-                  finalType = 'expense';
-                }
-
-                const amountAbs = normalizeStoredAmount(amountNum);
-                const descFinal = String(p.description ?? '').replace(/\u00A0/g, ' ').trim();
-                const descClean = cleanDescription(descFinal);
-
-                // Dedupe key: always use cleaned description for consistency
-                const key = makeTxnKey({
-                  accountId: accountForRow.id,
-                  dateISO,
-                  type: String(finalType),
-                  amountAbs,
-                  descClean, // always cleaned
-                });
-
-                if (existingKeys.has(key)) {
-                  skippedDuplicate++;
-                  continue;
-                }
-                existingKeys.add(key);
-
-                const categoryFinal = normalizeCategory(p.category);
-
-                // Build transaction object directly (don't call addTransaction to avoid state conflicts)
-                const newTxn: Transaction = {
-                  id: makeId('tx'),
-                  accountId: accountForRow.id,
-                  amount: amountAbs,
-                  type: finalType,
-                  date: dateISO,
-                  name: descClean || undefined,
-                  description: descFinal || undefined,
-                  category: categoryFinal,
-                };
-
-                newTxs.push(newTxn);
-                importedCount++;
 
                 // Yield frequently to avoid watchdog kills (every 50 rows)
                 if (processed % yieldEvery === 0) {
@@ -1984,6 +1973,7 @@ export function useDataExportImport() {
                     skippedDuplicate +
                     skippedInvalidType +
                     skippedInvalidAccountForType +
+                    skippedMissingAccountAForTransfer +
                     skippedTransferMissingAccountB;
                   updateProgress({
                     imported: importedCount,
@@ -2016,6 +2006,7 @@ export function useDataExportImport() {
                 skippedDuplicate +
                 skippedInvalidType +
                 skippedInvalidAccountForType +
+                skippedMissingAccountAForTransfer +
                 skippedTransferMissingAccountB;
               updateProgress({
                 imported: importedCount,
@@ -2072,9 +2063,9 @@ export function useDataExportImport() {
               summaryLines.push(`Skipped invalid amount/date: ${skippedBadAmountOrDate}`);
               summaryLines.push(`Skipped missing account name: ${skippedMissingAccountName}`);
               summaryLines.push(`Skipped unknown Type: ${skippedInvalidType}`);
-              summaryLines.push(`Skipped wrong account for Type (expense=A, income=B, transfer=A+B): ${skippedInvalidAccountForType}`);
-              if (skippedTransferMissingAccountB > 0) {
-                summaryLines.push(`Transfer rows missing Account B (to-account) skipped: ${skippedTransferMissingAccountB}`);
+              summaryLines.push(`Skipped missing/wrong account for type (expense=A, income=B or A, transfer=A+B): ${skippedInvalidAccountForType}`);
+              if (skippedMissingAccountAForTransfer > 0 || skippedTransferMissingAccountB > 0) {
+                summaryLines.push(`Transfer rows missing Account A and/or B skipped: A=${skippedMissingAccountAForTransfer}, B=${skippedTransferMissingAccountB}`);
               }
               summaryLines.push(`Account creation failed: ${skippedCouldNotCreateAccount}`);
               if (end >= total) {
@@ -2308,8 +2299,8 @@ export function useDataExportImport() {
 
     const normType = (v: string): 'income' | 'expense' | 'transfer' | null => {
       const s = (v || '').trim().toLowerCase();
-      if (s === 'income') return 'income';
-      if (s === 'expense') return 'expense';
+      if (s === 'income' || s === 'credit' || s === 'in') return 'income';
+      if (s === 'expense' || s === 'debit' || s === 'out') return 'expense';
       if (s === 'transfer') return 'transfer';
       return null;
     };
@@ -2349,6 +2340,7 @@ export function useDataExportImport() {
     let skippedMissingAccountName = 0;
     let skippedInvalidType = 0;
     let skippedInvalidAccountForType = 0;
+    let skippedMissingAccountAForTransfer = 0;
     let skippedTransferMissingAccountB = 0;
     let createdAccountsCount = 0;
     let skippedCouldNotCreateAccount = 0;
@@ -2386,17 +2378,19 @@ export function useDataExportImport() {
 
       const accountATrim = String(p.accountA ?? '').replace(/\u00A0/g, ' ').trim();
       const accountBTrim = String(p.accountB ?? '').replace(/\u00A0/g, ' ').trim();
+      const effectiveAccountB = accountBTrim || accountATrim; // income single-account fallback
+
       if (p.type === 'expense' && !accountATrim) {
         skippedInvalidAccountForType++;
         continue;
       }
-      if (p.type === 'income' && !accountBTrim) {
+      if (p.type === 'income' && !effectiveAccountB) {
         skippedInvalidAccountForType++;
         continue;
       }
       if (p.type === 'transfer') {
         if (!accountATrim) {
-          skippedInvalidAccountForType++;
+          skippedMissingAccountAForTransfer++;
           continue;
         }
         if (!accountBTrim) {
@@ -2405,7 +2399,7 @@ export function useDataExportImport() {
         }
       }
 
-      const accountName = p.type === 'expense' ? accountATrim : p.type === 'income' ? accountBTrim : accountATrim;
+      const accountName = p.type === 'expense' ? accountATrim : p.type === 'income' ? effectiveAccountB : accountATrim;
       const accountNameSafe = accountName || 'Imported Account';
 
       if (!accountName && p.type !== 'transfer') {
@@ -2430,98 +2424,106 @@ export function useDataExportImport() {
       const descClean = cleanDescription(descFinal);
       const categoryFinal = normalizeCategory(p.category);
 
-      if (p.type === 'transfer') {
-        const getOrCreate = (name: string): Account | null => {
-          const resolvedId = resolveAccountId(name, newAccounts);
-          let acc = resolvedId ? newAccounts.find((a) => a?.id === resolvedId) ?? null : null;
-          if (!acc) acc = createdAccountByName[normName(name)] ?? null;
-          if (!acc && createMissingAccounts) {
-            try {
-              const created = actions.addAccount({
-                name: name || 'Imported Account',
-                type: 'bank',
-                balance: 0,
-              });
-              if (created?.id) {
-                acc = created;
-                createdAccountByName[normName(name)] = acc;
-                newAccounts.push(acc);
-                createdAccountsCount++;
+      switch (p.type) {
+        case 'transfer': {
+          const getOrCreate = (name: string): Account | null => {
+            const resolvedId = resolveAccountId(name, newAccounts);
+            let acc = resolvedId ? newAccounts.find((a) => a?.id === resolvedId) ?? null : null;
+            if (!acc) acc = createdAccountByName[normName(name)] ?? null;
+            if (!acc && createMissingAccounts) {
+              try {
+                const created = actions.addAccount({
+                  name: name || 'Imported Account',
+                  type: 'bank',
+                  balance: 0,
+                });
+                if (created?.id) {
+                  acc = created;
+                  createdAccountByName[normName(name)] = acc;
+                  newAccounts.push(acc);
+                  createdAccountsCount++;
+                }
+              } catch {
+                return null;
               }
-            } catch {
-              return null;
+            }
+            return acc ?? null;
+          };
+          const acctA = getOrCreate(accountATrim);
+          const acctB = getOrCreate(accountBTrim);
+          if (!acctA || !acctB) {
+            skippedUnknownAccount++;
+            break;
+          }
+          builtTxs.push({
+            id: makeId('tx'),
+            accountId: acctA.id,
+            amount,
+            type: 'transfer',
+            date: isoDate,
+            description: descFinal || undefined,
+            name: descClean || undefined,
+            category: categoryFinal,
+            fromAccountId: acctA.id,
+            toAccountId: acctB.id,
+            merchant: acctB.name,
+          } as any);
+          importedCount++;
+          break;
+        }
+
+        case 'income':
+        case 'expense': {
+          let acct: Account | undefined = null;
+          const resolvedAccountId = resolveAccountId(accountName, newAccounts);
+          if (resolvedAccountId) {
+            acct = newAccounts.find((a) => a?.id === resolvedAccountId) ?? null;
+          }
+          if (!acct) {
+            const accountKey = normName(accountName);
+            acct = createdAccountByName[accountKey] ?? null;
+            if (!acct && createMissingAccounts) {
+              try {
+                const created = actions.addAccount({
+                  name: accountNameSafe,
+                  type: 'bank',
+                  balance: 0,
+                });
+                if (created?.id) {
+                  acct = created;
+                  createdAccountByName[accountKey] = acct;
+                  newAccounts.push(acct);
+                  createdAccountsCount++;
+                }
+              } catch (e) {
+                console.error('CSV restore: could not create account', e);
+                skippedCouldNotCreateAccount++;
+                break;
+              }
             }
           }
-          return acc ?? null;
-        };
-        const acctA = getOrCreate(accountATrim);
-        const acctB = getOrCreate(accountBTrim);
-        if (!acctA || !acctB) {
-          skippedUnknownAccount++;
-          continue;
-        }
-        builtTxs.push({
-          id: makeId('tx'),
-          accountId: acctA.id,
-          amount,
-          type: 'transfer',
-          date: isoDate,
-          description: descFinal || undefined,
-          name: descClean || undefined,
-          category: categoryFinal,
-          fromAccountId: acctA.id,
-          toAccountId: acctB.id,
-          merchant: acctB.name,
-        } as any);
-        importedCount++;
-        continue;
-      }
-
-      let acct: Account | undefined = null;
-      const resolvedAccountId = resolveAccountId(accountName, newAccounts);
-      if (resolvedAccountId) {
-        acct = newAccounts.find((a) => a?.id === resolvedAccountId) ?? null;
-      }
-      if (!acct) {
-        const accountKey = normName(accountName);
-        acct = createdAccountByName[accountKey] ?? null;
-        if (!acct && createMissingAccounts) {
-          try {
-            const created = actions.addAccount({
-              name: accountNameSafe,
-              type: 'bank',
-              balance: 0,
-            });
-            if (created?.id) {
-              acct = created;
-              createdAccountByName[accountKey] = acct;
-              newAccounts.push(acct);
-              createdAccountsCount++;
-            }
-          } catch (e) {
-            console.error('CSV restore: could not create account', e);
-            skippedCouldNotCreateAccount++;
-            continue;
+          if (!acct?.id) {
+            skippedUnknownAccount++;
+            break;
           }
+          builtTxs.push({
+            id: makeId('tx'),
+            accountId: acct.id,
+            date: isoDate,
+            type: p.type,
+            amount,
+            category: categoryFinal,
+            description: descFinal || undefined,
+            name: descClean || undefined,
+          } as any);
+          importedCount++;
+          break;
         }
-        if (!acct?.id) {
-          skippedUnknownAccount++;
-          continue;
-        }
+
+        default:
+          skippedInvalidType++;
+          break;
       }
-
-      builtTxs.push({
-        id: makeId('tx'),
-        accountId: acct!.id,
-        date: isoDate,
-        type: p.type,
-        amount,
-        category: categoryFinal,
-        description: descFinal || undefined,
-        name: descClean || undefined,
-      } as any);
-
-      importedCount++;
     }
 
     return {
@@ -2535,6 +2537,7 @@ export function useDataExportImport() {
         skippedMissingAccountName,
         skippedInvalidType,
         skippedInvalidAccountForType,
+        skippedMissingAccountAForTransfer,
         skippedTransferMissingAccountB,
         skippedCouldNotCreateAccount,
       },
@@ -2661,8 +2664,8 @@ export function useDataExportImport() {
             summaryLines.push(`Skipped unknown accounts: ${built.stats.skippedUnknownAccount}`);
             summaryLines.push(`Skipped invalid amount/date: ${built.stats.skippedBadAmountOrDate}`);
             summaryLines.push(`Skipped missing account name: ${built.stats.skippedMissingAccountName}`);
-            if ((built.stats.skippedTransferMissingAccountB ?? 0) > 0) {
-              summaryLines.push(`Transfer rows missing Account B (to-account) skipped: ${built.stats.skippedTransferMissingAccountB}`);
+            if ((built.stats.skippedMissingAccountAForTransfer ?? 0) > 0 || (built.stats.skippedTransferMissingAccountB ?? 0) > 0) {
+              summaryLines.push(`Transfer rows missing Account A and/or B skipped: A=${built.stats.skippedMissingAccountAForTransfer ?? 0}, B=${built.stats.skippedTransferMissingAccountB ?? 0}`);
             }
             summaryLines.push(`Account creation failed: ${built.stats.skippedCouldNotCreateAccount}`);
             summaryLines.push(`Recurring items: (not rebuilt during restore - use "Rebuild recurring" button if needed)`);

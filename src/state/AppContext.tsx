@@ -26,6 +26,11 @@ export type Account = {
 
   color?: string; // e.g. '#3b82f6'
   icon?: string;  // e.g. '🏦'
+
+  maturityDate?: string;                 // 'YYYY-MM-DD'
+  maturityReminderDays?: number;         // e.g. 60
+  maturityReminderEnabled?: boolean;     // toggle
+  maturityReminderDismissedFor?: string; // store the maturityDate that was dismissed
 };
 
 export type TransactionType = 'income' | 'expense' | 'transfer';
