@@ -33,14 +33,6 @@ GoogleService-Info.plist
 android/
 ios/
 
-# append .expo/ to .gitignore if not already present
-if (-not (Select-String -Path .gitignore -Pattern '^\.expo/?' -Quiet)) {
-  Add-Content -Path .gitignore -Value "`n.expo/"
-  Write-Host ".expo/ added to .gitignore"
-} else {
-  Write-Host ".expo/ already in .gitignore"
-}
-
 # VS Code workspace files
 *.code-workspace
 

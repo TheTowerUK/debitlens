@@ -1,37 +1,130 @@
 // src/screens/NotificationsScreen.tsx
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Platform } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Switch,
+  Platform,
+  ActivityIndicator,
+  Alert,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { colors as theme } from '../theme/colors';
+import {
+  ensurePermissions,
+  initNotifications,
+  rescheduleFromPrefs,
+} from '../utils/notifications';
+import {
+  loadNotificationSettings,
+  notificationSettingsToPrefs,
+  saveNotificationSettings,
+  type NotificationSettings,
+} from '../utils/settingsStorage';
 
 export default function NotificationsScreen() {
-  // Local UI state for now – avoids relying on missing AppState/AppActions fields
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [emailEnabled, setEmailEnabled] = useState(false);
-  const [remindersEnabled, setRemindersEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [prefs, setPrefs] = useState<NotificationSettings | null>(null);
+
+  const loadPrefs = useCallback(async () => {
+    setLoading(true);
+    try {
+      await initNotifications();
+      const loaded = await loadNotificationSettings();
+      setPrefs(loaded);
+    } catch {
+      setPrefs(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPrefs();
+  }, [loadPrefs]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadPrefs();
+    }, [loadPrefs])
+  );
+
+  const applyAndPersist = async (patch: Partial<NotificationSettings>) => {
+    if (!prefs) return;
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    setSaving(true);
+    try {
+      const saved = await saveNotificationSettings(patch);
+
+      const needsSchedule = saved.dailySummaryEnabled || saved.weeklySummaryEnabled;
+      if (needsSchedule) {
+        const granted = await ensurePermissions();
+        if (!granted) {
+          Alert.alert(
+            'Permission required',
+            'Enable notifications in system settings to schedule local summaries.'
+          );
+        }
+      }
+
+      await rescheduleFromPrefs(notificationSettingsToPrefs(saved));
+    } catch (e) {
+      console.warn('[Notifications] save failed', e);
+      Alert.alert('Save failed', 'Could not update notification settings.');
+      await loadPrefs();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading || !prefs) {
+    return (
+      <View style={[styles.wrap, styles.centered]}>
+        <ActivityIndicator color={theme.link} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
       <Text style={styles.h1}>Notifications</Text>
-      <Text style={styles.subtle}>Control how DebitLens keeps you in the loop.</Text>
+      <Text style={styles.subtle}>
+        Local reminders on this device only. Changes are saved automatically.
+      </Text>
+
+      {saving ? (
+        <Text style={styles.savingHint}>Saving…</Text>
+      ) : null}
 
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Push notifications</Text>
-            <Text style={styles.caption}>Transaction alerts and balance changes.</Text>
+            <Text style={styles.label}>Daily summary</Text>
+            <Text style={styles.caption}>Morning cashflow reminder (default 09:00).</Text>
           </View>
-          <Switch value={pushEnabled} onValueChange={setPushEnabled} />
+          <Switch
+            value={prefs.dailySummaryEnabled}
+            onValueChange={(v) => void applyAndPersist({ dailySummaryEnabled: v })}
+            disabled={saving}
+          />
         </View>
 
         <View style={styles.divider} />
 
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Email summaries</Text>
-            <Text style={styles.caption}>Optional weekly snapshot to your inbox.</Text>
+            <Text style={styles.label}>Weekly summary</Text>
+            <Text style={styles.caption}>Weekly spend and income review (default Monday 09:00).</Text>
           </View>
-          <Switch value={emailEnabled} onValueChange={setEmailEnabled} />
+          <Switch
+            value={prefs.weeklySummaryEnabled}
+            onValueChange={(v) => void applyAndPersist({ weeklySummaryEnabled: v })}
+            disabled={saving}
+          />
         </View>
 
         <View style={styles.divider} />
@@ -39,15 +132,22 @@ export default function NotificationsScreen() {
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Reminders</Text>
-            <Text style={styles.caption}>Gentle nudges for upcoming bills and goals.</Text>
+            <Text style={styles.caption}>
+              Preference for bill and goal nudges (stored for future use).
+            </Text>
           </View>
-          <Switch value={remindersEnabled} onValueChange={setRemindersEnabled} />
+          <Switch
+            value={prefs.remindersEnabled}
+            onValueChange={(v) => void applyAndPersist({ remindersEnabled: v })}
+            disabled={saving}
+          />
         </View>
       </View>
 
       <View style={styles.infoBox}>
         <Text style={styles.infoText}>
-          Notification behaviour can vary slightly on {Platform.OS === 'android' ? 'Android' : 'iOS'} devices.
+          Notification behaviour can vary on {Platform.OS === 'android' ? 'Android' : 'iOS'}.
+          Restart the app to confirm scheduled notifications after changing settings.
         </Text>
       </View>
     </View>
@@ -61,7 +161,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'ios' ? 56 : 24,
   },
-
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   h1: {
     color: '#fff',
     fontSize: 24,
@@ -71,6 +174,11 @@ const styles = StyleSheet.create({
   subtle: {
     color: theme.textDim,
     marginBottom: 16,
+  },
+  savingHint: {
+    color: theme.textDim,
+    fontSize: 12,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: '#020617',

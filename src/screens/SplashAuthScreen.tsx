@@ -9,61 +9,69 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigations/types';
 import { useApp } from '../state/AppContext';
 import { colors as theme } from '../theme/colors';
+import {
+  clearSecurityOnPinRemove,
+  loadSecuritySettings,
+  markUnlockedNow,
+} from '../utils/settingsStorage';
 
-const STORAGE_KEY_BIOMETRICS = '@debitlens/biometricsEnabled:v1';
-const STORAGE_KEY_LAST_UNLOCKED_AT = '@debitlens/lastUnlockedAt:v1';
-
-// Route key in RootStackParamList should be 'Login'
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-export default function SplashAuthScreen({ navigation }: Props) {
-  const { getPin, setPin } = useApp();
+type ScreenMode = 'loading' | 'sign' | 'create' | 'changeCurrent' | 'changeNew' | 'remove';
 
-  // Use simple string modes: 'loading' | 'sign' | 'pin'
-  const [mode, setMode] = useState<string>('loading');
+export default function SplashAuthScreen({ navigation, route }: Props) {
+  const { getPin, setPin } = useApp();
+  const flow = route.params?.flow;
+
+  const [mode, setMode] = useState<ScreenMode>('loading');
   const [pin, setPinInput] = useState('');
   const [confirm, setConfirm] = useState('');
   const [pinError, setPinError] = useState('');
   const [biometricsUnavailableHint, setBiometricsUnavailableHint] = useState<string | null>(null);
   const biometricAttempted = useRef(false);
 
-  const markUnlocked = async () => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_LAST_UNLOCKED_AT, String(Date.now()));
-    } catch {
-      // non-fatal
-    }
-  };
-
-  // Authoritative: compute once at render
   const storedPin = (getPin() ?? '').trim();
   const pinExists = storedPin.length > 0;
 
-  // Mode must follow PIN existence (no userChoseCreateMode when PIN exists)
   useEffect(() => {
-    if (pinExists) setMode('sign');
-    else setMode('pin');
-  }, [pinExists]);
+    if (flow === 'change') {
+      setMode(pinExists ? 'changeCurrent' : 'create');
+      return;
+    }
+    if (flow === 'remove') {
+      setMode(pinExists ? 'remove' : 'create');
+      return;
+    }
+    if (flow === 'create' || !pinExists) {
+      setMode('create');
+      return;
+    }
+    setMode('sign');
+  }, [flow, pinExists]);
 
-  // Attempt biometric authentication when mode becomes 'sign' and biometrics enabled
+  const finishUnlock = async (destination: 'Dashboard' | 'Settings' = 'Dashboard') => {
+    await markUnlockedNow();
+    if (destination === 'Settings') {
+      navigation.replace('Settings');
+      return;
+    }
+    navigation.replace('Dashboard');
+  };
+
   useEffect(() => {
     if (mode !== 'sign' || !pinExists) return;
-
-    if (biometricAttempted.current) return; // Already attempted this session
+    if (biometricAttempted.current) return;
 
     let mounted = true;
     (async () => {
       try {
-        const biometricsEnabledRaw = await AsyncStorage.getItem(STORAGE_KEY_BIOMETRICS);
-        const biometricsEnabled = biometricsEnabledRaw === 'true';
-
-        if (!biometricsEnabled || !mounted) return;
+        const security = await loadSecuritySettings();
+        if (!security.biometricsEnabled || !mounted) return;
 
         const [hasHardware, isEnrolled] = await Promise.all([
           LocalAuthentication.hasHardwareAsync(),
@@ -71,12 +79,12 @@ export default function SplashAuthScreen({ navigation }: Props) {
         ]);
 
         if (!mounted) return;
+        biometricAttempted.current = true;
 
-        const available = !!hasHardware && !!isEnrolled;
-        biometricAttempted.current = true; // Don't keep trying (prompt or skip)
-
-        if (!available) {
-          if (mounted) setBiometricsUnavailableHint('Face ID / Biometrics is enabled but not available on this device.');
+        if (!hasHardware || !isEnrolled) {
+          setBiometricsUnavailableHint(
+            'Biometrics is enabled but not available. Enter your PIN instead.'
+          );
           return;
         }
 
@@ -86,32 +94,42 @@ export default function SplashAuthScreen({ navigation }: Props) {
         });
 
         if (mounted && result.success) {
-          await markUnlocked();
-          navigation.replace('Dashboard');
+          await finishUnlock('Dashboard');
         }
-        // If fail/cancel, stay on PIN entry screen (no crash)
       } catch (e) {
         console.warn('[SplashAuth] biometric auth error', e);
-        biometricAttempted.current = true; // Don't retry on error
+        biometricAttempted.current = true;
       }
     })();
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [mode, pinExists, navigation]);
 
   const onSignIn = () => {
     const entered = pin.trim();
     if (storedPin && entered === storedPin) {
       setPinError('');
-      void markUnlocked();
-      navigation.replace('Dashboard');
+      void finishUnlock('Dashboard');
     } else {
       setPinError('Incorrect PIN. Please try again.');
       setPinInput('');
     }
   };
 
-  const onSavePin = () => {
+  const onVerifyCurrentPin = (): boolean => {
+    const entered = pin.trim();
+    if (entered !== storedPin) {
+      setPinError('Incorrect PIN. Please try again.');
+      setPinInput('');
+      return false;
+    }
+    setPinError('');
+    return true;
+  };
+
+  const onSaveNewPin = () => {
     const p1 = pin.trim();
     const p2 = confirm.trim();
 
@@ -122,23 +140,49 @@ export default function SplashAuthScreen({ navigation }: Props) {
       return Alert.alert('Mismatch', 'PINs do not match.');
     }
 
-    biometricAttempted.current = false; // Clear when PIN changes (e.g. before navigate)
+    biometricAttempted.current = false;
     setPin(p1);
+    setPinInput('');
+    setConfirm('');
     setPinError('');
-    void markUnlocked();
-    navigation.replace('Dashboard');
+    void finishUnlock(flow === 'change' ? 'Settings' : 'Dashboard');
   };
 
-  const performPinReset = () => {
+  const onChangePinContinue = () => {
+    if (!onVerifyCurrentPin()) return;
+    setPinInput('');
+    setMode('changeNew');
+  };
+
+  const onRemovePinConfirm = async () => {
+    if (!onVerifyCurrentPin()) return;
+
+    Alert.alert(
+      'Remove PIN',
+      'Your PIN and biometric unlock will be turned off. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove PIN',
+          style: 'destructive',
+          onPress: async () => {
+            biometricAttempted.current = false;
+            setPin(null);
+            await clearSecurityOnPinRemove();
+            setPinInput('');
+            setConfirm('');
+            setPinError('');
+            navigation.replace('Settings');
+          },
+        },
+      ]
+    );
+  };
+
+  const performPinReset = async () => {
     biometricAttempted.current = false;
-
-    // Clear stored PIN (AppContext -> AsyncStorage remove via effect)
     setPin(null);
-
-    // Also disable biometrics if PIN is removed/reset
-    void AsyncStorage.removeItem(STORAGE_KEY_BIOMETRICS).catch(() => {});
-
-    // Clear local UI state
+    await clearSecurityOnPinRemove();
     setPinInput('');
     setConfirm('');
     setPinError('');
@@ -156,11 +200,10 @@ export default function SplashAuthScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const biometricsEnabledRaw = await AsyncStorage.getItem(STORAGE_KEY_BIOMETRICS);
-              const biometricsEnabled = biometricsEnabledRaw === 'true';
-
-              if (!biometricsEnabled) {
-                performPinReset();
+              const security = await loadSecuritySettings();
+              if (!security.biometricsEnabled) {
+                await performPinReset();
+                setMode('create');
                 return;
               }
 
@@ -170,21 +213,19 @@ export default function SplashAuthScreen({ navigation }: Props) {
               ]);
 
               if (!hasHardware || !isEnrolled) {
-                Alert.alert(
-                  'Biometrics unavailable',
-                  'Face ID / Touch ID is enabled but not available on this device. You can still reset your PIN.'
-                );
-                performPinReset();
+                await performPinReset();
+                setMode('create');
                 return;
               }
 
               const result = await LocalAuthentication.authenticateAsync({
                 promptMessage: 'Confirm to reset PIN',
-                fallbackLabel: 'Use device passcode',
+                fallbackLabel: 'Use PIN',
               });
 
               if (result.success) {
-                performPinReset();
+                await performPinReset();
+                setMode('create');
               }
             } catch (e) {
               console.warn('[SplashAuth] forgot pin auth error', e);
@@ -205,24 +246,41 @@ export default function SplashAuthScreen({ navigation }: Props) {
   }
 
   const isValidPin = /^\d{4,6}$/.test(pin.trim());
-  const isSignMode = mode === 'sign';
+
+  const title =
+    mode === 'sign'
+      ? 'Sign in'
+      : mode === 'remove'
+        ? 'Remove PIN'
+        : mode === 'changeCurrent'
+          ? 'Change PIN'
+          : mode === 'changeNew'
+            ? 'Choose new PIN'
+            : 'Set PIN';
+
+  const subtitle =
+    mode === 'sign'
+      ? 'Enter your PIN to continue'
+      : mode === 'remove'
+        ? 'Enter your current PIN to confirm removal'
+        : mode === 'changeCurrent'
+          ? 'Enter your current PIN first'
+          : mode === 'changeNew'
+            ? 'Enter and confirm your new PIN'
+            : 'Create a PIN for quick access';
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.h1}>Welcome</Text>
-      <Text style={styles.subtle}>
-        {isSignMode
-          ? 'Enter your PIN to continue'
-          : 'Create a PIN for quick access'}
-      </Text>
+      <Text style={styles.h1}>{title}</Text>
+      <Text style={styles.subtle}>{subtitle}</Text>
 
-      {isSignMode ? (
+      {(mode === 'sign' || mode === 'remove' || mode === 'changeCurrent') && (
         <>
           <TextInput
             value={pin}
             onChangeText={(value) => {
               setPinInput(value);
-              if (pinError) setPinError(''); // clear error on change
+              if (pinError) setPinError('');
             }}
             placeholder="PIN (4–6 digits)"
             placeholderTextColor="#6B7280"
@@ -231,7 +289,6 @@ export default function SplashAuthScreen({ navigation }: Props) {
             style={styles.input}
           />
 
-          {/* Inline error pill */}
           {pinError ? (
             <View style={styles.errorPill}>
               <Text style={styles.errorText}>{pinError}</Text>
@@ -242,20 +299,53 @@ export default function SplashAuthScreen({ navigation }: Props) {
             <Text style={styles.hint}>{biometricsUnavailableHint}</Text>
           ) : null}
 
-          <Pressable onPress={onForgotPin} hitSlop={10} style={styles.linkWrap}>
-            <Text style={styles.linkText}>Forgot PIN?</Text>
-          </Pressable>
+          {mode === 'sign' ? (
+            <>
+              <Pressable onPress={onForgotPin} hitSlop={10} style={styles.linkWrap}>
+                <Text style={styles.linkText}>Forgot PIN?</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.primary, !isValidPin && { opacity: 0.5 }]}
+                onPress={onSignIn}
+                disabled={!isValidPin}
+              >
+                <Text style={styles.primaryText}>Sign In</Text>
+              </Pressable>
+            </>
+          ) : null}
 
-          <Pressable
-            style={[styles.primary, !isValidPin && { opacity: 0.5 }]}
-            onPress={onSignIn}
-            disabled={!isValidPin}
-          >
-            <Text style={styles.primaryText}>Sign In</Text>
-          </Pressable>
-          {/* No "Set / Change PIN" when pinExists: mode must stay 'sign', no create mode */}
+          {mode === 'changeCurrent' ? (
+            <Pressable
+              style={[styles.primary, !isValidPin && { opacity: 0.5 }]}
+              onPress={onChangePinContinue}
+              disabled={!isValidPin}
+            >
+              <Text style={styles.primaryText}>Continue</Text>
+            </Pressable>
+          ) : null}
+
+          {mode === 'remove' ? (
+            <Pressable
+              style={[styles.primary, styles.danger, !isValidPin && { opacity: 0.5 }]}
+              onPress={onRemovePinConfirm}
+              disabled={!isValidPin}
+            >
+              <Text style={styles.primaryText}>Remove PIN</Text>
+            </Pressable>
+          ) : null}
+
+          {(mode === 'changeCurrent' || mode === 'remove') && (
+            <Pressable
+              style={[styles.ghost, { marginTop: 10 }]}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.ghostText}>Cancel</Text>
+            </Pressable>
+          )}
         </>
-      ) : (
+      )}
+
+      {(mode === 'create' || mode === 'changeNew') && (
         <>
           <TextInput
             value={pin}
@@ -281,11 +371,24 @@ export default function SplashAuthScreen({ navigation }: Props) {
 
           <Pressable
             style={[styles.primary, (!isValidPin || !confirm.trim()) && { opacity: 0.5 }]}
-            onPress={onSavePin}
+            onPress={onSaveNewPin}
             disabled={!isValidPin || confirm.trim().length === 0}
           >
             <Text style={styles.primaryText}>Save PIN</Text>
           </Pressable>
+
+          {mode === 'changeNew' ? (
+            <Pressable
+              style={[styles.ghost, { marginTop: 10 }]}
+              onPress={() => {
+                setPinInput('');
+                setConfirm('');
+                setMode('changeCurrent');
+              }}
+            >
+              <Text style={styles.ghostText}>Back</Text>
+            </Pressable>
+          ) : null}
         </>
       )}
     </View>
@@ -330,8 +433,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
   },
+  danger: {
+    backgroundColor: '#7F1D1D',
+  },
   primaryText: {
     color: '#fff',
+    fontWeight: '700',
+  },
+  ghost: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  ghostText: {
+    color: theme.textDim,
     fontWeight: '700',
   },
   hint: {

@@ -1,5 +1,7 @@
+export type LoginFlow = 'sign' | 'create' | 'change' | 'remove';
+
 export type RootStackParamList = {
-  Login: undefined;
+  Login: { flow?: LoginFlow } | undefined;
   Dashboard: undefined;
 
   Account: { accountId?: string } | undefined;

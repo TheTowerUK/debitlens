@@ -162,8 +162,14 @@ type AppContextValue = {
 
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
+import {
+  clearAllSettings,
+  getPinFromStorage,
+  migrateSettingsIfNeeded,
+  setPinInStorage,
+} from '../utils/settingsStorage';
+
 const STORAGE_KEY_APP_STATE = '@debitlens/appState:v1';
-const STORAGE_KEY_PIN = '@debitlens/pin:v1';
 const PERSIST_DEBOUNCE_MS = 400;
 
 /* =====================
@@ -521,7 +527,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         await Promise.all([
           AsyncStorage.removeItem(STORAGE_KEY_APP_STATE),
-          AsyncStorage.removeItem(STORAGE_KEY_PIN),
+          clearAllSettings(),
         ]);
       } catch {
         // ignore storage errors
@@ -537,11 +543,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function loadFromStorage() {
       try {
-        const [rawState, rawPin] = await Promise.all([
+        await migrateSettingsIfNeeded();
+        const [rawState, storedPin] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEY_APP_STATE),
-          AsyncStorage.getItem(STORAGE_KEY_PIN),
+          getPinFromStorage(),
         ]);
-
         if (rawState != null && rawState !== '') {
           try {
             const parsed = JSON.parse(rawState) as Partial<AppState>;
@@ -554,8 +560,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (rawPin != null && rawPin !== '') {
-          setPinState(rawPin);
+        if (storedPin != null) {
+          setPinState(storedPin);
         }
       } catch {
         /* load error: ignore, continue with defaults */
@@ -592,11 +598,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     savePinTimeoutRef.current = setTimeout(() => {
       savePinTimeoutRef.current = null;
-      if (pin == null || pin === '') {
-        void AsyncStorage.removeItem(STORAGE_KEY_PIN);
-      } else {
-        void AsyncStorage.setItem(STORAGE_KEY_PIN, pin);
-      }
+      void setPinInStorage(pin);
     }, PERSIST_DEBOUNCE_MS);
     return () => {
       if (savePinTimeoutRef.current) {

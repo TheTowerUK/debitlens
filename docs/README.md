@@ -19,7 +19,8 @@ docs/
 
 ### Platform
 
-- [platform.md](./platform/platform.md) — Stack, APIs, identifiers, secrets
+- [platform-ids.md](./platform/platform-ids.md) — IDs and URLs for EAS, store submissions, and support
+- [platform.md](./platform/platform.md) — Platform overview (external connections, stack, identifiers, secrets)
 - [release-process.md](./platform/release-process.md) — Deployment cheat sheet
 - [ios-submission-guide.md](./platform/ios-submission-guide.md) — App Store Connect submission
 - [android-submission-guide.md](./platform/android-submission-guide.md) — Google Play Console submission
@@ -40,6 +41,7 @@ docs/
 ### Product
 
 - [app-content.md](./product/app-content.md) — App overview for onboarding developers and AI assistants
+- [security.md](./product/security.md) — Security model (local storage, auth, backups, data transmission)
 
 ## Related documentation (repo root)
 
